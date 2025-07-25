@@ -44,7 +44,28 @@
 
 ---
 
-## 🎯 Project Goals
-- Incentivize the use of Fusion+ and Near through playful rewards.
-- Build user loyalty with a gamified experience.
-- Create a vibrant ecosystem bridging DeFi and gaming.
+
+
+## 🏗️ Project Architecture
+
+```mermaid
+graph TD
+    A[Frontend] --> B[Wallet Provider]
+    A --> C[2D Game JS]
+    A --> D[Backend]
+    D --> E[Smart Contracts]
+    D --> F[Database]
+    E --> G[1inch Fusion+]
+    E --> H[Near Protocol]
+    A --> E
+    C --> D
+
+```
+
+**Key Points:**
+- The 2D game runs fully in JavaScript within the frontend (no external game engine).
+- The frontend manages UI, game logic, wallet connection, and NFT display.
+- The backend orchestrates blockchain interactions, reward distribution, and off-chain data.
+- Smart contracts handle swaps, bridges, rewards, and NFTs.
+- Database stores profiles, inventory, and progression.
+- DeFi protocols (1inch, Near) are integrated via smart contracts.
