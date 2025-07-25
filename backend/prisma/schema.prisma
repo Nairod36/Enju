@@ -1,0 +1,39 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           Int      @id @default(autoincrement())
+  wallet       String   @unique
+  profile      String?
+  progression  Int      @default(0)
+  inventory    Json?
+  quests       Quest[]
+  transactions Transaction[]
+}
+
+model Quest {
+  id      Int    @id @default(autoincrement())
+  userId  Int
+  status  String
+  rewards Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Transaction {
+  id        Int    @id @default(autoincrement())
+  userId    Int
+  type      String
+  chain     String
+  amount    Float
+  reward    String
+  timestamp DateTime @default(now())
+  user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
