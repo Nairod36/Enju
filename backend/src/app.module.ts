@@ -1,14 +1,17 @@
 import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
 import { PrismaService } from './prisma.service';
 import { UsersModule } from './users/users.module';
 import { TransactionsModule } from './transactions/transactions.module';
-import { QuestsModule } from './quests/quests.module';
 import { HealthController } from './health/health.controller';
 
 @Module({
-  imports: [UsersModule, TransactionsModule, QuestsModule],
+  imports: [ConfigModule.forRoot({
+    isGlobal: true,
+    envFilePath: '.env',
+  }), UsersModule, TransactionsModule],
   controllers: [HealthController],
   providers: [PrismaService],
   exports: [PrismaService],
 })
-export class AppModule {}
+export class AppModule { }

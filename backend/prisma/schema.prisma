@@ -8,28 +8,117 @@ datasource db {
 }
 
 model User {
-  id           Int      @id @default(autoincrement())
-  wallet       String   @unique
-  profile      String?
-  progression  Int      @default(0)
-  inventory    Json?
-  quests       Quest[]
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Informations de base
+  email     String? @unique
+  username  String? @unique
+  
+  // Wallet connection
+  walletAddress String  @unique @map("wallet_address")
+  chainId       Int?    @default(1) @map("chain_id")
+  
+  // Statut de connexion
+  isConnected   Boolean @default(true) @map("is_connected")
+  lastLoginAt   DateTime @default(now()) @map("last_login_at")
+  
+  // Activité PUBLIQUE (tout le monde peut voir)
+  activityScore   Int     @default(0) @map("activity_score") // Points d'activité totaux
+  lastActivityAt  DateTime @default(now()) @map("last_activity_at") // Dernière activité
+  level           Int     @default(1)
+  experience      Int     @default(0)
+  tokenBalance    Decimal @default(0) @db.Decimal(18, 8) @map("token_balance")
+  
+  // Métadonnées
+  nonce         String?
+  profileImage  String? @map("profile_image")
+  bio           String?
+  
+  // Relations
+  biome         Biome?
   transactions Transaction[]
+  
+  @@index([walletAddress])
+  @@index([activityScore]) // Pour le classement public
+  @@index([lastActivityAt]) // Pour voir qui est actif récemment
+  @@map("users")
 }
 
-model Quest {
-  id      Int    @id @default(autoincrement())
-  userId  Int
-  status  String
-  rewards Json?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+model Biome {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Propriétaire
+  userId    String @unique @map("user_id")
+  user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Infos de base PUBLIQUES
+  name        String  @default("Ma Forêt")
+  description String? @default("Mon biome personnel")
+  
+  // Statistiques PUBLIQUES (tout le monde peut voir et comparer)
+  totalTrees      Int     @default(0) @map("total_trees")
+  healthScore     Decimal @default(100) @db.Decimal(5, 2) @map("health_score") // Se dégrade sans activité
+  lastUpdateAt    DateTime @default(now()) @map("last_update_at") // Dernière mise à jour des stats
+  
+  // Relations
+  plants     Plant[]
+  
+  @@index([userId])
+  @@index([healthScore]) // Pour comparer les biomes
+  @@index([totalTrees]) // Pour le classement
+  @@map("biomes")
+}
+
+enum PlantSpecies {
+  SEEDLING  // Graine - niveau 1-2
+  SPROUT    // Pousse - niveau 3-4  
+  SAPLING   // Jeune arbre - niveau 5-6
+  TREE      // Arbre - niveau 7-8
+  GIANT     // Arbre géant - niveau 9-10
+}
+
+model Plant {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Appartenance
+  biomeId String @map("biome_id")
+  biome   Biome  @relation(fields: [biomeId], references: [id], onDelete: Cascade)
+  
+  // Infos de base PUBLIQUES
+  name     String
+  species  PlantSpecies @default(SEEDLING)
+  
+  // Position simple (x, y dans une grille) - PUBLIQUE
+  positionX Int @map("position_x")
+  positionY Int @map("position_y")
+  
+  // Croissance et santé PUBLIQUES (basée sur l'activité du user)
+  growthLevel    Int     @default(1) @map("growth_level") // 1-10
+  health         Decimal @default(100) @db.Decimal(5, 2) // Se dégrade sans activité
+  lastGrowthAt   DateTime @default(now()) @map("last_growth_at")
+  lastHealthCheck DateTime @default(now()) @map("last_health_check")
+  
+  // État PUBLIC
+  isAlive       Boolean @default(true) @map("is_alive") // Peut mourir si santé = 0
+  isDegraded    Boolean @default(false) @map("is_degraded") // Marqué comme dégradé
+  
+  @@index([biomeId])
+  @@index([health, isAlive])
+  @@index([lastHealthCheck]) // Pour les cron jobs de dégradation
+  @@index([growthLevel]) // Pour comparer les arbres
+  @@unique([biomeId, positionX, positionY])
+  @@map("trees")
 }
 
 model Transaction {
   id        Int    @id @default(autoincrement())
-  userId    Int
+  userId    String
   type      String
   chain     String
   amount    Float
