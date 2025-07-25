@@ -1,6 +1,9 @@
 # Dependencies
 node_modules/
 */node_modules/
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
 
 # Environment variables
 .env
@@ -8,18 +11,21 @@ node_modules/
 .env.development
 .env.test
 .env.production
+*.env
 
 # Build outputs
 dist/
 build/
 .next/
 out/
+*.tsbuildinfo
 
 # Cache and temp files
 .cache/
-*.tsbuildinfo
 .turbo/
 .vite/
+.swc/
+.parcel-cache/
 
 # IDE and editor files
 .vscode/
@@ -27,6 +33,9 @@ out/
 *.swp
 *.swo
 *~
+.project
+.classpath
+.settings/
 
 # OS generated files
 .DS_Store
@@ -36,6 +45,7 @@ out/
 .Trashes
 ehthumbs.db
 Thumbs.db
+desktop.ini
 
 # Logs
 *.log
@@ -43,6 +53,7 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 lerna-debug.log*
+pnpm-debug.log*
 
 # Runtime data
 pids
@@ -52,37 +63,60 @@ pids
 
 # Database
 *.sqlite
+*.sqlite3
 *.db
+*.db-journal
 
 # Prisma
 prisma/migrations/
 .prisma/
 
-# Coverage directory used by tools like istanbul
+# NestJS specific
+dist/
+coverage/
+*.tsbuildinfo
+
+# Testing
 coverage/
 *.lcov
-
-# nyc test coverage
 .nyc_output
+test-results/
+playwright-report/
 
-# Grunt intermediate storage
-.grunt
+# Temporary folders
+tmp/
+temp/
 
-# Bower dependency directory
-bower_components
+# Docker
+.dockerignore
+Dockerfile*
+docker-compose*.yml
+.docker/
 
-# Compiled class file
+# Production
+*.tar.gz
+*.zip
+*.rar
+
+# Security
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+
+# Backup files
+*.bak
+*.backup
+*.old
+
+# Compiled files
 *.class
-
-# Package Files #
 *.jar
 *.war
 *.nar
 *.ear
-*.zip
-*.tar.gz
-*.rar
 
-# virtual machine crash logs
+# Virtual machine crash logs
 hs_err_pid*
 replay_pid*

@@ -1,25 +1,47 @@
 {
-  "name": "mokuen-backend",
+  "name": "backend",
   "version": "1.0.0",
-  "main": "src/app.js",
-  "type": "module",
+  "description": "This backend powers the Mokuen SwapForest app, handling user data, game logic, blockchain interactions, and rewards.",
+  "main": "dist/main.js",
   "scripts": {
-    "dev": "node src/app.js",
-    "start": "node src/app.js",
+    "build": "tsc",
+    "format": "prettier --write \"src/**/*.ts\"",
+    "start": "node dist/main",
+    "start:dev": "nodemon",
+    "start:debug": "nodemon --config nodemon-debug.json",
+    "prestart:prod": "npm run build",
+    "start:prod": "node dist/main",
+    "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:cov": "jest --coverage",
+    "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
+    "test:e2e": "jest --config ./test/jest-e2e.json",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
     "db:studio": "prisma studio"
   },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
   "dependencies": {
-    "express": "^4.18.2",
-    "prisma": "^5.10.2",
-    "@prisma/client": "^5.10.2",
-    "pg": "^8.11.3",
-    "cors": "^2.8.5",
-    "dotenv": "^16.4.5"
+    "@nestjs/cli": "^11.0.7",
+    "@nestjs/common": "^11.1.5",
+    "@nestjs/core": "^11.1.5",
+    "@nestjs/platform-express": "^11.1.5",
+    "@prisma/client": "^6.12.0",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.14.2",
+    "dotenv": "^17.2.1",
+    "prisma": "^6.12.0",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2"
   },
   "devDependencies": {
-    "nodemon": "^3.0.3"
+    "@types/node": "^24.1.0",
+    "nodemon": "^3.1.10",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.8.3"
   }
 }
