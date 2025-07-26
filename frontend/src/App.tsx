@@ -1,4 +1,4 @@
-import { createAppKit } from '@reown/appkit/react'
+import { createAppKit, useAppKit } from '@reown/appkit/react'
 
 import { WagmiProvider } from 'wagmi'
 import { useState } from 'react'
@@ -7,6 +7,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ActionButtonList } from './components/ActionButtonList'
 import { SmartContractActionButtonList } from './components/SmartContractActionButtonList'
 import { InfoList } from './components/InfoList'
+import FusionPlus from './components/FusionPlus'
 import { projectId, metadata, networks, wagmiAdapter } from './config'
 
 import "./App.css"
@@ -32,23 +33,29 @@ createAppKit({
   }
 })
 
+
 export function App() {
   const [transactionHash, setTransactionHash] = useState<`0x${string}` | undefined>(undefined);
   const [signedMsg, setSignedMsg] = useState('');
   const [balance, setBalance] = useState('');
 
+  // Récupère provider et userAddress via useAppKit
+  const appKit = useAppKit();
+  // Essayons d'accéder à provider et address si disponibles
+  const provider = (appKit as any)?.provider;
+  const userAddress = (appKit as any)?.address;
+
   const receiveHash = (hash: `0x${string}`) => {
-    setTransactionHash(hash); // Update the state with the transaction hash
+    setTransactionHash(hash);
   };
 
   const receiveSignedMsg = (signedMsg: string) => {
-    setSignedMsg(signedMsg); // Update the state with the transaction hash
+    setSignedMsg(signedMsg);
   };
 
   const receivebalance = (balance: string) => {
-    setBalance(balance)
-  }
-
+    setBalance(balance);
+  };
 
   return (
     <div className={"pages"}>
@@ -59,6 +66,7 @@ export function App() {
             <appkit-button />
             <ActionButtonList sendHash={receiveHash} sendSignMsg={receiveSignedMsg} sendBalance={receivebalance}/>
             <SmartContractActionButtonList />
+            <FusionPlus provider={provider} userAddress={userAddress} />
             <div className="advice">
               <p>
                 This projectId only works on localhost. <br/>
@@ -69,7 +77,7 @@ export function App() {
         </QueryClientProvider>
       </WagmiProvider>
     </div>
-  )
+  );
 }
 
-export default App
+export default App;

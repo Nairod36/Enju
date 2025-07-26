@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: unitededfi-frontend
+    ports:
+      - "3000:80"      # Application React
+      - "8080:8080"    # Proxy API 1inch
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - VITE_FUSION_AUTH_KEY=${VITE_FUSION_AUTH_KEY}
+    volumes:
+      # Optionnel: pour les logs
+      - ./logs:/var/log/nginx
+    networks:
+      - unitededfi-network
+
+  # Optionnel: si vous avez un backend
+  # backend:
+  #   build: ../backend
+  #   container_name: unitededfi-backend
+  #   ports:
+  #     - "3001:3000"
+  #   environment:
+  #     - NODE_ENV=production
+  #   networks:
+  #     - unitededfi-network
+
+networks:
+  unitededfi-network:
+    driver: bridge
+
+volumes:
+  nginx-logs:
