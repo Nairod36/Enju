@@ -14,8 +14,10 @@
     "@reown/appkit-adapter-wagmi": "1.7.15",
     "@tanstack/react-query": "^5.56.2",
     "@tanstack/react-router": "^1.129.8",
+    "pixi.js": "^7.3.0",
     "react": "19.0.0",
     "react-dom": "19.0.0",
+    "three-stdlib": "^2.36.0",
     "viem": "^2.31.7",
     "wagmi": "^2.15.6"
   },
@@ -23,6 +25,7 @@
     "@eslint/js": "^9.9.0",
     "@types/react": "^19.0.10",
     "@types/react-dom": "^19.0.4",
+    "@types/three": "^0.178.1",
     "@vitejs/plugin-react": "^4.3.1",
     "eslint": "^9.9.0",
     "eslint-plugin-react-hooks": "^5.1.0-rc.0",
