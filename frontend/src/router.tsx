@@ -4,19 +4,18 @@ import {
   createRootRoute,
   Outlet,
 } from "@tanstack/react-router";
-import { Header } from "./components/Header";
-import { HomePage } from "./pages/HomePage";
-import { GamePage } from "./pages/GamePage";
-import ThreePage from "./pages/ThreePage";
+import { Header } from "./components/headers/Header";
+import HomePage from "./pages/HomePage";
+import { TransitionPage } from "./pages/TransitionPage";
+import { AppPage } from "./pages/app/AppPage";
+import { AppDashboard } from "./pages/app/AppDashboard";
+import ThreePage from "./pages/app/ThreePage";
 
 const rootRoute = createRootRoute({
   component: () => (
-    <div style={{ backgroundColor: "white", minHeight: "100vh" }}>
-      <Header />
-      <main>
-        <Outlet />
-      </main>
-    </div>
+    <main>
+      <Outlet />
+    </main>
   ),
 });
 
@@ -26,21 +25,34 @@ const homeRoute = createRoute({
   component: HomePage,
 });
 
-const gameRoute = createRoute({
+const transitionRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: "/game",
-  component: GamePage,
+  path: "/transition",
+  component: TransitionPage,
+});
+
+const appRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/app",
+  component: AppPage,
+});
+
+const appDashboardRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/",
+  component: AppDashboard,
 });
 
 const ThreeDGameRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: "/3d-game",
+  path: "/game",
   component: ThreePage,
 });
 
 const routeTree = rootRoute.addChildren([
   homeRoute,
-  gameRoute,
+  transitionRoute,
+  appRoute.addChildren([appDashboardRoute]),
   ThreeDGameRoute,
 ]);
 
