@@ -34,12 +34,16 @@ export function TransitionPage() {
       }`}
     >
       {/* Background */}
-      <div className="fixed inset-0 bg-gradient-to-br from-black via-gray-950 to-green-950/80" />
-      <div className="fixed inset-0 bg-gradient-to-tr from-green-950/30 via-transparent to-gray-950" />
-      <div className="fixed inset-0 bg-gradient-to-bl from-transparent via-black/90 to-green-950/40" />
+      <div className="fixed inset-0 bg-gradient-to-br from-white to-emerald-50/40" />
+      
+      {/* Subtle animated background elements */}
+      <div className="fixed inset-0 opacity-30">
+        <div className="absolute top-20 left-20 w-72 h-72 bg-emerald-500/10 rounded-full blur-3xl animate-pulse" />
+        <div className="absolute bottom-40 right-20 w-96 h-96 bg-emerald-400/5 rounded-full blur-3xl animate-pulse delay-1000" />
+      </div>
 
       {/* Main content */}
-      <div className="relative z-10 flex flex-col items-center justify-center min-h-screen text-white">
+      <div className="relative z-10 flex flex-col items-center justify-center min-h-screen text-slate-800">
         {/* Logo with enhanced animations */}
         <div className="mb-16 relative">
           {/* Glow rings */}
@@ -48,13 +52,13 @@ export function TransitionPage() {
               isComplete ? "scale-150 opacity-0" : "scale-100 opacity-100"
             }`}
           >
-            <div className="absolute -inset-8 border border-green-400/30 rounded-full animate-ping" />
-            <div className="absolute -inset-12 border border-green-400/20 rounded-full animate-ping delay-500" />
-            <div className="absolute -inset-16 border border-green-400/10 rounded-full animate-ping delay-1000" />
+            <div className="absolute -inset-8 border border-emerald-400/30 rounded-full animate-ping" />
+            <div className="absolute -inset-12 border border-emerald-400/20 rounded-full animate-ping delay-500" />
+            <div className="absolute -inset-16 border border-emerald-400/10 rounded-full animate-ping delay-1000" />
           </div>
 
           {/* Background glow */}
-          <div className="absolute -inset-4 bg-gradient-to-r from-green-400/20 to-green-600/20 rounded-full blur-xl animate-pulse" />
+          <div className="absolute -inset-4 bg-gradient-to-r from-emerald-400/20 to-emerald-600/20 rounded-full blur-xl animate-pulse" />
 
           {/* Logo container */}
           <div
@@ -71,8 +75,8 @@ export function TransitionPage() {
         {/* Loading text */}
         <div className="text-center mb-8">
           <h2
-            className={`text-2xl font-light transition-all duration-500 ${
-              isComplete ? "text-green-400" : "text-white"
+            className={`text-2xl font-normal transition-all duration-500 ${
+              isComplete ? "text-emerald-700" : "text-slate-900"
             }`}
           >
             {isComplete ? "Ready!" : "Loading..."}
@@ -81,15 +85,15 @@ export function TransitionPage() {
 
         {/* Progress bar */}
         <div className="w-80 max-w-sm">
-          <div className="bg-white/10 rounded-full h-1 overflow-hidden backdrop-blur-sm">
+          <div className="bg-slate-200 rounded-full h-2 overflow-hidden">
             <div
               className={`h-full rounded-full transition-all duration-300 ${
-                isComplete ? "bg-green-400" : "bg-green-500"
+                isComplete ? "bg-emerald-500" : "bg-emerald-600"
               }`}
               style={{ width: `${progress}%` }}
             />
           </div>
-          <div className="flex justify-between text-sm text-white/60 mt-3">
+          <div className="flex justify-between text-sm text-slate-600 mt-3">
             <span>Initializing...</span>
             <span>{Math.round(progress)}%</span>
           </div>
@@ -98,7 +102,7 @@ export function TransitionPage() {
         {/* Completion message */}
         {isComplete && (
           <div className="mt-8 animate-fade-in">
-            <p className="text-green-400 text-lg font-light">
+            <p className="text-emerald-700 text-lg font-normal">
               Welcome to your DeFi Forest
             </p>
           </div>

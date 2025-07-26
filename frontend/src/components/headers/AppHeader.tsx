@@ -5,9 +5,9 @@ import FluidLogo from "../FluidLogo";
 
 export function AppHeader() {
   return (
-    <header className="fixed top-0 left-0 right-0 z-50">
-      <div className="max-w-7xl mx-auto px-4 py-6">
-        <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl px-6 flex items-center justify-between shadow-2xl">
+    <header className="fixed top-0 left-0 right-0 z-50 bg-gradient-to-r from-white/80 to-emerald-20/40 backdrop-blur">
+      <div className="max-w-[1600px] mx-auto px-4 py-6">
+        <div className="bg-white/90 rounded-full px-6 py-4 flex items-center justify-between shadow-md">
           {/* Logo & Brand */}
           <Link
             to="/app"
@@ -17,28 +17,28 @@ export function AppHeader() {
           </Link>
 
           {/* Navigation */}
-          <nav className="hidden md:flex items-center gap-8 text-sm">
+          <nav className="hidden md:flex items-center gap-6 text-sm">
             <Link
               to="/app/forest"
-              className="text-white/70 hover:text-green-400 transition-all duration-300 hover:scale-105 px-3 py-2 rounded-lg hover:bg-white/10"
+              className="text-slate-700 hover:text-slate-900 transition-colors px-3 py-2 rounded-lg hover:bg-emerald-50"
             >
               Forest
             </Link>
             <Link
               to="/app/defi"
-              className="text-white/70 hover:text-green-400 transition-all duration-300 hover:scale-105 px-3 py-2 rounded-lg hover:bg-white/10"
+              className="text-slate-700 hover:text-slate-900 transition-colors px-3 py-2 rounded-lg hover:bg-emerald-50"
             >
               DeFi
             </Link>
             <Link
               to="/app/rewards"
-              className="text-white/70 hover:text-green-400 transition-all duration-300 hover:scale-105 px-3 py-2 rounded-lg hover:bg-white/10"
+              className="text-slate-700 hover:text-slate-900 transition-colors px-3 py-2 rounded-lg hover:bg-emerald-50"
             >
               Rewards
             </Link>
             <Link
               to="/app/marketplace"
-              className="text-white/70 hover:text-green-400 transition-all duration-300 hover:scale-105 px-3 py-2 rounded-lg hover:bg-white/10"
+              className="text-slate-700 hover:text-slate-900 transition-colors px-3 py-2 rounded-lg hover:bg-emerald-50"
             >
               Marketplace
             </Link>
@@ -49,7 +49,7 @@ export function AppHeader() {
             <Button
               variant="outline"
               size="sm"
-              className="rounded-2xl border-white/20 bg-white/5 backdrop-blur-xl text-white hover:bg-white/10 hover:border-green-600/50 transition-all duration-300"
+              className="rounded-full border-emerald-300 text-emerald-800 hover:bg-emerald-50 px-4 h-10"
             >
               <Wallet size={16} className="mr-2" />
               Connect
@@ -58,7 +58,7 @@ export function AppHeader() {
             <Button
               variant="ghost"
               size="sm"
-              className="text-white/60 hover:text-green-400 hover:bg-white/10 rounded-xl transition-all duration-300"
+              className="text-slate-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-full"
             >
               <User size={16} />
             </Button>
@@ -66,7 +66,7 @@ export function AppHeader() {
             <Button
               variant="ghost"
               size="sm"
-              className="text-white/60 hover:text-green-400 hover:bg-white/10 rounded-xl transition-all duration-300"
+              className="text-slate-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-full"
             >
               <Settings size={16} />
             </Button>
