@@ -3,6 +3,8 @@ import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
 import * as dotenv from 'dotenv';
 import { setupSwagger } from './app.swagger';
+import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
+import { ValidationPipe as CustomValidationPipe } from './common/pipes/validation.pipe';
 
 dotenv.config();
 
@@ -18,8 +20,20 @@ async function bootstrap() {
 
   // Préfixe global pour l'API
   app.setGlobalPrefix('api/v1');
-  app.useGlobalPipes(new ValidationPipe());
-  app.enableCors();
+  
+  // Gestion globale des erreurs
+  app.useGlobalFilters(new GlobalExceptionFilter());
+  
+  // Validation globale des données
+  app.useGlobalPipes(new ValidationPipe({
+    whitelist: true,
+    forbidNonWhitelisted: true,
+    transform: true,
+    transformOptions: {
+      enableImplicitConversion: true,
+    },
+  }));
+  
   // Configuration de Swagger
   setupSwagger(app);
 

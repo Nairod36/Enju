@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException, ConflictException, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { JwtService } from '@nestjs/jwt';
 import { ethers } from 'ethers';
@@ -14,6 +14,14 @@ import {
 
 } from './dto'
 import { UsersUtils } from './users.utils';
+import {
+  UserNotFoundException,
+  InvalidWalletAddressException,
+  InvalidSignatureException,
+  NonceNotFoundException,
+  UsernameAlreadyTakenException,
+  EmailAlreadyTakenException
+} from '../common/exceptions';
 
 @Injectable()
 export class UsersService {
@@ -25,7 +33,7 @@ export class UsersService {
 
   async generateNonce(walletAddress: string): Promise<NonceResponseDto> {
     if (!ethers.utils.isAddress(walletAddress)) {
-      throw new UnauthorizedException('Invalid wallet address');
+      throw new InvalidWalletAddressException();
     }
 
     const nonce = `nonce-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -48,7 +56,7 @@ export class UsersService {
     const { walletAddress, signature, message } = connectWalletDto;
 
     if (!ethers.utils.isAddress(walletAddress)) {
-      throw new UnauthorizedException('Invalid wallet address');
+      throw new InvalidWalletAddressException();
     }
 
     const user = await this.prisma.user.findUnique({
@@ -56,12 +64,12 @@ export class UsersService {
     });
 
     if (!user || !user.nonce) {
-      throw new UnauthorizedException('No nonce found. Please request a nonce first.');
+      throw new NonceNotFoundException();
     }
 
     const expectedMessage = `Please sign this message to authenticate with Mokuen SwapForest: ${user.nonce}`;
     if (message !== expectedMessage) {
-      throw new UnauthorizedException('Invalid message');
+      throw new InvalidSignatureException('Message invalide');
     }
 
     try {
@@ -70,7 +78,7 @@ export class UsersService {
         throw new UnauthorizedException('Invalid signature');
       }
     } catch (error) {
-      throw new UnauthorizedException('Invalid signature format');
+      throw new InvalidSignatureException('Format de signature invalide');
     }
 
     const isNewUser = !user.isConnected && !user.lastLoginAt;
@@ -149,7 +157,7 @@ export class UsersService {
     });
 
     if (!user) {
-      throw new NotFoundException('User not found');
+      throw new UserNotFoundException();
     }
 
     return this.usersUtils.transformToResponseDto(user);
@@ -161,7 +169,7 @@ export class UsersService {
         where: { username: updateData.username, NOT: { id: userId } },
       });
       if (existing) {
-        throw new ConflictException('Username already taken');
+        throw new UsernameAlreadyTakenException(updateData.username);
       }
     }
 
@@ -170,7 +178,7 @@ export class UsersService {
         where: { email: updateData.email, NOT: { id: userId } },
       });
       if (existing) {
-        throw new ConflictException('Email already taken');
+        throw new EmailAlreadyTakenException(updateData.email);
       }
     }
 
@@ -271,7 +279,7 @@ export class UsersService {
     });
 
     if (!user) {
-      throw new NotFoundException('User not found');
+      throw new UserNotFoundException();
     }
 
     return this.usersUtils.transformToPublicDto(user);

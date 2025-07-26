@@ -1,6 +1,7 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { PlantSpecies } from '@prisma/client';
+import { BiomeNotFoundException } from '../common/exceptions';
 
 @Injectable()
 export class BiomesService {
@@ -29,7 +30,7 @@ export class BiomesService {
         });
 
         if (!biome) {
-            throw new NotFoundException('Biome not found');
+            throw new BiomeNotFoundException();
         }
 
         return biome;
@@ -52,7 +53,7 @@ export class BiomesService {
         });
 
         if (!user || !user.biome) {
-            throw new NotFoundException('Biome not found');
+            throw new BiomeNotFoundException();
         }
 
         return {
