@@ -2,24 +2,30 @@ import { BadRequestException, NotFoundException, ForbiddenException } from '@nes
 
 export class BiomeNotFoundException extends NotFoundException {
   constructor(message?: string) {
-    super(message || 'Biome non trouvé');
+    super(message || 'Biome not found');
+  }
+}
+
+export class BiomeNotCreatedYetException extends NotFoundException {
+  constructor(walletAddress: string) {
+    super(`User ${walletAddress} has not created a biome yet`);
   }
 }
 
 export class BiomeAccessDeniedException extends ForbiddenException {
   constructor(message?: string) {
-    super(message || 'Accès au biome refusé');
+    super(message || 'Access to biome denied');
   }
 }
 
 export class BiomeFullException extends BadRequestException {
   constructor(message?: string) {
-    super(message || 'Le biome est plein (maximum 25 plantes)');
+    super(message || 'Biome is full (maximum 25 plants)');
   }
 }
 
 export class InvalidBiomeHealthException extends BadRequestException {
   constructor(message?: string) {
-    super(message || 'La santé du biome est invalide');
+    super(message || 'Invalid biome health value');
   }
 }

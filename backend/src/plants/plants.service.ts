@@ -3,13 +3,15 @@ import { PrismaService } from '../prisma/prisma.service';
 import { PlantSpecies } from '@prisma/client';
 import { CreatePlantDto, UpdatePlantDto, MoveePlantDto } from './dto';
 import {
-  BiomeNotFoundException,
-  PlantNotFoundException,
-  PlantNotOwnedException,
-  PositionOccupiedException,
-  InvalidPositionException,
-  PlantDeadException,
-  BiomeFullException
+    BiomeNotFoundException,
+    BiomeNotCreatedYetException,
+    PlantNotFoundException,
+    PlantNotOwnedException,
+    PositionOccupiedException,
+    InvalidPositionException,
+    PlantDeadException,
+    BiomeFullException,
+    UserNotRegisteredYetException
 } from '../common/exceptions';
 
 @Injectable()
@@ -55,8 +57,12 @@ export class PlantsService {
             },
         });
 
-        if (!user || !user.biome) {
-            throw new BiomeNotFoundException();
+        if (!user) {
+            throw new UserNotRegisteredYetException(walletAddress);
+        }
+
+        if (!user.biome) {
+            throw new BiomeNotCreatedYetException(walletAddress);
         }
 
         return user.biome.plants;
@@ -144,7 +150,7 @@ export class PlantsService {
         });
 
         if (existingPlant) {
-            throw new PositionOccupiedException(createPlantDto.positionX, createPlantDto.positionY);
+            throw new PositionOccupiedException(movePlantDto.positionX, movePlantDto.positionY);
         }
 
         // Vérifier les limites de la grille
@@ -226,8 +232,12 @@ export class PlantsService {
             },
         });
 
-        if (!user || !user.biome) {
-            throw new BiomeNotFoundException();
+        if (!user) {
+            throw new UserNotRegisteredYetException(walletAddress);
+        }
+
+        if (!user.biome) {
+            throw new BiomeNotCreatedYetException(walletAddress);
         }
 
         // Créer une grille 10x10
@@ -273,7 +283,7 @@ export class PlantsService {
         }
 
         if (!plant.isAlive) {
-            throw new PlantDeadException('Impossible d\'arroser une plante morte');
+            throw new PlantDeadException('Cannot water a dead plant');
         }
 
         const newHealth = Math.min(100, parseFloat(plant.health.toString()) + 10);

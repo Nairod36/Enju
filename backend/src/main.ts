@@ -20,10 +20,10 @@ async function bootstrap() {
 
   // Préfixe global pour l'API
   app.setGlobalPrefix('api/v1');
-  
+
   // Gestion globale des erreurs
   app.useGlobalFilters(new GlobalExceptionFilter());
-  
+
   // Validation globale des données
   app.useGlobalPipes(new ValidationPipe({
     whitelist: true,
@@ -33,7 +33,7 @@ async function bootstrap() {
       enableImplicitConversion: true,
     },
   }));
-  
+
   // Configuration de Swagger
   setupSwagger(app);
 
@@ -42,7 +42,7 @@ async function bootstrap() {
   console.log(`
     🌳 Mokuen SwapForest API is running!
     📍 Server: http://localhost:${port}
-    📚 Swagger: http://localhost:${port}/api
+    📚 Swagger: http://localhost:${port}/api/v1/swagger
     🗄️  Database: NEON PostgreSQL
     🌍 Public forest data available to all users
   `);

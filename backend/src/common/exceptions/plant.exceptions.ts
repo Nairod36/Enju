@@ -2,42 +2,42 @@ import { BadRequestException, NotFoundException, ForbiddenException } from '@nes
 
 export class PlantNotFoundException extends NotFoundException {
   constructor(message?: string) {
-    super(message || 'Plante non trouvée');
+    super(message || 'Plant not found');
   }
 }
 
 export class PlantNotOwnedException extends ForbiddenException {
   constructor(message?: string) {
-    super(message || 'Cette plante ne vous appartient pas');
+    super(message || 'You do not own this plant');
   }
 }
 
 export class PositionOccupiedException extends BadRequestException {
   constructor(x: number, y: number) {
-    super(`La position (${x}, ${y}) est déjà occupée`);
+    super(`Position (${x}, ${y}) is already occupied`);
   }
 }
 
 export class InvalidPositionException extends BadRequestException {
   constructor(message?: string) {
-    super(message || 'Position invalide (doit être entre 0 et 9)');
+    super(message || 'Invalid position (must be between 0 and 9)');
   }
 }
 
 export class PlantDeadException extends BadRequestException {
   constructor(message?: string) {
-    super(message || 'Impossible d\'effectuer cette action sur une plante morte');
+    super(message || 'Cannot perform action on a dead plant');
   }
 }
 
 export class PlantTooYoungException extends BadRequestException {
   constructor(message?: string) {
-    super(message || 'La plante est trop jeune pour cette action');
+    super(message || 'Plant is too young for this action');
   }
 }
 
 export class PlantAlreadyWateredException extends BadRequestException {
   constructor(message?: string) {
-    super(message || 'Cette plante a déjà été arrosée récemment');
+    super(message || 'Plant has already been watered recently');
   }
 }

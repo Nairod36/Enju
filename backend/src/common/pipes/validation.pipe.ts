@@ -18,7 +18,7 @@ export class ValidationPipe implements PipeTransform<any> {
       });
       
       throw new BadRequestException({
-        message: 'Données de validation invalides',
+        message: 'Invalid validation data',
         errors: errorMessages,
       });
     }

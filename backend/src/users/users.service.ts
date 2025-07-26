@@ -69,16 +69,16 @@ export class UsersService {
 
     const expectedMessage = `Please sign this message to authenticate with Mokuen SwapForest: ${user.nonce}`;
     if (message !== expectedMessage) {
-      throw new InvalidSignatureException('Message invalide');
+      throw new InvalidSignatureException('Invalid message');
     }
 
     try {
       const recoveredAddress = ethers.utils.verifyMessage(message, signature);
       if (recoveredAddress.toLowerCase() !== walletAddress.toLowerCase()) {
-        throw new UnauthorizedException('Invalid signature');
+        throw new InvalidSignatureException('Invalid signature');
       }
     } catch (error) {
-      throw new InvalidSignatureException('Format de signature invalide');
+      throw new InvalidSignatureException('Invalid signature format');
     }
 
     const isNewUser = !user.isConnected && !user.lastLoginAt;

@@ -39,34 +39,34 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       
       switch (exception.code) {
         case 'P2002':
-          message = 'Cette ressource existe déjà (contrainte unique violée)';
+          message = 'Resource already exists (unique constraint violation)';
           break;
         case 'P2025':
-          message = 'Ressource non trouvée';
+          message = 'Resource not found';
           status = HttpStatus.NOT_FOUND;
           break;
         case 'P2003':
-          message = 'Violation de contrainte de clé étrangère';
+          message = 'Foreign key constraint violation';
           break;
         case 'P2014':
-          message = 'Les données fournies violent une contrainte';
+          message = 'The provided data violates a constraint';
           break;
         default:
-          message = 'Erreur de base de données';
+          message = 'Database error';
           break;
       }
     } else if (exception instanceof Prisma.PrismaClientValidationError) {
       status = HttpStatus.BAD_REQUEST;
       error = 'Validation Error';
-      message = 'Données invalides fournies';
+      message = 'Invalid data provided';
     } else if (exception instanceof Prisma.PrismaClientUnknownRequestError) {
       status = HttpStatus.INTERNAL_SERVER_ERROR;
       error = 'Database Error';
-      message = 'Erreur de base de données inconnue';
+      message = 'Unknown database error';
     } else {
       status = HttpStatus.INTERNAL_SERVER_ERROR;
       error = 'Internal Server Error';
-      message = 'Une erreur interne est survenue';
+      message = 'An internal error occurred';
     }
 
     const errorResponse = {
