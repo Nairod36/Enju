@@ -3,7 +3,7 @@
 interface ImportMetaEnv {
   readonly VITE_PROJECT_ID: string
   readonly VITE_FUSION_AUTH_KEY: string
-  // Ajoutez d'autres variables d'environnement ici si nécessaire
+  readonly VITE_FUSION_PROXY_URL: string
 }
 
 interface ImportMeta {

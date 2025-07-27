@@ -1,6 +1,8 @@
 import express from 'express';
 import { FusionResolver } from '../services/resolver';
 import { NearExecutor } from '../services/near-executor';
+import { FusionMonitor } from '../services/fusion-monitor';
+import { NearMonitorService } from '../services/near-monitor';
 import { ResolverRequest } from '../types/resolver';
 import winston from 'winston';
 import rateLimit from 'express-rate-limit';
@@ -22,11 +24,15 @@ export class ResolverAPI {
   private app: express.Application;
   private resolver: FusionResolver;
   private nearExecutor: NearExecutor;
+  private fusionMonitor: FusionMonitor;
+  private nearMonitor: NearMonitorService;
 
   constructor() {
     this.app = express();
     this.nearExecutor = new NearExecutor();
     this.resolver = new FusionResolver(this.nearExecutor);
+    this.fusionMonitor = new FusionMonitor();
+    this.nearMonitor = new NearMonitorService();
     this.setupMiddleware();
     this.setupRoutes();
   }
@@ -193,6 +199,96 @@ export class ResolverAPI {
       }
     });
 
+    // Webhook pour recevoir les ordres Fusion+ depuis l'UI
+    this.app.post('/webhook/fusion-order',
+      [
+        body('orderId').isString().isLength({ min: 1, max: 100 }),
+        body('secretHash').isString().isLength({ min: 1, max: 100 }),
+        body('nearRecipient').isString().isLength({ min: 1, max: 100 }),
+        body('timelock').isInt({ min: 1 }),
+        body('amount').isString().matches(/^[0-9.]+$/),
+        body('fromToken').isString().isLength({ min: 1, max: 20 }),
+        body('toToken').isString().isLength({ min: 1, max: 20 })
+      ],
+      async (req, res) => {
+        try {
+          // Validation des entrées
+          const errors = validationResult(req);
+          if (!errors.isEmpty()) {
+            return res.status(400).json({
+              success: false,
+              error: 'Validation failed',
+              details: errors.array()
+            });
+          }
+
+          logger.info('📨 Webhook ordre Fusion+ reçu:', req.body);
+
+          // Traiter l'ordre via le monitor
+          await this.fusionMonitor.handleWebhook(req.body);
+
+          res.json({
+            success: true,
+            message: 'Ordre traité avec succès'
+          });
+
+        } catch (error) {
+          logger.error('Error processing fusion order webhook:', error);
+          res.status(500).json({
+            success: false,
+            error: 'Internal server error',
+            message: error instanceof Error ? error.message : 'Unknown error'
+          });
+        }
+      }
+    );
+
+    // Webhook pour recevoir les demandes de swap NEAR→ETH depuis l'UI
+    this.app.post('/webhook/near-swap',
+      [
+        body('orderId').isString().isLength({ min: 1, max: 100 }),
+        body('secretHash').isString().isLength({ min: 1, max: 100 }),
+        body('ethRecipient').isString().isLength({ min: 1, max: 100 }),
+        body('nearSender').isString().isLength({ min: 1, max: 100 }),
+        body('timelock').isInt({ min: 1 }),
+        body('amount').isString().matches(/^[0-9.]+$/),
+        body('fromToken').isString().isLength({ min: 1, max: 20 }),
+        body('toToken').isString().isLength({ min: 1, max: 20 }),
+        body('direction').isString().equals('near-to-eth')
+      ],
+      async (req, res) => {
+        try {
+          // Validation des entrées
+          const errors = validationResult(req);
+          if (!errors.isEmpty()) {
+            return res.status(400).json({
+              success: false,
+              error: 'Validation failed',
+              details: errors.array()
+            });
+          }
+
+          logger.info('📨 Webhook swap NEAR→ETH reçu:', req.body);
+
+          // Traiter la demande via le monitor NEAR
+          await this.nearMonitor.handleNearWebhook(req.body);
+
+          res.json({
+            success: true,
+            message: 'Demande de swap NEAR→ETH traitée avec succès'
+          });
+
+        } catch (error) {
+          logger.error('Error processing NEAR→ETH swap webhook:', error);
+          res.status(500).json({
+            success: false,
+            error: 'Internal server error',
+            message: error instanceof Error ? error.message : 'Unknown error'
+          });
+        }
+      }
+    );
+
     // Cleanup endpoint (admin only)
     this.app.post('/admin/cleanup', (req, res) => {
       try {
@@ -230,7 +326,10 @@ export class ResolverAPI {
     });
   }
 
-  public start(port: number = 3000): void {
+  public async start(port: number = 3000): Promise<void> {
+    // Démarrer le monitoring Fusion+
+    await this.fusionMonitor.start();
+    
     this.app.listen(port, () => {
       logger.info(`🚀 Resolver API started on port ${port}`);
       logger.info(`📖 Endpoints available:`);
@@ -238,6 +337,8 @@ export class ResolverAPI {
       logger.info(`  GET  /stats - Resolver statistics`);
       logger.info(`  POST /resolve - Resolve a swap`);
       logger.info(`  GET  /swap/:id - Get swap status`);
+      logger.info(`  POST /webhook/fusion-order - Receive ETH→NEAR orders`);
+      logger.info(`  POST /webhook/near-swap - Receive NEAR→ETH orders`);
       logger.info(`  POST /admin/cleanup - Cleanup old nonces`);
     });
   }

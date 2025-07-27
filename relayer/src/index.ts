@@ -1,36 +1,24 @@
-import winston from 'winston';
-import { EthereumMonitor } from './services/ethereum-monitor';
 import { NearExecutor } from './services/near-executor';
 import { FusionResolver } from './services/resolver';
+import { FusionMonitor } from './services/fusion-monitor';
+import { NearMonitorService } from './services/near-monitor';
 import { ResolverAPI } from './api/resolver-api';
 import { config } from './config';
+import { createLogger } from './utils/logger';
 
-const logger = winston.createLogger({
-  level: config.monitoring.logLevel,
-  format: winston.format.combine(
-    winston.format.timestamp(),
-    winston.format.json()
-  ),
-  transports: [
-    new winston.transports.Console({
-      format: winston.format.combine(
-        winston.format.colorize(),
-        winston.format.simple()
-      )
-    }),
-    new winston.transports.File({ filename: 'relayer.log' })
-  ],
-});
+const logger = createLogger('main');
 
 class FusionRelayer {
-  private ethereumMonitor: EthereumMonitor;
+  private fusionMonitor: FusionMonitor;
+  private nearMonitor: NearMonitorService;
   private nearExecutor: NearExecutor;
   private resolver: FusionResolver;
   private resolverAPI: ResolverAPI;
   private isRunning: boolean = false;
 
   constructor() {
-    this.ethereumMonitor = new EthereumMonitor();
+    this.fusionMonitor = new FusionMonitor();
+    this.nearMonitor = new NearMonitorService();
     this.nearExecutor = new NearExecutor();
     this.resolver = new FusionResolver(this.nearExecutor);
     this.resolverAPI = new ResolverAPI();
@@ -42,10 +30,13 @@ class FusionRelayer {
       
       this.isRunning = true;
 
-      // Démarrer le monitoring Ethereum
-      await this.ethereumMonitor.start();
+      // Démarrer le monitoring Fusion+ (ETH→NEAR)
+      await this.fusionMonitor.start();
       
-      // Démarrer le monitoring NEAR
+      // Démarrer le monitoring NEAR (NEAR→ETH)
+      await this.nearMonitor.startMonitoring();
+      
+      // Démarrer le monitoring NEAR executor
       await this.nearExecutor.monitorNearEvents();
 
       // Démarrer l'API resolver
@@ -54,7 +45,8 @@ class FusionRelayer {
 
       logger.info('✅ Fusion Relayer démarré avec succès');
       logger.info(`📊 Configuration:`, {
-        ethereumRpc: config.ethereum.rpcUrl,
+        fusionMonitoring: 'Active (ETH→NEAR)',
+        nearMonitoring: 'Active (NEAR→ETH)',
         nearNetwork: config.near.networkId,
         nearContract: config.near.contractId,
         pollInterval: config.monitoring.pollInterval,
@@ -79,7 +71,8 @@ class FusionRelayer {
     this.isRunning = false;
 
     try {
-      await this.ethereumMonitor.stop();
+      await this.fusionMonitor.stop();
+      this.nearMonitor.stopMonitoring();
       logger.info('✅ Fusion Relayer arrêté proprement');
     } catch (error) {
       logger.error('❌ Erreur lors de l\'arrêt:', error);
@@ -112,7 +105,7 @@ class FusionRelayer {
     return {
       running: this.isRunning,
       config: {
-        ethereumRpc: config.ethereum.rpcUrl,
+        fusionMonitoring: 'Active',
         nearNetwork: config.near.networkId,
         nearContract: config.near.contractId,
       },

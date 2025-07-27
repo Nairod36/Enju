@@ -8,6 +8,8 @@ import { ActionButtonList } from './components/ActionButtonList'
 import { SmartContractActionButtonList } from './components/SmartContractActionButtonList'
 import { InfoList } from './components/InfoList'
 import FusionPlusWrapper from './components/FusionPlusWrapper'
+import SwapCreator from './components/SwapCreator'
+import SwapList from './components/SwapList'
 import { projectId, metadata, networks, wagmiAdapter } from './config'
 
 import "./App.css"
@@ -38,6 +40,7 @@ export function App() {
   const [transactionHash, setTransactionHash] = useState<`0x${string}` | undefined>(undefined);
   const [signedMsg, setSignedMsg] = useState('');
   const [balance, setBalance] = useState('');
+  const [createdSwaps, setCreatedSwaps] = useState<any[]>([]);
 
   const receiveHash = (hash: `0x${string}`) => {
     setTransactionHash(hash);
@@ -51,6 +54,10 @@ export function App() {
     setBalance(balance);
   };
 
+  const handleSwapCreated = (swapData: any) => {
+    setCreatedSwaps(prev => [swapData, ...prev]);
+  };
+
   return (
     <div className={"pages"}>
       <img src="/reown.svg" alt="Reown" style={{ width: '150px', height: '150px' }} />
@@ -58,6 +65,13 @@ export function App() {
       <WagmiProvider config={wagmiAdapter.wagmiConfig}>
         <QueryClientProvider client={queryClient}>
             <appkit-button />
+            
+            {/* Nouvelle section pour les swaps cross-chain */}
+            <div style={{ margin: '20px 0' }}>
+              <SwapCreator onSwapCreated={handleSwapCreated} />
+              <SwapList swaps={createdSwaps} />
+            </div>
+            
             <ActionButtonList sendHash={receiveHash} sendSignMsg={receiveSignedMsg} sendBalance={receivebalance}/>
             <SmartContractActionButtonList />
             <FusionPlusWrapper />

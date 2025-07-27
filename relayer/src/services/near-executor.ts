@@ -191,71 +191,7 @@ export class NearExecutor {
     }
   }
 
-  private async getSecretFromEthereumTx(txHash: string): Promise<string> {
-    try {
-      logger.info(`Extraction du secret depuis la transaction ${txHash}`);
-      
-      // Créer un provider Ethereum pour récupérer la transaction
-      const { ethers } = await import('ethers');
-      const provider = new ethers.JsonRpcProvider(config.ethereum?.rpcUrl || 'https://eth-mainnet.g.alchemy.com/v2/demo');
-      
-      // Récupérer la transaction et son receipt
-      const tx = await provider.getTransaction(txHash);
-      const receipt = await provider.getTransactionReceipt(txHash);
-      
-      if (!tx || !receipt) {
-        throw new Error(`Transaction ${txHash} non trouvée`);
-      }
-      
-      // Analyser les logs pour trouver l'événement qui révèle le secret
-      for (const log of receipt.logs) {
-        try {
-          // Interface pour décoder les événements qui révèlent le secret
-          const iface = new ethers.Interface([
-            "event SwapClaimed(bytes32 indexed secretHash, bytes32 secret)",
-            "event SecretRevealed(bytes32 indexed hash, bytes32 secret)",
-            "event ClaimWithSecret(bytes32 secret)"
-          ]);
-          
-          const parsed = iface.parseLog(log);
-          
-          if (parsed && (parsed.name === 'SwapClaimed' || parsed.name === 'SecretRevealed' || parsed.name === 'ClaimWithSecret')) {
-            const secret = parsed.args.secret;
-            if (secret && secret !== '0x' + '0'.repeat(64)) {
-              logger.info(`Secret trouvé dans l'événement ${parsed.name}: ${secret}`);
-              return secret;
-            }
-          }
-        } catch (parseError) {
-          // Continuer si ce log n'est pas décodable
-          continue;
-        }
-      }
-      
-      // Si aucun secret trouvé dans les logs, analyser les données de transaction
-      if (tx.data && tx.data !== '0x') {
-        // Essayer de décoder les données de transaction pour extraire le secret
-        const secret = this.extractSecretFromCalldata(tx.data);
-        if (secret) {
-          logger.info(`Secret extrait des données de transaction: ${secret}`);
-          return secret;
-        }
-      }
-      
-      throw new Error(`Aucun secret trouvé dans la transaction ${txHash}`);
-      
-    } catch (error) {
-      logger.error(`Erreur lors de l'extraction du secret depuis ${txHash}:`, error);
-      
-      // En cas d'erreur, essayer de récupérer le secret depuis le cache/DB
-      const cachedSecret = await this.getCachedSecret(txHash);
-      if (cachedSecret) {
-        return cachedSecret;
-      }
-      
-      throw error;
-    }
-  }
+  // Fonction supprimée - utilise SecretExtractor à la place
 
   async getHTLCStatus(swapId: string): Promise<any> {
     try {

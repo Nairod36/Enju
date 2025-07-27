@@ -1,18 +1,20 @@
 use near_sdk::{
     collections::UnorderedMap,
-    env, near_bindgen, AccountId, Balance, PanicOnDefault, Promise, 
+    env, near_bindgen, AccountId, PanicOnDefault, Promise, 
     serde::{Deserialize, Serialize},
     json_types::U128,
-    Gas, CryptoHash
+    NearToken, Gas, require, log,
+    borsh::{BorshDeserialize, BorshSerialize}
 };
 use serde_json::json;
 use sha2::{Digest, Sha256};
 use hex;
 
-// Gas for callbacks
-const CALLBACK_GAS: Gas = Gas(20_000_000_000_000);
+// Gas for callbacks (currently unused but kept for future use)
+#[allow(dead_code)]
+const CALLBACK_GAS: Gas = Gas::from_tgas(20);
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize, Clone)]
 #[serde(crate = "near_sdk::serde")]
 pub struct HTLCSwap {
     pub sender: AccountId,
@@ -30,7 +32,7 @@ pub struct HTLCSwap {
     pub claimers: Vec<(AccountId, U128)>, // Track who claimed how much
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize)]
 #[serde(crate = "near_sdk::serde")]
 pub struct SwapInitiatedEvent {
     pub swap_id: String,
@@ -42,7 +44,7 @@ pub struct SwapInitiatedEvent {
     pub eth_tx_hash: Option<String>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize)]
 #[serde(crate = "near_sdk::serde")]
 pub struct SwapClaimedEvent {
     pub swap_id: String,
@@ -53,7 +55,7 @@ pub struct SwapClaimedEvent {
     pub is_completed: bool,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize)]
 #[serde(crate = "near_sdk::serde")]
 pub struct SwapRefundedEvent {
     pub swap_id: String,
@@ -61,10 +63,37 @@ pub struct SwapRefundedEvent {
     pub amount: U128,
 }
 
+#[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize)]
+#[serde(crate = "near_sdk::serde")]
+pub struct EthSwapRequest {
+    pub swap_id: String,
+    pub near_sender: AccountId,
+    pub eth_recipient: String,      // Ethereum address as string
+    pub amount: U128,
+    pub near_token: Option<AccountId>,
+    pub eth_token: String,          // Ethereum token address
+    pub hashlock: String,
+    pub timelock: u64,
+    pub fusion_order_params: String, // JSON string with Fusion+ order parameters
+}
+
+#[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize)]
+#[serde(crate = "near_sdk::serde")]
+pub struct EthSwapRequestedEvent {
+    pub swap_id: String,
+    pub near_sender: AccountId,
+    pub eth_recipient: String,
+    pub amount: U128,
+    pub hashlock: String,
+    pub timelock: u64,
+    pub eth_token: String,
+}
+
 #[near_bindgen]
-#[derive(PanicOnDefault)]
+#[derive(BorshSerialize, BorshDeserialize, PanicOnDefault)]
 pub struct FusionHTLC {
     pub swaps: UnorderedMap<String, HTLCSwap>,
+    pub eth_swap_requests: UnorderedMap<String, EthSwapRequest>, // NEAR→ETH swap requests
     pub owner: AccountId,
     pub claims_in_progress: UnorderedMap<String, bool>, // Anti-reentrancy protection
 }
@@ -75,6 +104,7 @@ impl FusionHTLC {
     pub fn new(owner: AccountId) -> Self {
         Self {
             swaps: UnorderedMap::new(b"s"),
+            eth_swap_requests: UnorderedMap::new(b"e"),
             owner,
             claims_in_progress: UnorderedMap::new(b"c"),
         }
@@ -93,20 +123,20 @@ impl FusionHTLC {
         let sender = env::predecessor_account_id();
         let amount = env::attached_deposit();
         
-        require!(amount > 0, "Amount must be greater than 0");
+        require!(amount.as_yoctonear() > 0, "Amount must be greater than 0");
         require!(timelock > env::block_timestamp(), "Timelock must be in the future");
         require!(hashlock.len() == 64, "Hashlock must be 32 bytes hex string"); // 32 bytes = 64 hex chars
         
         // Generate unique swap ID
         let swap_id = self.generate_swap_id(&sender, &receiver, &hashlock, timelock);
         
-        require!(!self.swaps.contains_key(&swap_id), "Swap already exists");
+        require!(self.swaps.get(&swap_id).is_none(), "Swap already exists");
 
         let swap = HTLCSwap {
             sender: sender.clone(),
             receiver: receiver.clone(),
-            amount: U128(amount),
-            amount_remaining: U128(amount),
+            amount: U128(amount.as_yoctonear()),
+            amount_remaining: U128(amount.as_yoctonear()),
             amount_claimed: U128(0),
             token: None, // NEAR native token
             hashlock: hashlock.clone(),
@@ -121,11 +151,11 @@ impl FusionHTLC {
         self.swaps.insert(&swap_id, &swap);
 
         // Emit event
-        env::log_str(&serde_json::to_string(&SwapInitiatedEvent {
+        log!("EVENT_SWAP_INITIATED:{}", serde_json::to_string(&SwapInitiatedEvent {
             swap_id: swap_id.clone(),
             sender,
             receiver,
-            amount: U128(amount),
+            amount: U128(amount.as_yoctonear()),
             hashlock,
             timelock,
             eth_tx_hash,
@@ -176,7 +206,7 @@ impl FusionHTLC {
         require!(payout > 0, "Payout amount must be positive");
 
         // Emit event
-        env::log_str(&serde_json::to_string(&SwapClaimedEvent {
+        log!("EVENT_SWAP_CLAIMED:{}", serde_json::to_string(&SwapClaimedEvent {
             swap_id: swap_id.clone(),
             claimer: claimer.clone(),
             secret,
@@ -187,7 +217,7 @@ impl FusionHTLC {
 
         // Clear claim in progress and transfer funds
         self.clear_claim_in_progress(&swap_id);
-        Promise::new(claimer).transfer(payout)
+        Promise::new(claimer).transfer(NearToken::from_yoctonear(payout))
     }
 
     /// Refund the remaining amount after timelock expires
@@ -210,14 +240,14 @@ impl FusionHTLC {
         self.swaps.insert(&swap_id, &swap);
 
         // Emit event
-        env::log_str(&serde_json::to_string(&SwapRefundedEvent {
+        log!("EVENT_SWAP_REFUNDED:{}", serde_json::to_string(&SwapRefundedEvent {
             swap_id: swap_id.clone(),
             refunder: refunder.clone(),
             amount: U128(refund_amount),
         }).unwrap());
 
         // Refund remaining amount to sender
-        Promise::new(refunder).transfer(refund_amount)
+        Promise::new(refunder).transfer(NearToken::from_yoctonear(refund_amount))
     }
 
     /// Get swap details
@@ -265,11 +295,11 @@ impl FusionHTLC {
                 
                 // If not refunded yet, mark as available for refund
                 if !swap.is_refunded && swap.amount_remaining.0 > 0 {
-                    env::log_str(&format!(
+                    log!(
                         "Swap {} expired and available for refund. Remaining: {}", 
                         swap_id, 
                         swap.amount_remaining.0
-                    ));
+                    );
                 }
                 
                 self.swaps.insert(&swap_id, &swap);
@@ -309,16 +339,112 @@ impl FusionHTLC {
         hex::encode(hash)
     }
     
+    /// Request a swap from NEAR to Ethereum
+    /// This locks NEAR tokens and notifies the relayer to create a Fusion+ order
+    #[payable]
+    pub fn request_eth_swap(
+        &mut self,
+        eth_recipient: String,
+        eth_token: String,
+        hashlock: String,
+        timelock: u64,
+        fusion_order_params: String,
+    ) -> String {
+        let near_sender = env::predecessor_account_id();
+        let amount = env::attached_deposit();
+        
+        require!(amount.as_yoctonear() > 0, "Amount must be greater than 0");
+        require!(timelock > env::block_timestamp(), "Timelock must be in the future");
+        require!(hashlock.len() == 64, "Hashlock must be 32 bytes hex string");
+        require!(eth_recipient.len() == 42 && eth_recipient.starts_with("0x"), "Invalid Ethereum address");
+        
+        let swap_id = format!("near_to_eth_{}", env::block_timestamp());
+        
+        let eth_swap_request = EthSwapRequest {
+            swap_id: swap_id.clone(),
+            near_sender: near_sender.clone(),
+            eth_recipient: eth_recipient.clone(),
+            amount: U128(amount.as_yoctonear()),
+            near_token: None, // NEAR tokens for now
+            eth_token: eth_token.clone(),
+            hashlock: hashlock.clone(),
+            timelock,
+            fusion_order_params,
+        };
+        
+        // Store the request
+        self.eth_swap_requests.insert(&swap_id, &eth_swap_request);
+        
+        // Emit event for relayer to detect
+        let event = EthSwapRequestedEvent {
+            swap_id: swap_id.clone(),
+            near_sender,
+            eth_recipient,
+            amount: U128(amount.as_yoctonear()),
+            hashlock,
+            timelock,
+            eth_token,
+        };
+        
+        log!("EVENT_ETH_SWAP_REQUESTED:{}", serde_json::to_string(&event).unwrap());
+        
+        swap_id
+    }
+
+    /// Get an Ethereum swap request by ID
+    pub fn get_eth_swap_request(&self, swap_id: String) -> Option<EthSwapRequest> {
+        self.eth_swap_requests.get(&swap_id)
+    }
+
+    /// Complete an Ethereum swap request by providing the secret
+    /// This unlocks the NEAR tokens to the specified recipient
+    pub fn complete_eth_swap(&mut self, swap_id: String, secret: String, recipient: AccountId) {
+        let request = self.eth_swap_requests.get(&swap_id)
+            .expect("Ethereum swap request not found");
+        
+        // Verify the secret matches the hashlock
+        let hash = hex::encode(Sha256::digest(secret.as_bytes()));
+        require!(hash == request.hashlock, "Invalid secret");
+        
+        // Check timelock
+        require!(env::block_timestamp() <= request.timelock, "Swap expired");
+        
+        // Transfer the locked NEAR tokens to recipient
+        Promise::new(recipient.clone()).transfer(NearToken::from_yoctonear(request.amount.0));
+        
+        // Remove the request
+        self.eth_swap_requests.remove(&swap_id);
+        
+        log!("Ethereum swap {} completed, NEAR tokens sent to {}", swap_id, recipient);
+    }
+
+    /// Refund an Ethereum swap request if it has expired
+    pub fn refund_eth_swap(&mut self, swap_id: String) {
+        let request = self.eth_swap_requests.get(&swap_id)
+            .expect("Ethereum swap request not found");
+        
+        // Check that timelock has expired
+        require!(env::block_timestamp() > request.timelock, "Swap not yet expired");
+        
+        // Refund the locked NEAR tokens to original sender
+        Promise::new(request.near_sender.clone()).transfer(NearToken::from_yoctonear(request.amount.0));
+        
+        // Remove the request
+        self.eth_swap_requests.remove(&swap_id);
+        
+        log!("Ethereum swap {} refunded to {}", swap_id, request.near_sender);
+    }
+
     // Anti-reentrancy helper functions
-    fn is_claiming_in_progress(&self, swap_id: &str) -> bool {
+    fn is_claiming_in_progress(&self, swap_id: &String) -> bool {
         self.claims_in_progress.get(swap_id).unwrap_or(false)
     }
     
-    fn mark_claim_in_progress(&mut self, swap_id: &str) {
+    fn mark_claim_in_progress(&mut self, swap_id: &String) {
         self.claims_in_progress.insert(swap_id, &true);
     }
     
-    fn clear_claim_in_progress(&mut self, swap_id: &str) {
+    fn clear_claim_in_progress(&mut self, swap_id: &String) {
         self.claims_in_progress.remove(swap_id);
     }
 }
@@ -327,7 +453,7 @@ impl FusionHTLC {
 mod tests {
     use super::*;
     use near_sdk::test_utils::{accounts, VMContextBuilder};
-    use near_sdk::{testing_env, MockedBlockchain};
+    use near_sdk::testing_env;
     use sha2::{Digest, Sha256};
 
     fn get_context(predecessor: AccountId) -> VMContextBuilder {
@@ -348,7 +474,7 @@ mod tests {
         let expected_hash = hex::encode(Sha256::digest(secret.as_bytes()));
         
         // Initiate swap
-        context.attached_deposit(1_000_000_000_000_000_000_000_000); // 1 NEAR
+        context.attached_deposit(NearToken::from_near(1)); // 1 NEAR
         context.block_timestamp(1_000_000_000);
         testing_env!(context.build());
         
@@ -402,7 +528,7 @@ mod tests {
         let expected_hash = hex::encode(Sha256::digest(secret.as_bytes()));
         
         // Initiate swap with 2 NEAR
-        context.attached_deposit(2_000_000_000_000_000_000_000_000); // 2 NEAR
+        context.attached_deposit(NearToken::from_near(2)); // 2 NEAR
         context.block_timestamp(1_000_000_000);
         testing_env!(context.build());
         
@@ -468,7 +594,7 @@ mod tests {
         let expected_hash = hex::encode(Sha256::digest(secret.as_bytes()));
         
         // Initiate swap
-        context.attached_deposit(1_000_000_000_000_000_000_000_000);
+        context.attached_deposit(NearToken::from_near(1));
         context.block_timestamp(1_000_000_000);
         testing_env!(context.build());
         
@@ -490,5 +616,160 @@ mod tests {
         let swap = contract.get_swap(swap_id).unwrap();
         assert!(swap.is_refunded);
         assert!(swap.is_completed);
+    }
+
+    #[test]
+    fn test_request_eth_swap() {
+        let mut context = get_context(accounts(0));
+        testing_env!(context.build());
+        
+        let mut contract = FusionHTLC::new(accounts(0));
+        
+        let secret = "test_secret_eth";
+        let expected_hash = hex::encode(Sha256::digest(secret.as_bytes()));
+        
+        // Request ETH swap with 1 NEAR
+        context.attached_deposit(NearToken::from_near(1)); // 1 NEAR
+        context.block_timestamp(1_000_000_000);
+        testing_env!(context.build());
+        
+        let swap_id = contract.request_eth_swap(
+            "0x1234567890123456789012345678901234567890".to_string(),
+            "0xA0b86a33E6417c7E52e62b1F4e68CE6A8d4297b2".to_string(), // USDC
+            expected_hash,
+            2_000_000_000, // 2 seconds timelock
+            "{}".to_string() // Empty fusion params for test
+        );
+        
+        // Verify eth swap request was created
+        let request = contract.get_eth_swap_request(swap_id.clone()).unwrap();
+        assert_eq!(request.near_sender, accounts(0));
+        assert_eq!(request.eth_recipient, "0x1234567890123456789012345678901234567890");
+        assert_eq!(request.amount.0, 1_000_000_000_000_000_000_000_000);
+        assert_eq!(request.eth_token, "0xA0b86a33E6417c7E52e62b1F4e68CE6A8d4297b2");
+    }
+
+    #[test]
+    fn test_complete_eth_swap() {
+        let mut context = get_context(accounts(0));
+        testing_env!(context.build());
+        
+        let mut contract = FusionHTLC::new(accounts(0));
+        
+        let secret = "test_secret_complete";
+        let expected_hash = hex::encode(Sha256::digest(secret.as_bytes()));
+        
+        // Request ETH swap
+        context.attached_deposit(NearToken::from_near(1));
+        context.block_timestamp(1_000_000_000);
+        testing_env!(context.build());
+        
+        let swap_id = contract.request_eth_swap(
+            "0x1234567890123456789012345678901234567890".to_string(),
+            "0xA0b86a33E6417c7E52e62b1F4e68CE6A8d4297b2".to_string(),
+            expected_hash,
+            2_000_000_000,
+            "{}".to_string()
+        );
+        
+        // Complete the swap by providing secret
+        contract.complete_eth_swap(
+            swap_id.clone(),
+            secret.to_string(),
+            accounts(1) // Recipient
+        );
+        
+        // Verify request was removed
+        assert!(contract.get_eth_swap_request(swap_id).is_none());
+    }
+
+    #[test]
+    fn test_refund_eth_swap() {
+        let mut context = get_context(accounts(0));
+        testing_env!(context.build());
+        
+        let mut contract = FusionHTLC::new(accounts(0));
+        
+        let secret = "test_secret_refund";
+        let expected_hash = hex::encode(Sha256::digest(secret.as_bytes()));
+        
+        // Request ETH swap with short timelock
+        context.attached_deposit(NearToken::from_near(1));
+        context.block_timestamp(1_000_000_000);
+        testing_env!(context.build());
+        
+        let swap_id = contract.request_eth_swap(
+            "0x1234567890123456789012345678901234567890".to_string(),
+            "0xA0b86a33E6417c7E52e62b1F4e68CE6A8d4297b2".to_string(),
+            expected_hash,
+            1_500_000_000, // Timelock in past
+            "{}".to_string()
+        );
+        
+        // Move time forward past timelock
+        context.block_timestamp(2_000_000_000);
+        testing_env!(context.build());
+        
+        // Refund the eth swap
+        contract.refund_eth_swap(swap_id.clone());
+        
+        // Verify request was removed
+        assert!(contract.get_eth_swap_request(swap_id).is_none());
+    }
+
+    #[test]
+    #[should_panic(expected = "Invalid Ethereum address")]
+    fn test_request_eth_swap_invalid_address() {
+        let mut context = get_context(accounts(0));
+        testing_env!(context.build());
+        
+        let mut contract = FusionHTLC::new(accounts(0));
+        
+        let secret = "test_secret";
+        let expected_hash = hex::encode(Sha256::digest(secret.as_bytes()));
+        
+        context.attached_deposit(NearToken::from_near(1));
+        context.block_timestamp(1_000_000_000);
+        testing_env!(context.build());
+        
+        // Should panic with invalid Ethereum address
+        contract.request_eth_swap(
+            "invalid_address".to_string(),
+            "0xA0b86a33E6417c7E52e62b1F4e68CE6A8d4297b2".to_string(),
+            expected_hash,
+            2_000_000_000,
+            "{}".to_string()
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "Invalid secret")]
+    fn test_complete_eth_swap_wrong_secret() {
+        let mut context = get_context(accounts(0));
+        testing_env!(context.build());
+        
+        let mut contract = FusionHTLC::new(accounts(0));
+        
+        let secret = "test_secret";
+        let expected_hash = hex::encode(Sha256::digest(secret.as_bytes()));
+        
+        context.attached_deposit(NearToken::from_near(1));
+        context.block_timestamp(1_000_000_000);
+        testing_env!(context.build());
+        
+        let swap_id = contract.request_eth_swap(
+            "0x1234567890123456789012345678901234567890".to_string(),
+            "0xA0b86a33E6417c7E52e62b1F4e68CE6A8d4297b2".to_string(),
+            expected_hash,
+            2_000_000_000,
+            "{}".to_string()
+        );
+        
+        // Should panic with wrong secret
+        contract.complete_eth_swap(
+            swap_id,
+            "wrong_secret".to_string(),
+            accounts(1)
+        );
     }
 }

@@ -29,6 +29,16 @@ const FusionPlus: React.FC<FusionPlusProps> = ({ provider, userAddress }) => {
   const [activeOrders, setActiveOrders] = useState<any[]>([]);
   const [creatingOrder, setCreatingOrder] = useState<boolean>(false);
   const [sdkInstance, setSdkInstance] = useState<SDK | null>(null);
+  
+  // États pour le formulaire de création de swap
+  const [swapForm, setSwapForm] = useState({
+    fromToken: 'ETH',
+    toToken: 'NEAR',
+    amount: '',
+    nearAddress: '',
+    timelock: '3600' // 1 heure par défaut
+  });
+  const [createdSwaps, setCreatedSwaps] = useState<any[]>([]);
 
   // Réinitialise l'état quand le provider ou l'adresse changent
   useEffect(() => {
