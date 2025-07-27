@@ -25,6 +25,7 @@ export interface FloatingIslandRef {
   spawnChest: () => void;
   saveIsland: (customName?: string) => string | null;
   loadIsland: (id: string) => boolean;
+  loadFromDatabase: (islandData: any) => boolean;
   getCurrentState: () => {
     seed: number;
     islandData: any;
@@ -215,6 +216,48 @@ export const FloatingIsland = React.forwardRef<
         return true;
       } catch (error) {
         console.error("❌ Erreur lors du chargement:", error);
+        return false;
+      }
+    },
+    loadFromDatabase: (dbIsland: any) => {
+      try {
+        console.log("🔄 Chargement de l'île depuis la base de données...", dbIsland);
+        
+        // Restaurer les données de l'île depuis la base
+        if (dbIsland.islandData) {
+          setIslandData(dbIsland.islandData);
+        }
+        
+        // Restaurer les arbres utilisateur
+        if (dbIsland.userTrees && dbIsland.userTrees.length > 0) {
+          setUserTrees(dbIsland.userTrees);
+          console.log(`✅ ${dbIsland.userTrees.length} arbres restaurés`);
+        }
+        
+        // Restaurer les coffres
+        if (dbIsland.chests && dbIsland.chests.length > 0) {
+          setChests(dbIsland.chests);
+          console.log(`✅ ${dbIsland.chests.length} coffres restaurés`);
+        }
+        
+        // Restaurer les tuiles utilisées
+        if (dbIsland.usedTiles && dbIsland.usedTiles.length > 0) {
+          setUsedTiles(new Set(dbIsland.usedTiles));
+          console.log(`✅ ${dbIsland.usedTiles.length} tuiles utilisées restaurées`);
+        }
+        
+        // Restaurer le nombre d'arbres
+        if (dbIsland.treeCount !== undefined) {
+          setTreeCount(dbIsland.treeCount);
+        }
+        
+        // Mettre à jour l'ID de l'île courante
+        setCurrentIslandId(dbIsland.id);
+        
+        console.log(`✅ Île "${dbIsland.name}" chargée depuis la base de données`);
+        return true;
+      } catch (error) {
+        console.error("❌ Erreur lors du chargement depuis la base:", error);
         return false;
       }
     },

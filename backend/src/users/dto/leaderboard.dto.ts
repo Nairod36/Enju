@@ -33,7 +33,7 @@ export class LeaderboardDto {
     category: string;
 
     @ApiPropertyOptional({
-        description: 'Additional biome stats',
+        description: 'Additional island stats',
         type: 'object'
     })
     biomeStats?: {

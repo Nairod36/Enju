@@ -54,8 +54,7 @@ export class UserResponseDto {
         description: 'Token balance',
         example: '1250.75000000'
     })
-    @Transform(({ value }) => value.toString())
-    tokenBalance: string;
+    tokenBalance: number;
 
     @ApiProperty({
         description: 'Connection status',

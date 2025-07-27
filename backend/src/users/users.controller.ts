@@ -52,6 +52,16 @@ export class UsersController {
     return this.usersService.getLeaderboard();
   }
 
+  @Post('nonce')
+  @ApiOperation({
+    summary: 'Generate nonce',
+    description: 'Generate nonce for wallet authentication'
+  })
+  @ApiResponse({ status: 201, description: 'Nonce generated successfully' })
+  async generateNonce(@Body() body: { walletAddress: string }) {
+    return this.usersService.generateNonce(body.walletAddress);
+  }
+
   @Post('connect')
   @ApiOperation({
     summary: 'Connect wallet',

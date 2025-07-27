@@ -3,8 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { PrismaService } from './prisma/prisma.service';
 import { UsersModule } from './users/users.module';
 import { TransactionsModule } from './transactions/transactions.module';
-import { BiomesModule } from './biomes/biomes.module';
-import { PlantsModule } from './plants/plants.module';
+import { IslandsModule } from './islands/islands.module';
 import { HealthController } from './health/health.controller';
 
 @Module({
@@ -15,8 +14,7 @@ import { HealthController } from './health/health.controller';
     }), 
     UsersModule, 
     TransactionsModule,
-    BiomesModule,
-    PlantsModule
+    IslandsModule
   ],
   controllers: [HealthController],
   providers: [PrismaService],

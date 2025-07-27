@@ -7,7 +7,7 @@ export function AppHeader() {
   return (
     <header className="fixed top-0 left-0 right-0 z-50 backdrop-blur">
       <div className="max-w-[1600px] mx-auto px-4 py-6">
-        <div className="bg-white/90 rounded-full px-6 py-4 flex items-center justify-between shadow-md">
+        <div className="bg-white/90 rounded-full px-6 flex items-center justify-between shadow-md">
           {/* Logo & Brand */}
           <Link
             to="/app"
@@ -46,14 +46,7 @@ export function AppHeader() {
 
           {/* Actions */}
           <div className="flex items-center gap-3">
-            <Button
-              variant="outline"
-              size="sm"
-              className="rounded-full border-emerald-300 text-emerald-800 hover:bg-emerald-50 px-4 h-10"
-            >
-              <Wallet size={16} className="mr-2" />
-              Connect
-            </Button>
+            <appkit-button />
 
             <Button
               variant="ghost"

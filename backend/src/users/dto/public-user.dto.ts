@@ -63,17 +63,17 @@ export class PublicUserDto {
     createdAt: Date;
 
     @ApiPropertyOptional({
-        description: 'Biome information (public)',
+        description: 'Active island information (public)',
         type: 'object',
         properties: {
-            name: { type: 'string', example: 'Forêt des Champions' },
-            description: { type: 'string', example: 'Une forêt dense et productive' },
+            name: { type: 'string', example: 'Île Tropicale' },
+            description: { type: 'string', example: 'Une île paradisiaque et productive' },
             totalTrees: { type: 'number', example: 25 },
             healthScore: { type: 'number', example: 95.5 },
             lastUpdateAt: { type: 'string', example: '2024-01-15T10:30:00Z' }
         }
     })
-    biome?: {
+    island?: {
         name: string;
         description?: string;
         totalTrees: number;
