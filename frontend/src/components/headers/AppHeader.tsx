@@ -5,7 +5,7 @@ import FluidLogo from "../FluidLogo";
 
 export function AppHeader() {
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 bg-gradient-to-r from-white/80 to-emerald-20/40 backdrop-blur">
+    <header className="fixed top-0 left-0 right-0 z-50 backdrop-blur">
       <div className="max-w-[1600px] mx-auto px-4 py-6">
         <div className="bg-white/90 rounded-full px-6 py-4 flex items-center justify-between shadow-md">
           {/* Logo & Brand */}
@@ -19,25 +19,25 @@ export function AppHeader() {
           {/* Navigation */}
           <nav className="hidden md:flex items-center gap-6 text-sm">
             <Link
-              to="/app/forest"
+              to="/app"
               className="text-slate-700 hover:text-slate-900 transition-colors px-3 py-2 rounded-lg hover:bg-emerald-50"
             >
               Forest
             </Link>
             <Link
-              to="/app/defi"
+              to="/game"
               className="text-slate-700 hover:text-slate-900 transition-colors px-3 py-2 rounded-lg hover:bg-emerald-50"
             >
-              DeFi
+              Game
             </Link>
             <Link
-              to="/app/rewards"
+              to="/app"
               className="text-slate-700 hover:text-slate-900 transition-colors px-3 py-2 rounded-lg hover:bg-emerald-50"
             >
               Rewards
             </Link>
             <Link
-              to="/app/marketplace"
+              to="/app"
               className="text-slate-700 hover:text-slate-900 transition-colors px-3 py-2 rounded-lg hover:bg-emerald-50"
             >
               Marketplace
