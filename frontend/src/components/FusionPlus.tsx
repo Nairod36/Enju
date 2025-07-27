@@ -1,19 +1,17 @@
 import React, { useState, useEffect } from "react";
 import { SDK } from "@1inch/cross-chain-sdk";
+import { HashLock } from "@1inch/cross-chain-sdk";
 import type { ExternalProvider } from "@ethersproject/providers";
+import { FUSION_CONFIG } from "../config/fusion-near";
 
-// Utiliser le proxy local pour éviter les problèmes CORS
-const FUSION_PLUS_API_URL = process.env.NODE_ENV === 'production' 
-  ? "http://localhost:8080"  // Via proxy Nginx en production
-  : "https://api.1inch.dev/fusion-plus";  // Direct en développement
 
 /**
  * Créer une instance du SDK Cross-Chain pour Fusion+
  */
 const createFusionPlusSDK = () => {
   return new SDK({
-    url: FUSION_PLUS_API_URL,
-    authKey: import.meta.env.VITE_FUSION_AUTH_KEY,
+    url: FUSION_CONFIG.apiUrl,
+    authKey: FUSION_CONFIG.authKey,
   });
 };
 
@@ -29,6 +27,8 @@ const FusionPlus: React.FC<FusionPlusProps> = ({ provider, userAddress }) => {
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string>("");
   const [activeOrders, setActiveOrders] = useState<any[]>([]);
+  const [creatingOrder, setCreatingOrder] = useState<boolean>(false);
+  const [sdkInstance, setSdkInstance] = useState<SDK | null>(null);
 
   // Réinitialise l'état quand le provider ou l'adresse changent
   useEffect(() => {
@@ -48,11 +48,17 @@ const FusionPlus: React.FC<FusionPlusProps> = ({ provider, userAddress }) => {
     setError("");
     
     try {
+      // Vérifier la configuration
+      if (!FUSION_CONFIG.authKey) {
+        throw new Error("Clé API Fusion+ manquante. Vérifiez VITE_FUSION_AUTH_KEY.");
+      }
+      
       // Créer une instance du SDK
       const sdk = createFusionPlusSDK();
+      setSdkInstance(sdk);
       
       // Récupérer les ordres actifs pour tester la connexion
-      const orders = await sdk.getActiveOrders({ page: 1, limit: 5 });
+      const orders = await sdk.getActiveOrders({ page: 1, limit: 10 });
       
       setActiveOrders(orders.items || []);
       setIsConnected(true);
@@ -64,6 +70,61 @@ const FusionPlus: React.FC<FusionPlusProps> = ({ provider, userAddress }) => {
       setActiveOrders([]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  /**
+   * Créer un ordre cross-chain de test
+   */
+  const handleCreateTestOrder = async (): Promise<void> => {
+    if (!sdkInstance || !userAddress) return;
+    
+    setCreatingOrder(true);
+    setError("");
+    
+    try {
+      // Paramètres pour un ordre de test : ETH -> USDC cross-chain
+      const quoteParams = {
+        srcChainId: 1, // Ethereum
+        dstChainId: 137, // Polygon
+        srcTokenAddress: "0x0000000000000000000000000000000000000000", // ETH
+        dstTokenAddress: "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174", // USDC sur Polygon
+        amount: "10000000000000000", // 0.01 ETH en wei
+        walletAddress: userAddress
+      };
+      
+      // Obtenir un quote
+      console.log("Requesting quote with params:", quoteParams);
+      const quote = await sdkInstance.getQuote(quoteParams);
+      console.log("Quote received:", quote);
+      
+      // Générer un secret et son hash pour l'ordre cross-chain
+      const secret = "test_secret_" + Date.now();
+      const secretHash = HashLock.hashSecret(secret);
+      const secretHashes = [secretHash];
+      
+      // Créer un HashLock pour un seul fill
+      const hashLock = HashLock.forSingleFill(secret);
+      
+      // Créer l'ordre
+      const orderParams = {
+        walletAddress: userAddress,
+        hashLock,
+        secretHashes,
+        permit: undefined // Optionnel
+      };
+      
+      const preparedOrder = sdkInstance.createOrder(quote, orderParams);
+      console.log("Order created:", preparedOrder);
+      
+      // Rafraîchir la liste des ordres
+      await handleConnectFusionPlus();
+      
+    } catch (err: any) {
+      console.error("Order creation error:", err);
+      setError(`Erreur création ordre: ${err?.message ?? "Erreur inconnue"}`);
+    } finally {
+      setCreatingOrder(false);
     }
   };
 
@@ -98,40 +159,99 @@ const FusionPlus: React.FC<FusionPlusProps> = ({ provider, userAddress }) => {
         </button>
       ) : (
         <div>
-          <p className="fusion-status" style={{ color: '#059669', fontWeight: 500 }}>
-            ✅ Connecté à 1inch Fusion+
-          </p>
-          <p className="fusion-address" style={{ 
-            color: '#6b7280', 
-            fontSize: '12px', 
-            fontFamily: 'monospace' 
-          }}>
-            Wallet: {userAddress}
-          </p>
+          <div style={{ marginBottom: '16px' }}>
+            <p className="fusion-status" style={{ color: '#059669', fontWeight: 500, margin: '0 0 4px 0' }}>
+              ✅ Connecté à 1inch Fusion+
+            </p>
+            <p className="fusion-address" style={{ 
+              color: '#6b7280', 
+              fontSize: '12px', 
+              fontFamily: 'monospace',
+              margin: '0 0 8px 0'
+            }}>
+              Wallet: {userAddress}
+            </p>
+            <p style={{ 
+              color: '#6b7280', 
+              fontSize: '12px',
+              margin: '0 0 12px 0'
+            }}>
+              API: {FUSION_CONFIG.apiUrl}
+            </p>
+          </div>
+          
+          <div style={{ marginBottom: '16px' }}>
+            <button
+              onClick={handleCreateTestOrder}
+              disabled={creatingOrder || !sdkInstance}
+              style={{
+                background: '#3b82f6',
+                color: 'white',
+                border: 'none',
+                padding: '8px 16px',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontSize: '12px',
+                marginRight: '8px',
+                opacity: (creatingOrder || !sdkInstance) ? 0.6 : 1
+              }}
+            >
+              {creatingOrder ? "Création..." : "Créer ordre test ETH→USDC"}
+            </button>
+            
+            <button
+              onClick={handleConnectFusionPlus}
+              disabled={loading}
+              style={{
+                background: '#10b981',
+                color: 'white',
+                border: 'none',
+                padding: '8px 16px',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontSize: '12px',
+                opacity: loading ? 0.6 : 1
+              }}
+            >
+              {loading ? "Actualisation..." : "Actualiser ordres"}
+            </button>
+          </div>
           
           <div className="active-orders">
-            <h4 style={{ margin: '15px 0 8px 0', color: '#374151' }}>
+            <h4 style={{ margin: '0 0 8px 0', color: '#374151' }}>
               Ordres actifs ({activeOrders.length})
             </h4>
             {activeOrders.length > 0 ? (
-              <ul style={{ listStyle: 'none', padding: 0 }}>
-                {activeOrders.slice(0, 3).map((order, index) => (
-                  <li key={index} className="order-item" style={{
+              <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
+                {activeOrders.map((order, index) => (
+                  <div key={index} className="order-item" style={{
                     background: '#f9fafb',
-                    padding: '6px 10px',
+                    padding: '8px 12px',
                     margin: '4px 0',
                     borderRadius: '4px',
-                    fontFamily: 'monospace'
+                    border: '1px solid #e5e7eb',
+                    fontSize: '12px'
                   }}>
-                    <small>
-                      {order.orderHash?.slice(0, 10)}...
-                      {order.orderHash?.slice(-8)}
-                    </small>
-                  </li>
+                    <div style={{ fontFamily: 'monospace', marginBottom: '4px' }}>
+                      Hash: {order.orderHash?.slice(0, 12)}...{order.orderHash?.slice(-8)}
+                    </div>
+                    {order.srcChainId && order.dstChainId && (
+                      <div style={{ color: '#6b7280' }}>
+                        Chaînes: {order.srcChainId} → {order.dstChainId}
+                      </div>
+                    )}
+                    {order.makingAmount && (
+                      <div style={{ color: '#6b7280' }}>
+                        Montant: {order.makingAmount}
+                      </div>
+                    )}
+                  </div>
                 ))}
-              </ul>
+              </div>
             ) : (
-              <p>Aucun ordre actif trouvé</p>
+              <p style={{ color: '#6b7280', fontSize: '14px' }}>
+                Aucun ordre actif trouvé
+              </p>
             )}
           </div>
         </div>
