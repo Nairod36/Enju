@@ -9,7 +9,7 @@ import * as THREE from "three";
 import { useFrame } from "@react-three/fiber";
 import { TreeData } from "./island.types";
 import { HexTile, WaterTile, AnimatedTree, Rock } from "./island.components";
-import { generateIsland, generateIslandFromShape } from "./island.generators.utils";
+import { generateIsland, generateIslandFromShape, enlargeIsland } from "./island.generators.utils";
 import { generateIslandShape, enlargeIslandShape } from "./island.generators";
 
 // ===== COMPOSANT ÎLE VOLANTE =====

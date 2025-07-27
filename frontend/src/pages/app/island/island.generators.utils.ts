@@ -31,7 +31,7 @@ const validatePosition = (position: [number, number, number]): [number, number, 
 const validateKey = (row: number, col: number): string => {
     const validRow = validateNumber(row);
     const validCol = validateNumber(col);
-    return `${validRow}-${validCol}`;
+    return `${validRow},${validCol}`;
 };
 
 // Fonction de lissage automatique des contours d'îles
@@ -45,7 +45,7 @@ const smoothIslandContours = (islandShape: any[], seed: number): any[] => {
     const tileSet = new Set<string>();
     islandShape.forEach(({ row, cols }) => {
         cols.forEach((col: number) => {
-            tileSet.add(`${row}-${col}`);
+            tileSet.add(`${row},${col}`);
         });
     });
 
@@ -57,13 +57,13 @@ const smoothIslandContours = (islandShape: any[], seed: number): any[] => {
             [row - 1, col + (row % 2 === 0 ? -1 : 1)],
             [row + 1, col + (row % 2 === 0 ? -1 : 1)]
         ];
-        return neighbors.filter(([r, c]) => tileSet.has(`${r}-${c}`)).length;
+        return neighbors.filter(([r, c]) => tileSet.has(`${r},${c}`)).length;
     };
 
     // Passe de lissage : retirer les tuiles isolées
     const tilesToRemove = new Set<string>();
     tileSet.forEach(tileKey => {
-        const [rowStr, colStr] = tileKey.split('-');
+        const [rowStr, colStr] = tileKey.split(',');
         const row = parseInt(rowStr);
         const col = parseInt(colStr);
         const neighborCount = countNeighbors(row, col);
@@ -79,7 +79,7 @@ const smoothIslandContours = (islandShape: any[], seed: number): any[] => {
     // Passe de remplissage : ajouter des tuiles pour lisser les contours
     const tilesToAdd = new Set<string>();
     tileSet.forEach(tileKey => {
-        const [rowStr, colStr] = tileKey.split('-');
+        const [rowStr, colStr] = tileKey.split(',');
         const row = parseInt(rowStr);
         const col = parseInt(colStr);
 
@@ -92,7 +92,7 @@ const smoothIslandContours = (islandShape: any[], seed: number): any[] => {
         ];
 
         neighbors.forEach(([r, c]) => {
-            const neighborKey = `${r}-${c}`;
+            const neighborKey = `${r},${c}`;
             if (!tileSet.has(neighborKey)) {
                 const neighborOfNeighbor = countNeighbors(r, c);
                 // Ajouter si le voisin vide a suffisamment de voisins existants
@@ -108,7 +108,7 @@ const smoothIslandContours = (islandShape: any[], seed: number): any[] => {
     // Reconvertir en format IslandShape
     const tilesByRow = new Map<number, number[]>();
     tileSet.forEach(tileKey => {
-        const [rowStr, colStr] = tileKey.split('-');
+        const [rowStr, colStr] = tileKey.split(',');
         const row = parseInt(rowStr);
         const col = parseInt(colStr);
 
@@ -600,7 +600,7 @@ export const generateIsland = (seed: number, customShape?: any[]): IslandGenerat
                 const baseCol = riverFunction(row);
                 if (typeof baseCol === 'number' && !isNaN(baseCol) && isFinite(baseCol)) {
                     const col = baseCol + riverOffset;
-                    riverPath.add(`${row}-${col}`);
+                    riverPath.add(`${row},${col}`);
 
                     // Largeur variable selon le terrain
                     let riverWidth = 0;
@@ -608,8 +608,8 @@ export const generateIsland = (seed: number, customShape?: any[]): IslandGenerat
                     if (terrainType === 3 && row >= maxRow * 0.3 && row <= maxRow * 0.7) riverWidth = 2; // Plateau
 
                     for (let w = 1; w <= riverWidth; w++) {
-                        riverPath.add(`${row}-${col - w}`);
-                        riverPath.add(`${row}-${col + w}`);
+                        riverPath.add(`${row},${col - w}`);
+                        riverPath.add(`${row},${col + w}`);
                     }
                 }
             }
@@ -620,12 +620,12 @@ export const generateIsland = (seed: number, customShape?: any[]): IslandGenerat
             const endRow = Math.floor(maxRow * 0.8);
 
             for (let row = startRow; row <= endRow; row++) {
-                riverPath.add(`${row}-${riverCol}`);
+                riverPath.add(`${row},${riverCol}`);
 
                 // Légère sinuosité
                 if (rand(seed * 203 + row) < 0.3) {
                     const offset = Math.floor((rand(seed * 204 + row) - 0.5) * 2);
-                    riverPath.add(`${row}-${riverCol + offset}`);
+                    riverPath.add(`${row},${riverCol + offset}`);
                 }
             }
         }
@@ -649,7 +649,7 @@ export const generateIsland = (seed: number, customShape?: any[]): IslandGenerat
                             Math.pow(pos.x - waterOffsetX, 2) + Math.pow(pos.z - waterOffsetZ, 2)
                         );
                         if (distFromCrater < 1.0 + rand(seed * 302) * 0.4) { // 1.0-1.4
-                            additionalWater.add(`${shape.row}-${col}`);
+                            additionalWater.add(`${shape.row},${col}`);
                         }
                     }
                 });
@@ -669,7 +669,7 @@ export const generateIsland = (seed: number, customShape?: any[]): IslandGenerat
                             Math.pow(pos.x - lakeCenterX, 2) + Math.pow(pos.z - lakeCenterZ, 2)
                         );
                         if (distFromLake < 1.8) { // Taille fixe garantie
-                            additionalWater.add(`${shape.row}-${col}`);
+                            additionalWater.add(`${shape.row},${col}`);
                         }
                     }
                 });
@@ -696,7 +696,7 @@ export const generateIsland = (seed: number, customShape?: any[]): IslandGenerat
                                 Math.pow(pos.x - pondX, 2) + Math.pow(pos.z - pondZ, 2)
                             );
                             if (distFromPond < 1.2) {
-                                additionalWater.add(`${shape.row}-${col}`);
+                                additionalWater.add(`${shape.row},${col}`);
                             }
                         }
                     });
@@ -717,7 +717,7 @@ export const generateIsland = (seed: number, customShape?: any[]): IslandGenerat
                             Math.pow(pos.x - springCenterX, 2) + Math.pow(pos.z - springCenterZ, 2)
                         );
                         if (distFromSpring < 1.3) {
-                            additionalWater.add(`${shape.row}-${col}`);
+                            additionalWater.add(`${shape.row},${col}`);
                         }
                     }
                 });
@@ -761,7 +761,7 @@ export const generateIsland = (seed: number, customShape?: any[]): IslandGenerat
                                     Math.pow(pos.x - riverX, 2) + Math.pow(pos.z - riverZ, 2)
                                 );
                                 if (distFromRiver < 0.8) { // Largeur de rivière
-                                    additionalWater.add(`${shape.row}-${col}`);
+                                    additionalWater.add(`${shape.row},${col}`);
                                 }
                             }
                         });
@@ -790,7 +790,7 @@ export const generateIsland = (seed: number, customShape?: any[]): IslandGenerat
                         Math.pow(pos.x - fallbackX, 2) + Math.pow(pos.z - fallbackZ, 2)
                     );
                     if (distFromFallback < 2.0) { // Lac plus grand
-                        additionalWater.add(`${shape.row}-${col}`);
+                        additionalWater.add(`${shape.row},${col}`);
                     }
                 }
             });
@@ -958,7 +958,7 @@ export const enlargeIsland = (seed: number, currentIslandData: IslandGenerationR
     let currentRadius = 0;
     currentIslandData.landTiles.forEach(tile => {
         // Retrouver les coordonnées row/col depuis la clé
-        const [rowStr, colStr] = tile.key.split('-');
+        const [rowStr, colStr] = tile.key.split(',');
         const row = parseInt(rowStr);
         const col = parseInt(colStr);
         const distance = Math.sqrt(row * row + col * col);
@@ -999,7 +999,7 @@ export const enlargeIsland = (seed: number, currentIslandData: IslandGenerationR
             ...currentIslandData.rocks, // Garder les rochers existants
             ...newIslandData.rocks.filter(newRock => {
                 // Ajouter seulement les nouveaux rochers (pas sur les anciennes tuiles)
-                const rockKey = `${Math.round(newRock.position[0] / 1.5)}-${Math.round(newRock.position[2] / 1.3)}`;
+                const rockKey = `${Math.round(newRock.position[0] / 1.5)},${Math.round(newRock.position[2] / 1.3)}`;
                 return !existingLandTiles.has(rockKey);
             })
         ],
@@ -1029,7 +1029,7 @@ export const generateIslandFromShape = (seed: number, islandShape: any[]): Islan
                 return;
             }
 
-            const key = `${row}-${col}`;
+            const key = `${row},${col}`;
             
             // Position hexagonale simple
             const x = col * 1.5;

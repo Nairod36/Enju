@@ -32,7 +32,7 @@ export const generateIslandShape = (seed: number, baseRadius: number = 5): Islan
             
             // Inclusion basée strictement sur l'équation du cercle
             if (distanceSquared <= radiusSquared) {
-                tiles.add(`${row}-${col}`);
+                tiles.add(`${row},${col}`);
             }
         }
     }
@@ -43,7 +43,7 @@ export const generateIslandShape = (seed: number, baseRadius: number = 5): Islan
     const tilesByRow = new Map<number, number[]>();
 
     tiles.forEach(tileKey => {
-        const [rowStr, colStr] = tileKey.split('-');
+        const [rowStr, colStr] = tileKey.split(',');
         const row = parseInt(rowStr, 10);
         const col = parseInt(colStr, 10);
         
@@ -76,7 +76,7 @@ export const enlargeIslandShape = (currentShape: IslandShape[], seed: number, ra
     const existingTiles = new Set<string>();
     currentShape.forEach(shape => {
         shape.cols.forEach(col => {
-            existingTiles.add(`${shape.row}-${col}`);
+            existingTiles.add(`${shape.row},${col}`);
         });
     });
 
@@ -85,7 +85,7 @@ export const enlargeIslandShape = (currentShape: IslandShape[], seed: number, ra
     // ÉTAPE 2: Calculer le rayon actuel
     let currentRadius = 0;
     existingTiles.forEach(tileKey => {
-        const [rowStr, colStr] = tileKey.split('-');
+        const [rowStr, colStr] = tileKey.split(',');
         const row = parseInt(rowStr, 10);
         const col = parseInt(colStr, 10);
         
@@ -109,7 +109,7 @@ export const enlargeIslandShape = (currentShape: IslandShape[], seed: number, ra
         for (let col = -newRadius; col <= newRadius; col++) {
             const distanceSquared = row * row + col * col;
             if (distanceSquared <= newRadiusSquared) {
-                newCircleTiles.add(`${row}-${col}`);
+                newCircleTiles.add(`${row},${col}`);
             }
         }
     }
@@ -123,7 +123,7 @@ export const enlargeIslandShape = (currentShape: IslandShape[], seed: number, ra
     const tilesByRow = new Map<number, number[]>();
 
     finalTiles.forEach(tileKey => {
-        const [rowStr, colStr] = tileKey.split('-');
+        const [rowStr, colStr] = tileKey.split(',');
         const row = parseInt(rowStr, 10);
         const col = parseInt(colStr, 10);
         
