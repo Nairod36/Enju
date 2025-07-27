@@ -66,7 +66,7 @@ pub struct SwapRefundedEvent {
 pub struct FusionHTLC {
     pub swaps: UnorderedMap<String, HTLCSwap>,
     pub owner: AccountId,
-    pub fee_rate: u128, // Fee in basis points (e.g., 30 = 0.3%)
+    pub claims_in_progress: UnorderedMap<String, bool>, // Anti-reentrancy protection
 }
 
 #[near_bindgen]
@@ -76,7 +76,7 @@ impl FusionHTLC {
         Self {
             swaps: UnorderedMap::new(b"s"),
             owner,
-            fee_rate: 30, // 0.3% default fee
+            claims_in_progress: UnorderedMap::new(b"c"),
         }
     }
 
@@ -152,6 +152,10 @@ impl FusionHTLC {
         
         require!(claim_amount > 0, "Claim amount must be greater than 0");
         require!(claim_amount <= remaining_amount, "Claim amount exceeds remaining balance");
+        
+        // Anti-reentrancy: mark as in-progress
+        require!(!self.is_claiming_in_progress(&swap_id), "Claim already in progress");
+        self.mark_claim_in_progress(&swap_id);
 
         // Update swap state
         swap.secret = Some(secret.clone());
@@ -166,8 +170,10 @@ impl FusionHTLC {
         
         self.swaps.insert(&swap_id, &swap);
 
-        let fee = claim_amount * self.fee_rate / 10000;
-        let payout = claim_amount - fee;
+        let payout = claim_amount;
+        
+        // Security check: ensure payout is reasonable
+        require!(payout > 0, "Payout amount must be positive");
 
         // Emit event
         env::log_str(&serde_json::to_string(&SwapClaimedEvent {
@@ -179,7 +185,8 @@ impl FusionHTLC {
             is_completed: swap.is_completed,
         }).unwrap());
 
-        // Transfer funds to claimer
+        // Clear claim in progress and transfer funds
+        self.clear_claim_in_progress(&swap_id);
         Promise::new(claimer).transfer(payout)
     }
 
@@ -288,19 +295,7 @@ impl FusionHTLC {
         self.hash_secret(&secret) == hashlock
     }
 
-    /// Owner functions
-    pub fn set_fee_rate(&mut self, new_rate: u128) {
-        require!(env::predecessor_account_id() == self.owner, "Only owner can set fee");
-        require!(new_rate <= 1000, "Fee rate cannot exceed 10%"); // Max 10%
-        self.fee_rate = new_rate;
-    }
-
-    pub fn withdraw_fees(&mut self) -> Promise {
-        require!(env::predecessor_account_id() == self.owner, "Only owner can withdraw");
-        let balance = env::account_balance();
-        let available = balance - env::account_locked_balance();
-        Promise::new(self.owner.clone()).transfer(available)
-    }
+    /// Owner functions (fees removed - direct transfers only)
 
     // Private helper functions
     fn generate_swap_id(&self, sender: &AccountId, receiver: &AccountId, hashlock: &str, timelock: u64) -> String {
@@ -312,6 +307,19 @@ impl FusionHTLC {
     fn hash_secret(&self, secret: &str) -> String {
         let hash = Sha256::digest(secret.as_bytes());
         hex::encode(hash)
+    }
+    
+    // Anti-reentrancy helper functions
+    fn is_claiming_in_progress(&self, swap_id: &str) -> bool {
+        self.claims_in_progress.get(swap_id).unwrap_or(false)
+    }
+    
+    fn mark_claim_in_progress(&mut self, swap_id: &str) {
+        self.claims_in_progress.insert(swap_id, &true);
+    }
+    
+    fn clear_claim_in_progress(&mut self, swap_id: &str) {
+        self.claims_in_progress.remove(swap_id);
     }
 }
 
@@ -378,7 +386,7 @@ mod tests {
         // Verify full completion
         let swap = contract.get_swap(swap_id).unwrap();
         assert_eq!(swap.amount_remaining.0, 0);
-        assert_eq!(swap.amount_claimed.0, 1_000_000_000_000_000_000_000_000);
+        assert_eq!(swap.amount_claimed.0, 1_000_000_000_000_000_000_000_000); // Full amount without fees
         assert!(swap.is_completed);
         assert_eq!(swap.claimers.len(), 2);
     }

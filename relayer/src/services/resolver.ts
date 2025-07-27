@@ -204,6 +204,7 @@ export class FusionResolver {
       return false;
     }
 
+    logger.debug(`Validation montant - Claim: ${claimAmount}, Restant: ${remainingAmount}`);
     return true;
   }
 

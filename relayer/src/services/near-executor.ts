@@ -1,6 +1,7 @@
 import { Near, Account, keyStores, Contract } from 'near-api-js';
 import { SwapEvent, HTLCLock } from '../types';
 import { config } from '../config';
+import { SecretExtractor } from './secret-extractor';
 import winston from 'winston';
 
 const logger = winston.createLogger({
@@ -16,24 +17,29 @@ const logger = winston.createLogger({
 });
 
 interface HTLCContract extends Contract {
-  create_htlc(args: {
-    secret_hash: string;
-    recipient: string;
-    amount: string;
+  initiate_swap(args: {
+    receiver: string;
+    hashlock: string;
     timelock: number;
-  }, gas?: string, deposit?: string): Promise<any>;
+    eth_tx_hash?: string;
+  }, gas?: string, deposit?: string): Promise<string>;
   
-  claim_htlc(args: {
-    secret_hash: string;
+  claim_swap(args: {
+    swap_id: string;
     secret: string;
+    amount: string; // U128 as string
   }, gas?: string): Promise<any>;
   
-  refund_htlc(args: {
-    secret_hash: string;
+  refund_swap(args: {
+    swap_id: string;
   }, gas?: string): Promise<any>;
   
-  get_htlc(args: {
-    secret_hash: string;
+  get_swap(args: {
+    swap_id: string;
+  }): Promise<any>;
+  
+  get_swap_status(args: {
+    swap_id: string;
   }): Promise<any>;
 }
 
@@ -41,8 +47,10 @@ export class NearExecutor {
   private near: Near;
   private account: Account;
   private contract: HTLCContract;
+  private secretExtractor: SecretExtractor;
 
   constructor() {
+    this.secretExtractor = new SecretExtractor(config.ethereum.rpcUrl);
     this.initializeNear();
   }
 
@@ -69,8 +77,8 @@ export class NearExecutor {
         this.account,
         config.near.contractId,
         {
-          viewMethods: ['get_htlc'],
-          changeMethods: ['create_htlc', 'claim_htlc', 'refund_htlc'],
+          viewMethods: ['get_swap', 'get_swap_status', 'get_swaps_by_account'],
+          changeMethods: ['initiate_swap', 'claim_swap', 'refund_swap'],
         }
       ) as HTLCContract;
 
@@ -121,83 +129,140 @@ export class NearExecutor {
   }
 
   private async createHTLC(swapEvent: SwapEvent): Promise<void> {
-    logger.info(`Création du HTLC sur NEAR pour le swap ${swapEvent.id}`);
+    logger.info(`Création du swap sur NEAR pour ${swapEvent.id}`);
 
     try {
-      const result = await this.contract.create_htlc(
+      const result = await this.contract.initiate_swap(
         {
-          secret_hash: swapEvent.secretHash,
-          recipient: swapEvent.userAddress,
-          amount: swapEvent.amount,
+          receiver: swapEvent.userAddress,
+          hashlock: swapEvent.secretHash,
           timelock: swapEvent.timelock,
+          eth_tx_hash: swapEvent.txHash,
         },
         '300000000000000', // Gas: 300 TGas
         swapEvent.amount // Deposit: montant du swap
       );
 
-      logger.info(`HTLC créé avec succès sur NEAR:`, result);
+      logger.info(`Swap créé avec succès sur NEAR - ID: ${result}`);
     } catch (error) {
-      logger.error('Erreur lors de la création du HTLC:', error);
+      logger.error('Erreur lors de la création du swap:', error);
       throw error;
     }
   }
 
   private async claimHTLC(swapEvent: SwapEvent): Promise<void> {
-    logger.info(`Réclamation du HTLC sur NEAR pour le swap ${swapEvent.id}`);
+    logger.info(`Réclamation du swap sur NEAR pour ${swapEvent.id}`);
 
     try {
-      // Note: Le secret devrait être récupéré de la transaction Ethereum
-      // qui a révélé le secret lors du claim
-      const secret = await this.getSecretFromEthereumTx(swapEvent.txHash || '');
+      // Récupérer le secret de la transaction Ethereum
+      const secret = await this.secretExtractor.extractSecret(swapEvent.txHash || '');
       
-      const result = await this.contract.claim_htlc(
+      const result = await this.contract.claim_swap(
         {
-          secret_hash: swapEvent.secretHash,
+          swap_id: swapEvent.id,
           secret: secret,
+          amount: swapEvent.amount,
         },
         '100000000000000' // Gas: 100 TGas
       );
 
-      logger.info(`HTLC réclamé avec succès sur NEAR:`, result);
+      logger.info(`Swap réclamé avec succès sur NEAR:`, result);
     } catch (error) {
-      logger.error('Erreur lors de la réclamation du HTLC:', error);
+      logger.error('Erreur lors de la réclamation du swap:', error);
       throw error;
     }
   }
 
   private async refundHTLC(swapEvent: SwapEvent): Promise<void> {
-    logger.info(`Remboursement du HTLC sur NEAR pour le swap ${swapEvent.id}`);
+    logger.info(`Remboursement du swap sur NEAR pour ${swapEvent.id}`);
 
     try {
-      const result = await this.contract.refund_htlc(
+      const result = await this.contract.refund_swap(
         {
-          secret_hash: swapEvent.secretHash,
+          swap_id: swapEvent.id,
         },
         '100000000000000' // Gas: 100 TGas
       );
 
-      logger.info(`HTLC remboursé avec succès sur NEAR:`, result);
+      logger.info(`Swap remboursé avec succès sur NEAR:`, result);
     } catch (error) {
-      logger.error('Erreur lors du remboursement du HTLC:', error);
+      logger.error('Erreur lors du remboursement du swap:', error);
       throw error;
     }
   }
 
   private async getSecretFromEthereumTx(txHash: string): Promise<string> {
-    // Cette méthode devrait analyser la transaction Ethereum
-    // pour extraire le secret révélé lors du claim
-    
-    // Placeholder - à implémenter selon la logique Fusion+
-    logger.warn(`Extraction du secret depuis la tx ${txHash} non implémentée`);
-    return '0x' + '0'.repeat(64); // Secret temporaire
+    try {
+      logger.info(`Extraction du secret depuis la transaction ${txHash}`);
+      
+      // Créer un provider Ethereum pour récupérer la transaction
+      const { ethers } = await import('ethers');
+      const provider = new ethers.JsonRpcProvider(config.ethereum?.rpcUrl || 'https://eth-mainnet.g.alchemy.com/v2/demo');
+      
+      // Récupérer la transaction et son receipt
+      const tx = await provider.getTransaction(txHash);
+      const receipt = await provider.getTransactionReceipt(txHash);
+      
+      if (!tx || !receipt) {
+        throw new Error(`Transaction ${txHash} non trouvée`);
+      }
+      
+      // Analyser les logs pour trouver l'événement qui révèle le secret
+      for (const log of receipt.logs) {
+        try {
+          // Interface pour décoder les événements qui révèlent le secret
+          const iface = new ethers.Interface([
+            "event SwapClaimed(bytes32 indexed secretHash, bytes32 secret)",
+            "event SecretRevealed(bytes32 indexed hash, bytes32 secret)",
+            "event ClaimWithSecret(bytes32 secret)"
+          ]);
+          
+          const parsed = iface.parseLog(log);
+          
+          if (parsed && (parsed.name === 'SwapClaimed' || parsed.name === 'SecretRevealed' || parsed.name === 'ClaimWithSecret')) {
+            const secret = parsed.args.secret;
+            if (secret && secret !== '0x' + '0'.repeat(64)) {
+              logger.info(`Secret trouvé dans l'événement ${parsed.name}: ${secret}`);
+              return secret;
+            }
+          }
+        } catch (parseError) {
+          // Continuer si ce log n'est pas décodable
+          continue;
+        }
+      }
+      
+      // Si aucun secret trouvé dans les logs, analyser les données de transaction
+      if (tx.data && tx.data !== '0x') {
+        // Essayer de décoder les données de transaction pour extraire le secret
+        const secret = this.extractSecretFromCalldata(tx.data);
+        if (secret) {
+          logger.info(`Secret extrait des données de transaction: ${secret}`);
+          return secret;
+        }
+      }
+      
+      throw new Error(`Aucun secret trouvé dans la transaction ${txHash}`);
+      
+    } catch (error) {
+      logger.error(`Erreur lors de l'extraction du secret depuis ${txHash}:`, error);
+      
+      // En cas d'erreur, essayer de récupérer le secret depuis le cache/DB
+      const cachedSecret = await this.getCachedSecret(txHash);
+      if (cachedSecret) {
+        return cachedSecret;
+      }
+      
+      throw error;
+    }
   }
 
-  async getHTLCStatus(secretHash: string): Promise<any> {
+  async getHTLCStatus(swapId: string): Promise<any> {
     try {
-      const htlc = await this.contract.get_htlc({ secret_hash: secretHash });
-      return htlc;
+      const swap = await this.contract.get_swap_status({ swap_id: swapId });
+      return swap;
     } catch (error) {
-      logger.error(`Erreur lors de la récupération du HTLC ${secretHash}:`, error);
+      logger.error(`Erreur lors de la récupération du swap ${swapId}:`, error);
       throw error;
     }
   }
