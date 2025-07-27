@@ -37,8 +37,8 @@ model User {
   bio           String?
   
   // Relations
-  biome         Biome?
   transactions Transaction[]
+  islands      Island[]
   
   @@index([walletAddress])
   @@index([activityScore]) // Pour le classement public
@@ -46,75 +46,6 @@ model User {
   @@map("users")
 }
 
-model Biome {
-  id        String   @id @default(cuid())
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  // Propriétaire
-  userId    String @unique @map("user_id")
-  user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  // Infos de base PUBLIQUES
-  name        String  @default("Ma Forêt")
-  description String? @default("Mon biome personnel")
-  
-  // Statistiques PUBLIQUES (tout le monde peut voir et comparer)
-  totalTrees      Int     @default(0) @map("total_trees")
-  healthScore     Decimal @default(100) @db.Decimal(5, 2) @map("health_score") // Se dégrade sans activité
-  lastUpdateAt    DateTime @default(now()) @map("last_update_at") // Dernière mise à jour des stats
-  
-  // Relations
-  plants     Plant[]
-  
-  @@index([userId])
-  @@index([healthScore]) // Pour comparer les biomes
-  @@index([totalTrees]) // Pour le classement
-  @@map("biomes")
-}
-
-enum PlantSpecies {
-  SEEDLING  // Graine - niveau 1-2
-  SPROUT    // Pousse - niveau 3-4  
-  SAPLING   // Jeune arbre - niveau 5-6
-  TREE      // Arbre - niveau 7-8
-  GIANT     // Arbre géant - niveau 9-10
-}
-
-model Plant {
-  id        String   @id @default(cuid())
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  // Appartenance
-  biomeId String @map("biome_id")
-  biome   Biome  @relation(fields: [biomeId], references: [id], onDelete: Cascade)
-  
-  // Infos de base PUBLIQUES
-  name     String
-  species  PlantSpecies @default(SEEDLING)
-  
-  // Position simple (x, y dans une grille) - PUBLIQUE
-  positionX Int @map("position_x")
-  positionY Int @map("position_y")
-  
-  // Croissance et santé PUBLIQUES (basée sur l'activité du user)
-  growthLevel    Int     @default(1) @map("growth_level") // 1-10
-  health         Decimal @default(100) @db.Decimal(5, 2) // Se dégrade sans activité
-  lastGrowthAt   DateTime @default(now()) @map("last_growth_at")
-  lastHealthCheck DateTime @default(now()) @map("last_health_check")
-  
-  // État PUBLIC
-  isAlive       Boolean @default(true) @map("is_alive") // Peut mourir si santé = 0
-  isDegraded    Boolean @default(false) @map("is_degraded") // Marqué comme dégradé
-  
-  @@index([biomeId])
-  @@index([health, isAlive])
-  @@index([lastHealthCheck]) // Pour les cron jobs de dégradation
-  @@index([growthLevel]) // Pour comparer les arbres
-  @@unique([biomeId, positionX, positionY])
-  @@map("trees")
-}
 
 model Transaction {
   id        Int    @id @default(autoincrement())
@@ -125,4 +56,89 @@ model Transaction {
   reward    String
   timestamp DateTime @default(now())
   user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Island {
+  id           String   @id @default(cuid())
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  // Propriétaire de l'île
+  userId       String   @map("user_id")
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Métadonnées de l'île
+  name         String
+  seed         BigInt   // Seed de génération procédurale
+  isActive     Boolean  @default(true) @map("is_active") // Île actuellement utilisée
+
+  // Données de génération (JSON)
+  islandData   Json     @map("island_data") // IslandGenerationResult
+  
+  // État de l'île et statistiques du biome
+  treeCount    Int      @default(0) @map("tree_count")
+  totalTrees   Int      @default(0) @map("total_trees") // Nombre total d'arbres plantés
+  healthScore  Decimal  @default(100) @db.Decimal(5, 2) @map("health_score") // Santé globale du biome
+  description  String?  @default("Mon île personnelle") // Description du biome
+  
+  lastModified DateTime @default(now()) @map("last_modified")
+  lastUpdateAt DateTime @default(now()) @map("last_update_at") // Dernière mise à jour des stats
+  version      String   @default("1.0.0")
+
+  // Relations
+  userTrees    IslandTree[]
+  chests       IslandChest[]
+  usedTiles    IslandUsedTile[]
+
+  @@index([userId])
+  @@index([isActive])
+  @@index([seed])
+  @@index([healthScore]) // Pour comparer les biomes
+  @@index([totalTrees]) // Pour le classement
+  @@map("islands")
+}
+
+model IslandTree {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Appartenance
+  islandId  String   @map("island_id")
+  island    Island   @relation(fields: [islandId], references: [id], onDelete: Cascade)
+
+  // Données de l'arbre (JSON)
+  treeData  Json     @map("tree_data") // TreeData interface
+
+  @@index([islandId])
+  @@map("island_trees")
+}
+
+model IslandChest {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Appartenance
+  islandId  String   @map("island_id")
+  island    Island   @relation(fields: [islandId], references: [id], onDelete: Cascade)
+
+  // Données du coffre (JSON)
+  chestData Json     @map("chest_data") // ChestData interface
+
+  @@index([islandId])
+  @@map("island_chests")
+}
+
+model IslandUsedTile {
+  id        String   @id @default(cuid())
+
+  // Appartenance
+  islandId  String   @map("island_id")
+  island    Island   @relation(fields: [islandId], references: [id], onDelete: Cascade)
+
+  // Identifiant de la tuile utilisée
+  tileKey   String   @map("tile_key")
+
+  @@unique([islandId, tileKey])
+  @@index([islandId])
+  @@map("island_used_tiles")
 }

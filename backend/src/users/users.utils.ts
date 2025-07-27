@@ -5,12 +5,25 @@ export class UsersUtils {
     constructor() { }
 
     public transformToResponseDto(user: any): UserResponseDto {
-        return plainToClass(UserResponseDto, user, {
-            excludeExtraneousValues: false,
-        });
+        // Transformation manuelle pour éviter les erreurs Decimal
+        return {
+            id: user.id,
+            walletAddress: user.walletAddress,
+            username: user.username,
+            email: user.email,
+            activityScore: user.activityScore,
+            lastActivityAt: user.lastActivityAt,
+            level: user.level,
+            experience: user.experience,
+            tokenBalance: user.tokenBalance ? parseFloat(user.tokenBalance.toString()) : 0,
+            isConnected: user.isConnected,
+            createdAt: user.createdAt,
+        };
     }
 
     public transformToPublicDto(user: any): PublicUserDto {
+        const activeIsland = user.islands && user.islands[0];
+        
         return {
             username: user.username,
             walletAddress: user.walletAddress,
@@ -22,12 +35,12 @@ export class UsersUtils {
             bio: user.bio,
             isConnected: user.isConnected,
             createdAt: user.createdAt,
-            biome: user.biome ? {
-                name: user.biome.name,
-                description: user.biome.description,
-                totalTrees: user.biome.totalTrees,
-                healthScore: parseFloat(user.biome.healthScore.toString()),
-                lastUpdateAt: user.biome.lastUpdateAt,
+            island: activeIsland ? {
+                name: activeIsland.name,
+                description: activeIsland.description,
+                totalTrees: activeIsland.totalTrees,
+                healthScore: parseFloat(activeIsland.healthScore.toString()),
+                lastUpdateAt: activeIsland.lastUpdateAt,
             } : undefined,
         };
     }

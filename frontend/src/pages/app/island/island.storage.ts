@@ -1,4 +1,6 @@
 import { SavedIslandState, IslandGenerationResult, TreeData, ChestData } from './island.types';
+import { islandsService } from '../../../services/islands';
+import { authService } from '../../../services/auth';
 
 const STORAGE_KEY = 'saved_islands';
 const CURRENT_VERSION = '1.0.0';
@@ -7,7 +9,7 @@ export class IslandStorageService {
   /**
    * Sauvegarde l'état actuel d'une île
    */
-  static saveIsland(
+  static async saveIsland(
     seed: number,
     islandData: IslandGenerationResult,
     userTrees: TreeData[],
@@ -15,10 +17,33 @@ export class IslandStorageService {
     usedTiles: Set<string>,
     treeCount: number,
     customName?: string
-  ): string {
-    const id = `island_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  ): Promise<string> {
     const name = customName || `Île ${new Date().toLocaleDateString()}`;
 
+    // Si l'utilisateur est connecté, sauvegarder dans l'API
+    if (authService.isAuthenticated()) {
+      try {
+        const island = await islandsService.createIsland({
+          name,
+          seed,
+          islandData,
+          userTrees,
+          chests,
+          usedTiles: Array.from(usedTiles),
+          treeCount,
+          isActive: true
+        });
+        
+        console.log(`✅ Île sauvegardée en ligne: ${name} (ID: ${island.id})`);
+        return island.id;
+      } catch (error) {
+        console.error('❌ Erreur sauvegarde en ligne, fallback localStorage:', error);
+        // Fallback sur localStorage en cas d'erreur
+      }
+    }
+
+    // Fallback localStorage (utilisateur non connecté ou erreur API)
+    const id = `island_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const savedState: SavedIslandState = {
       id,
       name,
@@ -38,7 +63,7 @@ export class IslandStorageService {
     
     localStorage.setItem(STORAGE_KEY, JSON.stringify(existingSaves));
     
-    console.log(`✅ Île sauvegardée: ${name} (ID: ${id})`);
+    console.log(`✅ Île sauvegardée localement: ${name} (ID: ${id})`);
     return id;
   }
 
@@ -114,7 +139,31 @@ export class IslandStorageService {
   /**
    * Récupère toutes les îles sauvegardées
    */
-  static getAllSavedIslands(): SavedIslandState[] {
+  static async getAllSavedIslands(): Promise<SavedIslandState[]> {
+    // Si l'utilisateur est connecté, récupérer depuis l'API
+    if (authService.isAuthenticated()) {
+      try {
+        const islands = await islandsService.getMyIslands();
+        return islands.map(island => ({
+          id: island.id,
+          name: island.name,
+          seed: parseInt(island.seed),
+          createdAt: new Date(island.createdAt).getTime(),
+          lastModified: new Date(island.lastModified).getTime(),
+          baseIslandData: island.islandData,
+          userTrees: island.userTrees || [],
+          chests: island.chests || [],
+          usedTiles: island.usedTiles || [],
+          treeCount: island.treeCount,
+          version: island.version
+        }));
+      } catch (error) {
+        console.error('❌ Erreur lors du chargement des îles depuis l\'API:', error);
+        // Fallback sur localStorage
+      }
+    }
+
+    // Fallback localStorage
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (!saved) return [];

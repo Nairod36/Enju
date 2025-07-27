@@ -93,36 +93,39 @@ export class UsersService {
           lastActivityAt: new Date(),
           chainId: connectWalletDto.chainId || 1,
           nonce: null,
+          // S'assurer que les champs Decimal ont des valeurs
+          tokenBalance: isNewUser ? 0 : undefined,
           ...(isNewUser && {
             level: 1,
             experience: 0,
-            tokenBalance: 0,
             activityScore: 10, // Points de démarrage
           }),
         },
       });
 
-      // Créer le biome initial si nouveau utilisateur
+      // Créer l'île initiale si nouveau utilisateur
       if (isNewUser) {
-        const biome = await prisma.biome.create({
+        const defaultSeed = Math.floor(Math.random() * 1000000);
+        
+        await prisma.island.create({
           data: {
             userId: updatedUser.id,
-            name: 'Ma Première Forêt',
-            description: 'Le début de mon aventure forestière',
-            totalTrees: 1,
-          },
-        });
-
-        // Planter le premier arbre
-        await prisma.plant.create({
-          data: {
-            biomeId: biome.id,
-            name: 'Premier Arbre',
-            species: 'SEEDLING',
-            positionX: 5,
-            positionY: 5,
-            growthLevel: 1,
-            health: 100,
+            name: 'Ma Première Île',
+            seed: BigInt(defaultSeed),
+            description: 'Le début de mon aventure insulaire',
+            isActive: true,
+            islandData: {
+              landTiles: [],
+              waterTiles: [],
+              rocks: [],
+              houses: [],
+              totalTiles: 50,
+              waterColor: '#4682B4'
+            },
+            treeCount: 0,
+            totalTrees: 0,
+            healthScore: 100,
+            version: '1.0.0'
           },
         });
       }
@@ -199,9 +202,9 @@ export class UsersService {
     let orderBy: any = { activityScore: 'desc' };
 
     if (sortBy === 'trees') {
-      orderBy = { biome: { totalTrees: 'desc' } };
+      orderBy = { islands: { _count: true } };
     } else if (sortBy === 'health') {
-      orderBy = { biome: { healthScore: 'desc' } };
+      orderBy = { activityScore: 'desc' }; // Fallback sur activityScore
     }
 
     const users = await this.prisma.user.findMany({
@@ -209,7 +212,8 @@ export class UsersService {
       orderBy,
       take: limit,
       include: {
-        biome: {
+        islands: {
+          where: { isActive: true },
           select: {
             name: true,
             description: true,
@@ -217,6 +221,7 @@ export class UsersService {
             healthScore: true,
             lastUpdateAt: true,
           },
+          take: 1
         },
       },
     });
@@ -225,39 +230,48 @@ export class UsersService {
   }
 
   async getLeaderboard(category: string = 'activity', limit: number = 10): Promise<LeaderboardDto[]> {
-    let orderBy: any = { activityScore: 'desc' };
-
-    if (category === 'trees') {
-      orderBy = { biome: { totalTrees: 'desc' } };
-    } else if (category === 'health') {
-      orderBy = { biome: { healthScore: 'desc' } };
-    }
-
     const users = await this.prisma.user.findMany({
       where: { isConnected: true },
-      orderBy,
       take: limit,
       include: {
-        biome: {
+        islands: {
+          where: { isActive: true },
           select: {
             totalTrees: true,
             healthScore: true,
           },
+          take: 1
         },
       },
     });
 
-    return users.map((user, index) => ({
+    // Trier côté application selon la catégorie
+    const sortedUsers = users.sort((a, b) => {
+      if (category === 'activity') {
+        return b.activityScore - a.activityScore;
+      } else if (category === 'trees') {
+        const aTreeCount = a.islands[0]?.totalTrees || 0;
+        const bTreeCount = b.islands[0]?.totalTrees || 0;
+        return bTreeCount - aTreeCount;
+      } else if (category === 'health') {
+        const aHealth = parseFloat(a.islands[0]?.healthScore?.toString() || '0');
+        const bHealth = parseFloat(b.islands[0]?.healthScore?.toString() || '0');
+        return bHealth - aHealth;
+      }
+      return 0;
+    });
+
+    return sortedUsers.map((user, index) => ({
       rank: index + 1,
       username: user.username,
       walletAddress: user.walletAddress,
       score: category === 'activity' ? user.activityScore :
-        category === 'trees' ? user.biome?.totalTrees || 0 :
-          parseFloat(user.biome?.healthScore?.toString() || '0'),
+        category === 'trees' ? user.islands[0]?.totalTrees || 0 :
+          parseFloat(user.islands[0]?.healthScore?.toString() || '0'),
       category,
-      biomeStats: user.biome ? {
-        totalTrees: user.biome.totalTrees,
-        healthScore: parseFloat(user.biome.healthScore.toString()),
+      biomeStats: user.islands[0] ? {
+        totalTrees: user.islands[0].totalTrees,
+        healthScore: parseFloat(user.islands[0].healthScore.toString()),
       } : undefined,
     }));
   }
@@ -266,7 +280,8 @@ export class UsersService {
     const user = await this.prisma.user.findUnique({
       where: { walletAddress: walletAddress.toLowerCase() },
       include: {
-        biome: {
+        islands: {
+          where: { isActive: true },
           select: {
             name: true,
             description: true,
@@ -274,6 +289,7 @@ export class UsersService {
             healthScore: true,
             lastUpdateAt: true,
           },
+          take: 1
         },
       },
     });
@@ -296,7 +312,8 @@ export class UsersService {
       orderBy: { lastActivityAt: 'desc' },
       take: 50,
       include: {
-        biome: {
+        islands: {
+          where: { isActive: true },
           select: {
             name: true,
             description: true,
@@ -304,6 +321,7 @@ export class UsersService {
             healthScore: true,
             lastUpdateAt: true,
           },
+          take: 1
         },
       },
     });
@@ -316,12 +334,12 @@ export class UsersService {
     const user2 = await this.getPublicUserByAddress(address2);
 
     const activityDifference = user1.activityScore - user2.activityScore;
-    const treesDifference = (user1.biome?.totalTrees || 0) - (user2.biome?.totalTrees || 0);
-    const healthDifference = (user1.biome?.healthScore || 0) - (user2.biome?.healthScore || 0);
+    const treesDifference = (user1.island?.totalTrees || 0) - (user2.island?.totalTrees || 0);
+    const healthDifference = (user1.island?.healthScore || 0) - (user2.island?.healthScore || 0);
 
     // Déterminer le gagnant basé sur un score combiné
-    const user1Score = user1.activityScore + (user1.biome?.totalTrees || 0) * 10 + (user1.biome?.healthScore || 0);
-    const user2Score = user2.activityScore + (user2.biome?.totalTrees || 0) * 10 + (user2.biome?.healthScore || 0);
+    const user1Score = user1.activityScore + (user1.island?.totalTrees || 0) * 10 + (user1.island?.healthScore || 0);
+    const user2Score = user2.activityScore + (user2.island?.totalTrees || 0) * 10 + (user2.island?.healthScore || 0);
 
     let winner: 'user1' | 'user2' | 'tie' = 'tie';
     if (user1Score > user2Score) winner = 'user1';

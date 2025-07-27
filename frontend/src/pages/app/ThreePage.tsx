@@ -1,19 +1,71 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
+
 import { FloatingIsland, FloatingIslandRef } from "./island/island";
 import { generateIslandSeed } from "./island/island.generators";
 import { IslandStorageService } from "./island/island.storage";
+import { ProtectedRoute } from "../../components/ProtectedRoute";
+import { useIslands } from "../../hooks/useIslands";
+import { useAuthContext } from "../../contexts/AuthContext";
 
 // ===== APPLICATION PRINCIPALE =====
 
-export const ThreePage: React.FC = () => {
+const GameContent: React.FC = () => {
   const [treeCount, setTreeCount] = useState(0);
   const [islandSeed, setIslandSeed] = useState(() => generateIslandSeed());
   const islandRef = useRef<FloatingIslandRef>(null);
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [showLoadDialog, setShowLoadDialog] = useState(false);
   const [saveIslandName, setSaveIslandName] = useState("");
+  const [savedIslands, setSavedIslands] = useState<any[]>([]);
+  const [isInitialized, setIsInitialized] = useState(false);
+
+  const { isAuthenticated } = useAuthContext();
+  const {
+    activeIsland,
+    ensureUserHasIsland,
+    autoSaveIsland,
+    isLoading: islandsLoading,
+  } = useIslands();
+
+  // Initialiser l'île de l'utilisateur
+  useEffect(() => {
+    const initializeUserIsland = async () => {
+      if (isAuthenticated && !isInitialized && !islandsLoading) {
+        try {
+          const userIsland = await ensureUserHasIsland();
+          if (userIsland) {
+            setIslandSeed(parseInt(userIsland.seed));
+            setTreeCount(userIsland.treeCount || 0);
+            
+            // Charger l'état complet de l'île après que l'île soit rendue
+            setTimeout(() => {
+              if (islandRef.current) {
+                islandRef.current.loadFromDatabase(userIsland);
+              }
+            }, 1000); // Délai pour s'assurer que l'île est rendue
+            
+            setIsInitialized(true);
+          }
+        } catch (error) {
+          console.error("Failed to initialize user island:", error);
+        }
+      }
+    };
+
+    initializeUserIsland();
+  }, [isAuthenticated, isInitialized, islandsLoading]); // Retiré ensureUserHasIsland des deps
+
+  // Charger les îles sauvegardées
+  const loadSavedIslands = async () => {
+    try {
+      const islands = await IslandStorageService.getAllSavedIslands();
+      setSavedIslands(islands);
+    } catch (error) {
+      console.error("Error loading islands:", error);
+    }
+  };
 
   // Fonction pour ajouter un arbre aléatoire
   const handleAddTree = () => {
@@ -44,17 +96,56 @@ export const ThreePage: React.FC = () => {
   };
 
   // Fonction pour sauvegarder l'île
-  const handleSaveIsland = () => {
+  const handleSaveIsland = async () => {
     if (islandRef.current) {
-      const name = saveIslandName.trim() || `Île ${new Date().toLocaleDateString()}`;
-      const savedId = islandRef.current.saveIsland(name);
-      if (savedId) {
-        alert(`✅ Île "${name}" sauvegardée avec succès !`);
-        setShowSaveDialog(false);
-        setSaveIslandName("");
+      const name =
+        saveIslandName.trim() || `Île ${new Date().toLocaleDateString()}`;
+      try {
+        const savedId = await islandRef.current.saveIsland(name);
+        if (savedId) {
+          alert(`✅ Île "${name}" sauvegardée avec succès !`);
+          setShowSaveDialog(false);
+          setSaveIslandName("");
+        } else {
+          alert("❌ Erreur lors de la sauvegarde");
+        }
+      } catch (error) {
+        console.error("Save error:", error);
+        alert("❌ Erreur lors de la sauvegarde");
+      }
+    }
+  };
+
+  // Fonction pour sauvegarder l'île actuelle vers l'API
+  const handleSaveToAPI = async () => {
+    if (!activeIsland || !islandRef.current) {
+      alert("❌ Aucune île active à sauvegarder");
+      return;
+    }
+
+    try {
+      const currentState = islandRef.current.getCurrentState();
+      
+      const updateData = {
+        islandData: currentState.islandData,
+        treeCount: currentState.treeCount,
+        userTrees: currentState.userTrees,
+        chests: currentState.chests,
+        usedTiles: currentState.usedTiles,
+        totalTrees: currentState.treeCount,
+        healthScore: 100 // À calculer selon votre logique
+      };
+
+      const savedIsland = await autoSaveIsland(activeIsland.id, updateData);
+      
+      if (savedIsland) {
+        alert("✅ Île sauvegardée avec succès !");
       } else {
         alert("❌ Erreur lors de la sauvegarde");
       }
+    } catch (error) {
+      console.error("Save to API error:", error);
+      alert("❌ Erreur lors de la sauvegarde en ligne");
     }
   };
 
@@ -73,6 +164,46 @@ export const ThreePage: React.FC = () => {
       }
     }
   };
+
+  // Afficher un écran de chargement si l'île n'est pas encore initialisée
+  if (islandsLoading || !isInitialized) {
+    return (
+      <div
+        style={{
+          width: "100vw",
+          height: "100vh",
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          background: "linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)",
+          color: "white",
+          fontSize: "20px",
+          fontWeight: "bold",
+        }}
+      >
+        <div style={{ textAlign: "center" }}>
+          <div
+            style={{
+              width: "60px",
+              height: "60px",
+              border: "4px solid rgba(255,255,255,0.3)",
+              borderTop: "4px solid white",
+              borderRadius: "50%",
+              animation: "spin 1s linear infinite",
+              margin: "0 auto 20px",
+            }}
+          />
+          Chargement de votre île...
+        </div>
+        <style>{`
+          @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+          }
+        `}</style>
+      </div>
+    );
+  }
 
   return (
     <div style={{ width: "100vw", height: "100vh", overflow: "hidden" }}>
@@ -161,7 +292,7 @@ export const ThreePage: React.FC = () => {
           >
             🌱 Planter un arbre
           </button>
-
+          {/* 
           <button
             onClick={handleRegenerate}
             style={{
@@ -187,7 +318,7 @@ export const ThreePage: React.FC = () => {
             }}
           >
             🏝️ Nouvelle île
-          </button>
+          </button> */}
 
           <button
             onClick={handleEnlargeIsland}
@@ -244,6 +375,33 @@ export const ThreePage: React.FC = () => {
           </button>
 
           <button
+            onClick={handleSaveToAPI}
+            style={{
+              background: "rgba(34, 197, 94, 0.8)",
+              border: "none",
+              color: "white",
+              padding: "12px 24px",
+              borderRadius: "25px",
+              fontSize: "16px",
+              fontWeight: "bold",
+              cursor: "pointer",
+              backdropFilter: "blur(10px)",
+              transition: "all 0.3s ease",
+              boxShadow: "0 4px 15px rgba(0,0,0,0.3)",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = "scale(1.05)";
+              e.currentTarget.style.background = "rgba(34, 197, 94, 1)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = "scale(1)";
+              e.currentTarget.style.background = "rgba(34, 197, 94, 0.8)";
+            }}
+          >
+            💾 Sauvegarder
+          </button>
+
+          {/* <button
             onClick={() => setShowSaveDialog(true)}
             style={{
               background: "rgba(34, 197, 94, 0.8)",
@@ -271,7 +429,10 @@ export const ThreePage: React.FC = () => {
           </button>
 
           <button
-            onClick={() => setShowLoadDialog(true)}
+            onClick={() => {
+              setShowLoadDialog(true);
+              loadSavedIslands();
+            }}
             style={{
               background: "rgba(168, 85, 247, 0.8)",
               border: "none",
@@ -295,7 +456,7 @@ export const ThreePage: React.FC = () => {
             }}
           >
             📂 Charger
-          </button>
+          </button> */}
         </div>
 
         <div
@@ -338,7 +499,9 @@ export const ThreePage: React.FC = () => {
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 style={{ margin: "0 0 20px 0", color: "#333" }}>💾 Sauvegarder l'île</h2>
+            <h2 style={{ margin: "0 0 20px 0", color: "#333" }}>
+              💾 Sauvegarder l'île
+            </h2>
             <input
               type="text"
               placeholder="Nom de l'île (optionnel)"
@@ -354,7 +517,13 @@ export const ThreePage: React.FC = () => {
                 boxSizing: "border-box",
               }}
             />
-            <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
+            <div
+              style={{
+                display: "flex",
+                gap: "10px",
+                justifyContent: "flex-end",
+              }}
+            >
               <button
                 onClick={() => setShowSaveDialog(false)}
                 style={{
@@ -415,9 +584,11 @@ export const ThreePage: React.FC = () => {
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 style={{ margin: "0 0 20px 0", color: "#333" }}>📂 Charger une île</h2>
+            <h2 style={{ margin: "0 0 20px 0", color: "#333" }}>
+              📂 Charger une île
+            </h2>
             <div style={{ maxHeight: "400px", overflow: "auto" }}>
-              {IslandStorageService.getAllSavedIslands().map((island) => (
+              {savedIslands.map((island) => (
                 <div
                   key={island.id}
                   style={{
@@ -430,25 +601,57 @@ export const ThreePage: React.FC = () => {
                   }}
                   onClick={() => handleLoadIsland(island.id)}
                 >
-                  <div style={{ fontWeight: "bold", fontSize: "18px", color: "#333" }}>
+                  <div
+                    style={{
+                      fontWeight: "bold",
+                      fontSize: "18px",
+                      color: "#333",
+                    }}
+                  >
                     {island.name}
                   </div>
-                  <div style={{ color: "#666", fontSize: "14px", marginTop: "5px" }}>
-                    🎲 Seed: {island.seed} | 🌳 Arbres: {island.treeCount} | 💰 Coffres: {island.chests.length}
+                  <div
+                    style={{
+                      color: "#666",
+                      fontSize: "14px",
+                      marginTop: "5px",
+                    }}
+                  >
+                    🎲 Seed: {island.seed} | 🌳 Arbres: {island.treeCount} | 💰
+                    Coffres: {island.chests.length}
                   </div>
-                  <div style={{ color: "#888", fontSize: "12px", marginTop: "5px" }}>
-                    Créée: {new Date(island.createdAt).toLocaleDateString()} | 
-                    Modifiée: {new Date(island.lastModified).toLocaleDateString()}
+                  <div
+                    style={{
+                      color: "#888",
+                      fontSize: "12px",
+                      marginTop: "5px",
+                    }}
+                  >
+                    Créée: {new Date(island.createdAt).toLocaleDateString()} |
+                    Modifiée:{" "}
+                    {new Date(island.lastModified).toLocaleDateString()}
                   </div>
                 </div>
               ))}
-              {IslandStorageService.getAllSavedIslands().length === 0 && (
-                <div style={{ textAlign: "center", color: "#666", padding: "20px" }}>
+              {savedIslands.length === 0 && (
+                <div
+                  style={{
+                    textAlign: "center",
+                    color: "#666",
+                    padding: "20px",
+                  }}
+                >
                   Aucune île sauvegardée
                 </div>
               )}
             </div>
-            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "20px" }}>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "flex-end",
+                marginTop: "20px",
+              }}
+            >
               <button
                 onClick={() => setShowLoadDialog(false)}
                 style={{
@@ -466,6 +669,14 @@ export const ThreePage: React.FC = () => {
         </div>
       )}
     </div>
+  );
+};
+
+const ThreePage: React.FC = () => {
+  return (
+    <ProtectedRoute>
+      <GameContent />
+    </ProtectedRoute>
   );
 };
 
