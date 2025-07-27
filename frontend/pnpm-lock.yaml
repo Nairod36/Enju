@@ -35,6 +35,9 @@ importers:
       lucide-react:
         specifier: ^0.525.0
         version: 0.525.0(react@18.2.0)
+      noisejs:
+        specifier: ^2.1.0
+        version: 2.1.0
       react:
         specifier: 18.2.0
         version: 18.2.0
@@ -63,6 +66,9 @@ importers:
       '@types/node':
         specifier: ^24.1.0
         version: 24.1.0
+      '@types/noisejs':
+        specifier: ^2.1.0
+        version: 2.1.0
       '@types/react':
         specifier: ^18.3.23
         version: 18.3.23
@@ -973,6 +979,9 @@ packages:
 
   '@types/node@24.1.0':
     resolution: {integrity: sha512-ut5FthK5moxFKH2T1CUOC6ctR67rQRvvHdFLCD2Ql6KXmMuCrjsSsRI9UsLCm9M18BMwClv4pn327UvB7eeO1w==}
+
+  '@types/noisejs@2.1.0':
+    resolution: {integrity: sha512-wr00fdlH+qRK0R5R4JeNOuCyLKS4EB2pYzed2iubdwSHL3CZ1RjR5j3lmhQjZB7vZqtL5FxCM/dUZsR9kkGk5A==}
 
   '@types/offscreencanvas@2019.7.3':
     resolution: {integrity: sha512-ieXiYmgSRXUDeOntE1InxjWyvEelZGP63M+cGuquuRLuIKKT1osnkXjxev9B7d1nXSug5vpunx+gNlbVxMlC9A==}
@@ -2107,6 +2116,9 @@ packages:
 
   node-releases@2.0.19:
     resolution: {integrity: sha512-xxOWJsBKtzAq7DY0J+DTzuz58K8e7sJbdgwkbMWQe8UYB6ekmsQ45q0M/tJDsGaZmbC+l7n57UV8Hl5tHxO9uw==}
+
+  noisejs@2.1.0:
+    resolution: {integrity: sha512-sw39KaUS2YBta6apZ0/H+nnCsUyxT/ZRxgv/HnDxx6pWO2e2nUmWgLhpOaQdlxxkFepIpxDrlXy3fHVx0S3SLg==}
 
   normalize-path@3.0.0:
     resolution: {integrity: sha512-6eZs5Ls3WtCisHWp9S2GUy8dqkpGi4BVSz3GaqiE6ezub0512ESztXUwUB6C6IKbQkY2Pnb/mD4WYojCRwcwLA==}
@@ -4106,6 +4118,8 @@ snapshots:
     dependencies:
       undici-types: 7.8.0
 
+  '@types/noisejs@2.1.0': {}
+
   '@types/offscreencanvas@2019.7.3': {}
 
   '@types/prop-types@15.7.15': {}
@@ -5712,6 +5726,8 @@ snapshots:
   node-mock-http@1.0.1: {}
 
   node-releases@2.0.19: {}
+
+  noisejs@2.1.0: {}
 
   normalize-path@3.0.0: {}
 

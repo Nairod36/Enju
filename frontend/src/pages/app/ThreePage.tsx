@@ -1,544 +1,107 @@
-import React, {
-  useRef,
-  useMemo,
-  FC,
-  useState,
-  useEffect,
-  useImperativeHandle,
-} from "react";
-import * as THREE from "three";
-import { Canvas, useFrame, ThreeEvent } from "@react-three/fiber";
-import { Html, OrbitControls } from "@react-three/drei";
+import React, { useState, useRef } from "react";
+import { Canvas } from "@react-three/fiber";
+import { OrbitControls } from "@react-three/drei";
+import { FloatingIsland, FloatingIslandRef } from "./island/island";
+import { generateIslandSeed } from "./island/island.generators";
+import { IslandStorageService } from "./island/island.storage";
 
-// ===== TYPES =====
-interface HexPosition {
-  x: number;
-  z: number;
-  row: number;
-  col: number;
-}
+// ===== APPLICATION PRINCIPALE =====
 
-interface TileData {
-  position: [number, number, number];
-  height: number;
-  color: string;
-  type: "land" | "water";
-  key: string;
-}
-
-interface TreeData {
-  id: string;
-  position: [number, number, number];
-  scale: number;
-  birthTime: number;
-}
-
-// ===== CONSTANTES =====
-const HEX_RADIUS = 1;
-const HEX_HEIGHT = Math.sqrt(3) * HEX_RADIUS;
-const HEX_WIDTH = 2 * HEX_RADIUS;
-const WATER_COLOR = "#2196f3";
-const WATER_DEPTH = -0.2;
-
-// ===== COMPOSANTS DE BASE =====
-
-// Tuile hexagonale animée
-const HexTile: FC<{
-  data: TileData;
-  delay: number;
-  onAnimationComplete: () => void;
-}> = ({ data, delay, onAnimationComplete }) => {
-  const [visible, setVisible] = useState(false);
-  const meshRef = useRef<THREE.Mesh>(null);
-  const scaleRef = useRef(0);
-
-  useEffect(() => {
-    const timer = setTimeout(() => setVisible(true), delay);
-    return () => clearTimeout(timer);
-  }, [delay]);
-
-  useFrame((state, delta) => {
-    if (meshRef.current && visible) {
-      // Animation d'apparition
-      scaleRef.current = THREE.MathUtils.lerp(scaleRef.current, 1, delta * 3);
-      meshRef.current.scale.set(1, scaleRef.current, 1);
-
-      if (scaleRef.current > 0.99 && !meshRef.current.userData.completed) {
-        meshRef.current.userData.completed = true;
-        onAnimationComplete();
-      }
-    }
-  });
-
-  if (!visible) return null;
-
-  return (
-    <mesh
-      ref={meshRef}
-      position={data.position}
-      scale={[1, 0, 1]}
-      castShadow
-      receiveShadow
-    >
-      <cylinderGeometry args={[HEX_RADIUS, HEX_RADIUS, data.height, 6]} />
-      <meshStandardMaterial
-        color={data.color}
-        roughness={data.type === "water" ? 0.3 : 0.8}
-        metalness={data.type === "water" ? 0.1 : 0}
-      />
-    </mesh>
-  );
-};
-
-// Tuile d'eau animée avec texture
-const WaterTile: FC<{ position: [number, number, number]; delay: number }> = ({
-  position,
-  delay,
-}) => {
-  const [visible, setVisible] = useState(false);
-  const meshRef = useRef<THREE.Mesh>(null);
-  const timeOffset = useRef(Math.random() * Math.PI * 2);
-
-  useEffect(() => {
-    const timer = setTimeout(() => setVisible(true), delay);
-    return () => clearTimeout(timer);
-  }, [delay]);
-
-  useFrame(({ clock }) => {
-    if (meshRef.current && visible) {
-      // Animation de vagues
-      const wave1 =
-        Math.sin(clock.elapsedTime * 0.5 + timeOffset.current) * 0.02;
-      const wave2 =
-        Math.cos(clock.elapsedTime * 0.3 + position[0] * 0.1) * 0.01;
-      meshRef.current.position.y = position[1] + wave1 + wave2;
-
-      // Rotation subtile
-      meshRef.current.rotation.y =
-        Math.sin(clock.elapsedTime * 0.1 + timeOffset.current) * 0.05;
-    }
-  });
-
-  if (!visible) return null;
-
-  return (
-    <mesh ref={meshRef} position={position} receiveShadow>
-      <cylinderGeometry args={[HEX_RADIUS, HEX_RADIUS, 0.2, 6]} />
-      <meshStandardMaterial
-        color={WATER_COLOR}
-        transparent
-        opacity={0.85}
-        roughness={0.1}
-        metalness={0.3}
-      />
-    </mesh>
-  );
-};
-
-// Arbre animé qui pousse
-const AnimatedTree: FC<{ data: TreeData; onRemove: (id: string) => void }> = ({
-  data,
-  onRemove,
-}) => {
-  const groupRef = useRef<THREE.Group>(null);
-  const [growth, setGrowth] = useState(0);
-
-  useFrame((state, delta) => {
-    // Animation de croissance
-    const age = (Date.now() - data.birthTime) / 1000; // âge en secondes
-    const targetGrowth = Math.min(age / 2, 1); // 2 secondes pour grandir
-    setGrowth(THREE.MathUtils.lerp(growth, targetGrowth, delta * 2));
-
-    if (groupRef.current) {
-      groupRef.current.scale.set(
-        data.scale * growth,
-        data.scale * growth,
-        data.scale * growth
-      );
-
-      // Petite rotation pendant la croissance
-      if (growth < 1) {
-        groupRef.current.rotation.y += delta * 1.1;
-      }
-    }
-  });
-
-  const treeColor = useMemo(() => {
-    const colors = ["#0d5f0d", "#1a7a1a", "#0f4f0f", "#2d8b2d", "#228b22"];
-    return colors[Math.floor(Math.random() * colors.length)];
-  }, []);
-
-  return (
-    <group ref={groupRef} position={data.position}>
-      {/* Particules de croissance */}
-      {growth < 0.5 && (
-        <mesh position={[0, growth * 2, 0]}>
-          <sphereGeometry args={[0.2, 8, 8]} />
-          <meshStandardMaterial
-            color="#90ee90"
-            emissive="#90ee90"
-            emissiveIntensity={0.5}
-            transparent
-            opacity={0.5 - growth}
-          />
-        </mesh>
-      )}
-
-      {/* Tronc */}
-      <mesh position={[0, 0.15, 0]} castShadow>
-        <cylinderGeometry args={[0.08, 0.1, 0.3, 6]} />
-        <meshStandardMaterial color="#3e2918" roughness={1} />
-      </mesh>
-
-      {/* Feuillage - 3 niveaux */}
-      <mesh position={[0, 0.5, 0]} castShadow>
-        <coneGeometry args={[0.4, 0.6, 6]} />
-        <meshStandardMaterial color={treeColor} roughness={0.9} />
-      </mesh>
-      <mesh position={[0, 0.85, 0]} castShadow>
-        <coneGeometry args={[0.3, 0.5, 6]} />
-        <meshStandardMaterial color={treeColor} roughness={0.9} />
-      </mesh>
-      {growth > 0.7 && (
-        <mesh position={[0, 1.15, 0]} castShadow>
-          <coneGeometry args={[0.2, 0.4, 6]} />
-          <meshStandardMaterial color={treeColor} roughness={0.9} />
-        </mesh>
-      )}
-    </group>
-  );
-};
-
-// Rocher décoratif
-const Rock: FC<{ position: [number, number, number]; scale: number }> = ({
-  position,
-  scale,
-}) => (
-  <mesh
-    position={position}
-    scale={[scale, scale * 0.7, scale]}
-    castShadow
-    receiveShadow
-  >
-    <dodecahedronGeometry args={[0.2, 0]} />
-    <meshStandardMaterial color="#555555" roughness={1} />
-  </mesh>
-);
-
-// ===== COMPOSANT PRINCIPAL =====
-const FloatingIsland = React.forwardRef<{ addRandomTree: () => void }, {}>(
-  (props, ref) => {
-    const groupRef = useRef<THREE.Group>(null);
-    const [animatedTiles, setAnimatedTiles] = useState(0);
-    const [showDecorations, setShowDecorations] = useState(false);
-    const [userTrees, setUserTrees] = useState<TreeData[]>([]);
-    const [usedTiles, setUsedTiles] = useState<Set<string>>(new Set());
-
-    // Calcul de la position hexagonale
-    const getHexPosition = (row: number, col: number): HexPosition => {
-      // Décalage pour les rangées impaires
-      const offset = row % 2 === 0 ? 0 : HEX_WIDTH * 0.5;
-      return {
-        x: col * HEX_WIDTH * 0.75 + offset,
-        z: row * HEX_HEIGHT * 0.5,
-        row,
-        col,
-      };
-    };
-
-    // Génération de l'île
-    const { landTiles, waterTiles, paths, rocks, totalTiles } = useMemo(() => {
-      const land: TileData[] = [];
-      const water: TileData[] = [];
-      const pathConnections: Array<{
-        start: [number, number, number];
-        end: [number, number, number];
-      }> = [];
-      const rockPositions: Array<{
-        position: [number, number, number];
-        scale: number;
-      }> = [];
-
-      // Forme de l'île
-      const islandShape = [
-        { row: 0, cols: [-2, -1, 0, 1, 2] },
-        { row: 1, cols: [-3, -2, -1, 0, 1, 2, 3] },
-        { row: 2, cols: [-3, -2, -1, 0, 1, 2, 3] },
-        { row: 3, cols: [-4, -3, -2, -1, 0, 1, 2, 3, 4] },
-        { row: 4, cols: [-4, -3, -2, -1, 0, 1, 2, 3, 4] },
-        { row: 5, cols: [-4, -3, -2, -1, 0, 1, 2, 3, 4] },
-        { row: 6, cols: [-4, -3, -2, -1, 0, 1, 2, 3, 4] },
-        { row: 7, cols: [-4, -3, -2, -1, 0, 1, 2, 3, 4] },
-        { row: 8, cols: [-3, -2, -1, 0, 1, 2, 3] },
-        { row: 9, cols: [-3, -2, -1, 0, 1, 2, 3] },
-        { row: 10, cols: [-2, -1, 0, 1, 2] },
-      ];
-
-      // Définir la rivière (colonne centrale avec variations)
-      const riverPath = new Set<string>();
-      for (let row = 0; row <= 10; row++) {
-        const variation = Math.sin(row * 0.5) * 1.5;
-        const col = Math.round(variation);
-        riverPath.add(`${row}-${col}`);
-        // Élargir la rivière
-        if (row >= 3 && row <= 7) {
-          riverPath.add(`${row}-${col - 1}`);
-          riverPath.add(`${row}-${col + 1}`);
-        }
-      }
-
-      // Créer les tuiles
-      islandShape.forEach(({ row, cols }) => {
-        cols.forEach((col) => {
-          const pos = getHexPosition(row, col);
-          const key = `${row}-${col}`;
-          const isWater = riverPath.has(key);
-
-          // Calcul de la hauteur basé sur la distance du centre
-          const distance = Math.sqrt(pos.x * pos.x + pos.z * pos.z);
-          const noise = Math.sin(pos.x * 0.3) * Math.cos(pos.z * 0.3) * 0.2;
-          let height = Math.max(0.3, 1.2 - distance * 0.15 + noise);
-
-          if (isWater) {
-            water.push({
-              position: [pos.x, WATER_DEPTH, pos.z],
-              height: 0.2,
-              color: WATER_COLOR,
-              type: "water",
-              key,
-            });
-          } else {
-            // Variation de couleur selon la hauteur
-            let color = "#7ed956";
-            if (height > 0.9) color = "#5fa73a";
-            else if (height < 0.5) color = "#9bc760";
-
-            land.push({
-              position: [pos.x, height / 2, pos.z],
-              height,
-              color,
-              type: "land",
-              key,
-            });
-
-            // Ajouter des rochers occasionnels
-            if (Math.random() < 0.05) {
-              rockPositions.push({
-                position: [
-                  pos.x + (Math.random() - 0.5) * 0.5,
-                  height,
-                  pos.z + (Math.random() - 0.5) * 0.5,
-                ],
-                scale: 0.5 + Math.random() * 0.5,
-              });
-            }
-          }
-        });
-      });
-
-      // Créer des chemins logiques entre certaines tuiles
-      const pathTiles = land.filter(
-        (tile) => tile.height > 0.4 && tile.height < 0.8 && Math.random() < 0.2
-      );
-
-      // Connecter les tuiles de chemin proches
-      for (let i = 0; i < pathTiles.length - 1; i++) {
-        const current = pathTiles[i];
-        const next = pathTiles[i + 1];
-        const distance = Math.sqrt(
-          Math.pow(next.position[0] - current.position[0], 2) +
-            Math.pow(next.position[2] - current.position[2], 2)
-        );
-
-        if (distance < 3) {
-          pathConnections.push({
-            start: [
-              current.position[0],
-              current.position[1] + current.height / 2,
-              current.position[2],
-            ],
-            end: [
-              next.position[0],
-              next.position[1] + next.height / 2,
-              next.position[2],
-            ],
-          });
-        }
-      }
-
-      return {
-        landTiles: land,
-        waterTiles: water,
-        paths: pathConnections,
-        rocks: rockPositions,
-        totalTiles: land.length,
-      };
-    }, []);
-
-    useImperativeHandle(ref, () => ({
-      addRandomTree: () => {
-        if (!landTiles || landTiles.length === 0) {
-          console.warn("❌ landTiles non disponibles");
-          return;
-        }
-
-        const availableTiles = landTiles.filter(
-          (tile) => !usedTiles.has(tile.key)
-        );
-
-        console.log(
-          "🌿 Tuiles disponibles pour arbre :",
-          availableTiles.length
-        );
-
-        if (availableTiles.length === 0) {
-          console.warn("❌ Plus de tuiles disponibles pour planter");
-          return;
-        }
-
-        const tile =
-          availableTiles[Math.floor(Math.random() * availableTiles.length)];
-
-        const newTree: TreeData = {
-          id: `tree-${Date.now()}-${Math.random()}`,
-          position: [
-            tile.position[0] + (Math.random() - 0.5) * 0.3,
-            tile.position[1] + tile.height / 2,
-            tile.position[2] + (Math.random() - 0.5) * 0.3,
-          ],
-          scale: 0.6 + Math.random() * 0.4,
-          birthTime: Date.now(),
-        };
-
-        setUserTrees((prev) => [...prev, newTree]);
-        setUsedTiles((prev) => new Set(prev).add(tile.key));
-
-        console.log("✅ Arbre ajouté sur la tuile :", tile.key);
-      },
-    }));
-
-    // Gestion de l'animation progressive
-    useEffect(() => {
-      if (animatedTiles >= totalTiles * 0.8) {
-        setShowDecorations(true);
-      }
-    }, [animatedTiles, totalTiles]);
-
-    // Animation de flottement
-    useFrame(({ clock }) => {
-      if (groupRef.current) {
-        groupRef.current.position.y = Math.sin(clock.elapsedTime * 0.2) * 0.2;
-        groupRef.current.rotation.y = clock.elapsedTime * 0.01;
-      }
-    });
-
-    return (
-      <group ref={groupRef}>
-        {/* Terrain */}
-        {landTiles.map((tile, index) => (
-          <HexTile
-            key={tile.key}
-            data={tile}
-            delay={index * 30}
-            onAnimationComplete={() => setAnimatedTiles((prev) => prev + 1)}
-          />
-        ))}
-
-        {/* Eau */}
-        {waterTiles.map((tile, index) => (
-          <WaterTile
-            key={tile.key}
-            position={tile.position}
-            delay={1000 + index * 20}
-          />
-        ))}
-
-        {/* Décorations */}
-        {showDecorations && (
-          <>
-            {/* Rochers */}
-            {rocks.map((rock, index) => (
-              <Rock
-                key={`rock-${index}`}
-                position={rock.position}
-                scale={rock.scale}
-              />
-            ))}
-          </>
-        )}
-
-        {/* Arbres ajoutés par l'utilisateur */}
-        {userTrees.map((tree) => (
-          <AnimatedTree
-            key={tree.id}
-            data={tree}
-            onRemove={(id) =>
-              setUserTrees((prev) => prev.filter((t) => t.id !== id))
-            }
-          />
-        ))}
-      </group>
-    );
-  }
-) as React.ForwardRefExoticComponent<
-  React.RefAttributes<{ addRandomTree: () => void }>
->;
-
-// ===== COMPOSANT PRINCIPAL =====
-export const ThreePage: FC = () => {
+export const ThreePage: React.FC = () => {
   const [treeCount, setTreeCount] = useState(0);
-  const [islandKey, setIslandKey] = useState(0);
-  const islandRef = useRef<{ addRandomTree: () => void }>(null);
-  const [usedTiles, setUsedTiles] = useState<Set<string>>(new Set());
+  const [islandSeed, setIslandSeed] = useState(() => generateIslandSeed());
+  const islandRef = useRef<FloatingIslandRef>(null);
+  const [showSaveDialog, setShowSaveDialog] = useState(false);
+  const [showLoadDialog, setShowLoadDialog] = useState(false);
+  const [saveIslandName, setSaveIslandName] = useState("");
 
   // Fonction pour ajouter un arbre aléatoire
   const handleAddTree = () => {
-    console.log("Tentative d'ajout d'un arbre...");
     if (islandRef.current) {
       islandRef.current.addRandomTree();
-      console.log("Arbre ajouté !");
       setTreeCount((prev) => prev + 1);
     }
   };
 
   // Fonction pour régénérer l'île
   const handleRegenerate = () => {
-    setIslandKey((prev) => prev + 1);
+    setIslandSeed(generateIslandSeed());
     setTreeCount(0);
+  };
+
+  // Fonction pour agrandir l'île
+  const handleEnlargeIsland = () => {
+    if (islandRef.current) {
+      islandRef.current.enlargeIsland();
+    }
+  };
+
+  // Fonction pour faire apparaître un coffre
+  const handleSpawnChest = () => {
+    if (islandRef.current) {
+      islandRef.current.spawnChest();
+    }
+  };
+
+  // Fonction pour sauvegarder l'île
+  const handleSaveIsland = () => {
+    if (islandRef.current) {
+      const name = saveIslandName.trim() || `Île ${new Date().toLocaleDateString()}`;
+      const savedId = islandRef.current.saveIsland(name);
+      if (savedId) {
+        alert(`✅ Île "${name}" sauvegardée avec succès !`);
+        setShowSaveDialog(false);
+        setSaveIslandName("");
+      } else {
+        alert("❌ Erreur lors de la sauvegarde");
+      }
+    }
+  };
+
+  // Fonction pour charger une île
+  const handleLoadIsland = (id: string) => {
+    if (islandRef.current) {
+      const success = islandRef.current.loadIsland(id);
+      if (success) {
+        const state = islandRef.current.getCurrentState();
+        setIslandSeed(state.seed);
+        setTreeCount(state.treeCount);
+        setShowLoadDialog(false);
+        alert("✅ Île chargée avec succès !");
+      } else {
+        alert("❌ Erreur lors du chargement");
+      }
+    }
   };
 
   return (
     <div style={{ width: "100vw", height: "100vh", overflow: "hidden" }}>
-      <div className="fixed inset-0 bg-gradient-to-br from-black via-gray-950 to-green-950/80" />
-      <div className="fixed inset-0 bg-gradient-to-tr from-green-950/30 via-transparent to-gray-950" />
-      <div className="fixed inset-0 bg-gradient-to-bl from-transparent via-black/90 to-green-950/40" />
-      <Canvas shadows camera={{ position: [15, 10, 15], fov: 50 }}>
+      <Canvas shadows camera={{ position: [25, 15, 25], fov: 60 }}>
         <OrbitControls
-          enablePan={false}
-          minDistance={8}
-          maxDistance={30}
-          maxPolarAngle={Math.PI / 2.2}
-          autoRotate
-          autoRotateSpeed={0.3}
+          enablePan={true}
+          minDistance={5}
+          maxDistance={100}
+          maxPolarAngle={Math.PI}
+          autoRotate={false}
         />
 
         <ambientLight intensity={0.4} />
         <directionalLight
-          position={[10, 15, 5]}
+          position={[15, 20, 8]}
           intensity={1.2}
           castShadow
           shadow-mapSize={[2048, 2048]}
-          shadow-camera-far={50}
-          shadow-camera-left={-15}
-          shadow-camera-right={15}
-          shadow-camera-top={15}
-          shadow-camera-bottom={-15}
+          shadow-camera-far={80}
+          shadow-camera-left={-25}
+          shadow-camera-right={25}
+          shadow-camera-top={25}
+          shadow-camera-bottom={-25}
         />
-        <pointLight position={[-10, 10, -10]} intensity={0.3} color="#fff5ee" />
+        <pointLight position={[-15, 15, -15]} intensity={0.3} color="#fff5ee" />
 
-        <FloatingIsland key={islandKey} ref={islandRef} />
+        <FloatingIsland seed={islandSeed} ref={islandRef} />
 
-        <fog attach="fog" args={["#87CEEB", 25, 50]} />
+        <fog attach="fog" args={["#87CEEB", 40, 80]} />
       </Canvas>
 
       {/* Interface utilisateur */}
@@ -554,7 +117,7 @@ export const ThreePage: FC = () => {
           pointerEvents: "none",
         }}
       >
-        Île Volante Interactive
+        Île Volante Procédurale
       </div>
 
       <div
@@ -625,6 +188,114 @@ export const ThreePage: FC = () => {
           >
             🏝️ Nouvelle île
           </button>
+
+          <button
+            onClick={handleEnlargeIsland}
+            style={{
+              background: "rgba(255, 165, 0, 0.8)",
+              border: "none",
+              color: "white",
+              padding: "12px 24px",
+              borderRadius: "25px",
+              fontSize: "16px",
+              fontWeight: "bold",
+              cursor: "pointer",
+              backdropFilter: "blur(10px)",
+              transition: "all 0.3s ease",
+              boxShadow: "0 4px 15px rgba(0,0,0,0.3)",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = "scale(1.05)";
+              e.currentTarget.style.background = "rgba(255, 165, 0, 1)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = "scale(1)";
+              e.currentTarget.style.background = "rgba(255, 165, 0, 0.8)";
+            }}
+          >
+            🔍 Agrandir l'île
+          </button>
+
+          <button
+            onClick={handleSpawnChest}
+            style={{
+              background: "rgba(184, 134, 11, 0.8)",
+              border: "none",
+              color: "white",
+              padding: "12px 24px",
+              borderRadius: "25px",
+              fontSize: "16px",
+              fontWeight: "bold",
+              cursor: "pointer",
+              backdropFilter: "blur(10px)",
+              transition: "all 0.3s ease",
+              boxShadow: "0 4px 15px rgba(0,0,0,0.3)",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = "scale(1.05)";
+              e.currentTarget.style.background = "rgba(184, 134, 11, 1)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = "scale(1)";
+              e.currentTarget.style.background = "rgba(184, 134, 11, 0.8)";
+            }}
+          >
+            💰 Ajouter coffre
+          </button>
+
+          <button
+            onClick={() => setShowSaveDialog(true)}
+            style={{
+              background: "rgba(34, 197, 94, 0.8)",
+              border: "none",
+              color: "white",
+              padding: "12px 24px",
+              borderRadius: "25px",
+              fontSize: "16px",
+              fontWeight: "bold",
+              cursor: "pointer",
+              backdropFilter: "blur(10px)",
+              transition: "all 0.3s ease",
+              boxShadow: "0 4px 15px rgba(0,0,0,0.3)",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = "scale(1.05)";
+              e.currentTarget.style.background = "rgba(34, 197, 94, 1)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = "scale(1)";
+              e.currentTarget.style.background = "rgba(34, 197, 94, 0.8)";
+            }}
+          >
+            💾 Sauvegarder
+          </button>
+
+          <button
+            onClick={() => setShowLoadDialog(true)}
+            style={{
+              background: "rgba(168, 85, 247, 0.8)",
+              border: "none",
+              color: "white",
+              padding: "12px 24px",
+              borderRadius: "25px",
+              fontSize: "16px",
+              fontWeight: "bold",
+              cursor: "pointer",
+              backdropFilter: "blur(10px)",
+              transition: "all 0.3s ease",
+              boxShadow: "0 4px 15px rgba(0,0,0,0.3)",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = "scale(1.05)";
+              e.currentTarget.style.background = "rgba(168, 85, 247, 1)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = "scale(1)";
+              e.currentTarget.style.background = "rgba(168, 85, 247, 0.8)";
+            }}
+          >
+            📂 Charger
+          </button>
         </div>
 
         <div
@@ -635,9 +306,165 @@ export const ThreePage: FC = () => {
             backdropFilter: "blur(10px)",
           }}
         >
-          🌳 Arbres plantés: {treeCount}
+          🌳 Arbres plantés: {treeCount} | 🎲 Seed: {Math.floor(islandSeed)}
         </div>
       </div>
+
+      {/* Modal de sauvegarde */}
+      {showSaveDialog && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0, 0, 0, 0.7)",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            zIndex: 1000,
+          }}
+          onClick={() => setShowSaveDialog(false)}
+        >
+          <div
+            style={{
+              background: "rgba(255, 255, 255, 0.95)",
+              backdropFilter: "blur(10px)",
+              padding: "30px",
+              borderRadius: "20px",
+              boxShadow: "0 10px 30px rgba(0,0,0,0.3)",
+              minWidth: "400px",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 style={{ margin: "0 0 20px 0", color: "#333" }}>💾 Sauvegarder l'île</h2>
+            <input
+              type="text"
+              placeholder="Nom de l'île (optionnel)"
+              value={saveIslandName}
+              onChange={(e) => setSaveIslandName(e.target.value)}
+              style={{
+                width: "100%",
+                padding: "12px",
+                border: "2px solid #ddd",
+                borderRadius: "10px",
+                fontSize: "16px",
+                marginBottom: "20px",
+                boxSizing: "border-box",
+              }}
+            />
+            <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
+              <button
+                onClick={() => setShowSaveDialog(false)}
+                style={{
+                  padding: "10px 20px",
+                  background: "#ccc",
+                  border: "none",
+                  borderRadius: "8px",
+                  cursor: "pointer",
+                }}
+              >
+                Annuler
+              </button>
+              <button
+                onClick={handleSaveIsland}
+                style={{
+                  padding: "10px 20px",
+                  background: "#22c55e",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "8px",
+                  cursor: "pointer",
+                }}
+              >
+                Sauvegarder
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de chargement */}
+      {showLoadDialog && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0, 0, 0, 0.7)",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            zIndex: 1000,
+          }}
+          onClick={() => setShowLoadDialog(false)}
+        >
+          <div
+            style={{
+              background: "rgba(255, 255, 255, 0.95)",
+              backdropFilter: "blur(10px)",
+              padding: "30px",
+              borderRadius: "20px",
+              boxShadow: "0 10px 30px rgba(0,0,0,0.3)",
+              minWidth: "500px",
+              maxHeight: "70vh",
+              overflow: "auto",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 style={{ margin: "0 0 20px 0", color: "#333" }}>📂 Charger une île</h2>
+            <div style={{ maxHeight: "400px", overflow: "auto" }}>
+              {IslandStorageService.getAllSavedIslands().map((island) => (
+                <div
+                  key={island.id}
+                  style={{
+                    border: "2px solid #ddd",
+                    borderRadius: "10px",
+                    padding: "15px",
+                    marginBottom: "10px",
+                    background: "rgba(255, 255, 255, 0.8)",
+                    cursor: "pointer",
+                  }}
+                  onClick={() => handleLoadIsland(island.id)}
+                >
+                  <div style={{ fontWeight: "bold", fontSize: "18px", color: "#333" }}>
+                    {island.name}
+                  </div>
+                  <div style={{ color: "#666", fontSize: "14px", marginTop: "5px" }}>
+                    🎲 Seed: {island.seed} | 🌳 Arbres: {island.treeCount} | 💰 Coffres: {island.chests.length}
+                  </div>
+                  <div style={{ color: "#888", fontSize: "12px", marginTop: "5px" }}>
+                    Créée: {new Date(island.createdAt).toLocaleDateString()} | 
+                    Modifiée: {new Date(island.lastModified).toLocaleDateString()}
+                  </div>
+                </div>
+              ))}
+              {IslandStorageService.getAllSavedIslands().length === 0 && (
+                <div style={{ textAlign: "center", color: "#666", padding: "20px" }}>
+                  Aucune île sauvegardée
+                </div>
+              )}
+            </div>
+            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "20px" }}>
+              <button
+                onClick={() => setShowLoadDialog(false)}
+                style={{
+                  padding: "10px 20px",
+                  background: "#ccc",
+                  border: "none",
+                  borderRadius: "8px",
+                  cursor: "pointer",
+                }}
+              >
+                Fermer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
