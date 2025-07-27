@@ -1,4 +1,4 @@
-import { HexPosition, TileData, RockData, IslandGenerationResult } from './island.types';
+import { HexPosition, TileData, RockData, HouseData, IslandGenerationResult } from './island.types';
 import { HEX_RADIUS, HEX_HEIGHT, HEX_WIDTH, WATER_DEPTH } from './island.const';
 import {
     generateIslandShape,
@@ -559,6 +559,7 @@ export const generateIsland = (seed: number, customShape?: any[]): IslandGenerat
     const land: TileData[] = [];
     const water: TileData[] = [];
     const rockPositions: RockData[] = [];
+    const housePositions: HouseData[] = [];
 
     // Génération de la forme de l'île (utiliser la forme personnalisée si fournie)
     const islandShape = customShape || generateIslandShape(seed);
@@ -936,10 +937,34 @@ export const generateIsland = (seed: number, customShape?: any[]): IslandGenerat
         });
     });
 
+    // Placement aléatoire des maisons sur des cellules en hauteur
+    const landTilesForHouses = land.filter(tile => tile.height > 0.8 && tile.height < 2.0); // Cellules en hauteur modérées
+
+    for (let i = 0; i < 1 && i < landTilesForHouses.length; i++) {
+        // Sélectionner une tuile aléatoire parmi celles en hauteur
+        const tileIndex = Math.floor(rand(seed * (700 + i)) * landTilesForHouses.length);
+        const selectedTile = landTilesForHouses[tileIndex];
+
+        // Retirer la tuile sélectionnée pour éviter les doublons
+        landTilesForHouses.splice(tileIndex, 1);
+
+        // Vérifier qu'il n'y a pas de conflit avec les cellules voisines (éviter les chevauchements)
+        const houseX = selectedTile.position[0] + (rand(seed * (800 + i)) - 0.5) * 0.5;
+        const houseZ = selectedTile.position[2] + (rand(seed * (801 + i)) - 0.5) * 0.5;
+        const houseY = selectedTile.position[1] + selectedTile.height / 2 - 0.3; // Surélever légèrement
+
+        housePositions.push({
+            position: validatePosition([houseX, houseY, houseZ]),
+            scale: validateNumber(0.008 + rand(seed * (802 + i)) * 0.004, 0.008), // Échelle adaptée
+            rotation: validateNumber(rand(seed * (803 + i)) * Math.PI * 2, 0) // Rotation aléatoire
+        });
+    }
+
     return {
         landTiles: land,
         waterTiles: water,
         rocks: rockPositions,
+        houses: housePositions,
         totalTiles: land.length,
         waterColor,
     };
@@ -947,13 +972,13 @@ export const generateIsland = (seed: number, customShape?: any[]): IslandGenerat
 
 export const enlargeIsland = (seed: number, currentIslandData: IslandGenerationResult): IslandGenerationResult => {
     console.log("🔄 Agrandissement avec préservation complète du contenu");
-    
+
     // Extraire les coordonnées existantes des tuiles terrestres
     const existingLandTiles = new Set<string>();
     currentIslandData.landTiles.forEach(tile => {
         existingLandTiles.add(tile.key);
     });
-    
+
     // Calculer le rayon actuel basé sur les tuiles existantes
     let currentRadius = 0;
     currentIslandData.landTiles.forEach(tile => {
@@ -964,18 +989,18 @@ export const enlargeIsland = (seed: number, currentIslandData: IslandGenerationR
         const distance = Math.sqrt(row * row + col * col);
         currentRadius = Math.max(currentRadius, distance);
     });
-    
+
     const newRadius = Math.ceil(currentRadius) + 2; // Augmenter de 2
     console.log(`📏 Agrandissement: rayon ${currentRadius.toFixed(1)} → ${newRadius}`);
-    
+
     // Générer une nouvelle île avec le rayon augmenté
     const newIslandShape = generateIslandShape(seed, newRadius);
     const newIslandData = generateIsland(seed, newIslandShape);
-    
+
     // Préserver EXACTEMENT les tuiles existantes en les remplaçant dans les nouvelles données
     const preservedLandTiles: TileData[] = [];
     const newLandTiles: TileData[] = [];
-    
+
     newIslandData.landTiles.forEach(newTile => {
         if (existingLandTiles.has(newTile.key)) {
             // Trouver la tuile originale correspondante
@@ -986,12 +1011,12 @@ export const enlargeIsland = (seed: number, currentIslandData: IslandGenerationR
                 preservedLandTiles.push(newTile); // Fallback
             }
         } else {
-            newLandTiles.push(newTile); // Nouvelle tuile ajoutée
+            newLandTiles.push({ ...newTile, isNew: true }); // Nouvelle tuile ajoutée avec marqueur
         }
     });
-    
+
     console.log(`✅ Préservé: ${preservedLandTiles.length}, Ajouté: ${newLandTiles.length}`);
-    
+
     return {
         landTiles: [...preservedLandTiles, ...newLandTiles],
         waterTiles: newIslandData.waterTiles, // Nouvelles eaux
@@ -1003,6 +1028,14 @@ export const enlargeIsland = (seed: number, currentIslandData: IslandGenerationR
                 return !existingLandTiles.has(rockKey);
             })
         ],
+        houses: [
+            ...currentIslandData.houses, // Garder les maisons existantes
+            ...newIslandData.houses.filter(newHouse => {
+                // Ajouter seulement les nouvelles maisons (pas sur les anciennes tuiles)
+                const houseKey = `${Math.round(newHouse.position[0] / 1.5)},${Math.round(newHouse.position[2] / 1.3)}`;
+                return !existingLandTiles.has(houseKey);
+            })
+        ],
         totalTiles: preservedLandTiles.length + newLandTiles.length,
         waterColor: currentIslandData.waterColor // Garder la couleur d'eau existante
     };
@@ -1010,10 +1043,11 @@ export const enlargeIsland = (seed: number, currentIslandData: IslandGenerationR
 
 export const generateIslandFromShape = (seed: number, islandShape: any[]): IslandGenerationResult => {
     console.log("🏗️ Génération île simple depuis forme...");
-    
+
     const land: TileData[] = [];
     const water: TileData[] = [];
     const rockPositions: RockData[] = [];
+    const housePositions: HouseData[] = [];
 
     // Couleurs simples
     const waterColor = "#1e88e5";
@@ -1023,18 +1057,18 @@ export const generateIslandFromShape = (seed: number, islandShape: any[]): Islan
     islandShape.forEach(({ row, cols }) => {
         cols.forEach((col) => {
             // Vérifier que row et col sont valides
-            if (typeof row !== 'number' || typeof col !== 'number' || 
+            if (typeof row !== 'number' || typeof col !== 'number' ||
                 isNaN(row) || isNaN(col) || !isFinite(row) || !isFinite(col)) {
                 console.warn(`❌ Coordonnées invalides: row=${row}, col=${col}`);
                 return;
             }
 
             const key = `${row},${col}`;
-            
+
             // Position hexagonale simple
             const x = col * 1.5;
             const z = row * 1.3 + (col % 2) * 0.65;
-            
+
             const rand = (s: number) => {
                 const x = Math.sin(s) * 10000;
                 return x - Math.floor(x);
@@ -1042,7 +1076,7 @@ export const generateIslandFromShape = (seed: number, islandShape: any[]): Islan
             const height = 0.5 + rand(seed * 9000 + row * 100 + col) * 0.3; // Hauteur aléatoire simple
 
             // Vérifier que la position est valide
-            if (isNaN(x) || isNaN(z) || isNaN(height) || 
+            if (isNaN(x) || isNaN(z) || isNaN(height) ||
                 !isFinite(x) || !isFinite(z) || !isFinite(height)) {
                 console.warn(`❌ Position invalide: x=${x}, z=${z}, height=${height}`);
                 return;
@@ -1064,6 +1098,7 @@ export const generateIslandFromShape = (seed: number, islandShape: any[]): Islan
         landTiles: land,
         waterTiles: water,
         rocks: rockPositions,
+        houses: housePositions,
         totalTiles: land.length,
         waterColor,
     };

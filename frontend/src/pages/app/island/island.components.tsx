@@ -1,8 +1,9 @@
 import React, { useRef, useState, useEffect, useMemo } from "react";
 import * as THREE from "three";
 import { useFrame } from "@react-three/fiber";
-import { TileData, TreeData } from "./island.types";
+import { TileData, TreeData, CharacterData, ChestData } from "./island.types";
 import { HEX_RADIUS } from "./island.const";
+import { useModels } from "../../../hooks/useModels";
 
 // ===== COMPOSANTS 3D =====
 
@@ -211,5 +212,198 @@ export const Rock: React.FC<{
         metalness={0.1} 
       />
     </mesh>
+  );
+};
+
+// Maison placée aléatoirement
+export const House: React.FC<{
+  position: [number, number, number];
+  scale?: number;
+  rotation?: number;
+}> = ({ position, scale = 0.01, rotation = 0 }) => {
+  const { littleHouse } = useModels();
+  
+  if (!littleHouse) return null;
+
+  return (
+    <group 
+      position={[position[0], position[1] + 0.3, position[2]]} 
+      scale={[scale, scale, scale]}
+      rotation={[0, rotation, 0]}
+      castShadow 
+      receiveShadow
+    >
+      <primitive object={littleHouse.clone()} />
+    </group>
+  );
+};
+
+// Personnage qui se déplace intelligemment sur l'île
+export const GenericMale: React.FC<{
+  character: CharacterData;
+  landTiles: TileData[];
+  obstacles: Array<{ position: [number, number, number]; radius: number }>;
+  onCharacterUpdate: (character: CharacterData) => void;
+}> = ({ character, landTiles, obstacles, onCharacterUpdate }) => {
+  const groupRef = useRef<THREE.Group>(null);
+  const { genericMale } = useModels();
+
+  // Mouvement simple en cercle pour tester
+  useFrame(({ clock }) => {
+    if (!groupRef.current) return;
+
+    const time = clock.elapsedTime;
+    const radius = 3;
+    const speed = 0.5;
+    
+    const x = Math.cos(time * speed) * radius;
+    const z = Math.sin(time * speed) * radius;
+    const y = character.position[1]; // Garder la hauteur initiale
+    
+    groupRef.current.position.set(x, y, z);
+    groupRef.current.rotation.y = time * speed + Math.PI / 2; // Orienter dans la direction du mouvement
+    
+    // Mettre à jour le character pour le parent
+    const updatedCharacter = {
+      ...character,
+      position: [x, y, z] as [number, number, number],
+      direction: time * speed + Math.PI / 2,
+      state: 'walking' as const
+    };
+    
+    onCharacterUpdate(updatedCharacter);
+  });
+
+  if (!genericMale) {
+    console.log("🚫 Modèle GenericMale pas encore chargé");
+    return (
+      <group ref={groupRef} position={character.position}>
+        <mesh position={[0, 0.5, 0]}>
+          <sphereGeometry args={[0.3, 8, 8]} />
+          <meshStandardMaterial color="#ff0000" emissive="#ff0000" emissiveIntensity={0.3} />
+        </mesh>
+      </group>
+    );
+  }
+
+  console.log("✅ Rendu du personnage GenericMale");
+
+  return (
+    <group ref={groupRef} position={character.position}>
+      <primitive 
+        object={genericMale.clone()} 
+        scale={[0.01, 0.01, 0.01]}
+        castShadow
+        receiveShadow
+      />
+      
+      {/* Grosse sphère rouge pour debug */}
+      <mesh position={[0, 2, 0]}>
+        <sphereGeometry args={[0.2, 8, 8]} />
+        <meshStandardMaterial 
+          color="#ff0000" 
+          emissive="#ff0000" 
+          emissiveIntensity={0.8}
+        />
+      </mesh>
+    </group>
+  );
+};
+
+// Coffre qui peut apparaître sur l'île
+export const Chest: React.FC<{
+  chest: ChestData;
+  onChestClick?: (chestId: string) => void;
+}> = ({ chest, onChestClick }) => {
+  const groupRef = useRef<THREE.Group>(null);
+  const [hover, setHover] = useState(false);
+
+  useFrame(({ clock }) => {
+    if (groupRef.current) {
+      // Animation de flottement subtile
+      groupRef.current.position.y = chest.position[1] + Math.sin(clock.elapsedTime * 2) * 0.01;
+      
+      // Animation d'ouverture
+      if (chest.isOpen && groupRef.current.children[1]) {
+        (groupRef.current.children[1] as THREE.Mesh).rotation.x = -Math.PI / 3;
+      }
+    }
+  });
+
+  const handleClick = () => {
+    if (onChestClick) {
+      onChestClick(chest.id);
+    }
+  };
+
+  return (
+    <group 
+      ref={groupRef} 
+      position={chest.position} 
+      scale={[chest.scale, chest.scale, chest.scale]}
+      rotation={[0, chest.rotation, 0]}
+      onClick={handleClick}
+      onPointerOver={() => setHover(true)}
+      onPointerOut={() => setHover(false)}
+      style={{ cursor: 'pointer' }}
+    >
+      {/* Base du coffre */}
+      <mesh castShadow receiveShadow>
+        <boxGeometry args={[0.4, 0.2, 0.3]} />
+        <meshStandardMaterial 
+          color={hover ? "#8b4513" : "#654321"} 
+          roughness={0.8}
+        />
+      </mesh>
+      
+      {/* Couvercle du coffre */}
+      <mesh position={[0, 0.1, 0]} castShadow>
+        <boxGeometry args={[0.42, 0.08, 0.32]} />
+        <meshStandardMaterial 
+          color={hover ? "#8b4513" : "#654321"} 
+          roughness={0.8}
+        />
+      </mesh>
+      
+      {/* Fermeture dorée */}
+      <mesh position={[0, 0.05, 0.16]} castShadow>
+        <boxGeometry args={[0.05, 0.05, 0.02]} />
+        <meshStandardMaterial 
+          color="#ffd700" 
+          metalness={0.7}
+          roughness={0.2}
+        />
+      </mesh>
+
+      {/* Particules dorées si ouvert */}
+      {chest.isOpen && (
+        <>
+          <mesh position={[0, 0.3, 0]}>
+            <sphereGeometry args={[0.02, 8, 8]} />
+            <meshStandardMaterial 
+              color="#ffd700" 
+              emissive="#ffd700"
+              emissiveIntensity={0.5}
+            />
+          </mesh>
+          <mesh position={[0.1, 0.25, 0.1]}>
+            <sphereGeometry args={[0.015, 8, 8]} />
+            <meshStandardMaterial 
+              color="#ffd700" 
+              emissive="#ffd700"
+              emissiveIntensity={0.3}
+            />
+          </mesh>
+          <mesh position={[-0.1, 0.28, -0.1]}>
+            <sphereGeometry args={[0.018, 8, 8]} />
+            <meshStandardMaterial 
+              color="#ffd700" 
+              emissive="#ffd700"
+              emissiveIntensity={0.4}
+            />
+          </mesh>
+        </>
+      )}
+    </group>
   );
 };
