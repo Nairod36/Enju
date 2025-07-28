@@ -121,3 +121,5 @@ docker-compose*.yml
 # Virtual machine crash logs
 hs_err_pid*
 replay_pid*
+
+lib
