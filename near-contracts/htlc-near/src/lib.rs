@@ -411,13 +411,13 @@ mod tests {
         );
 
         let htlc = contract.get_contract(contract_id).unwrap();
-        assert_eq!(htlc.sender, accounts(1));
-        assert_eq!(htlc.receiver, accounts(2));
-        assert_eq!(htlc.amount, ATTACHED_DEPOSIT);
-        assert_eq!(htlc.hashlock, hashlock);
-        assert_eq!(htlc.timelock, timelock);
-        assert!(!htlc.withdrawn);
-        assert!(!htlc.refunded);
+        assert_eq!(htlc.0, accounts(1).to_string());
+        assert_eq!(htlc.1, accounts(2).to_string());
+        assert_eq!(htlc.2, ATTACHED_DEPOSIT.to_string());
+        assert_eq!(htlc.3, hex::encode(&hashlock));
+        assert_eq!(htlc.4, timelock);
+        assert!(!htlc.5);
+        assert!(!htlc.6);
     }
 
     #[test]
@@ -448,8 +448,8 @@ mod tests {
         contract.withdraw(contract_id.clone(), Base64VecU8(preimage.to_vec()));
 
         let htlc = contract.get_contract(contract_id).unwrap();
-        assert!(htlc.withdrawn);
-        assert!(!htlc.refunded);
+        assert!(htlc.5); // withdrawn
+        assert!(!htlc.6); // refunded
     }
 
     #[test]
@@ -506,8 +506,8 @@ mod tests {
         contract.refund(contract_id.clone());
 
         let htlc = contract.get_contract(contract_id).unwrap();
-        assert!(!htlc.withdrawn);
-        assert!(htlc.refunded);
+        assert!(!htlc.5); // withdrawn
+        assert!(htlc.6); // refunded
     }
 
     #[test]
