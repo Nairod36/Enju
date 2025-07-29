@@ -1,5 +1,5 @@
 {
-  "name": "react-wagmi-appkit",
+  "name": "react-wagmi-app",
   "private": true,
   "version": "0.0.1",
   "type": "module",
@@ -10,25 +10,45 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@reown/appkit": "1.7.15",
-    "@reown/appkit-adapter-wagmi": "1.7.15",
-    "@tanstack/react-query": "^5.56.2",
-    "react": "19.0.0",
-    "react-dom": "19.0.0",
-    "viem": "^2.31.7",
-    "wagmi": "^2.15.6"
+    "@radix-ui/react-slot": "^1.2.3",
+    "@react-three/drei": "^9.114.3",
+    "@react-three/fiber": "^8.18.0",
+    "@reown/appkit": "^1.7.16",
+    "@reown/appkit-adapter-wagmi": "^1.7.16",
+    "@tanstack/react-query": "^5.83.0",
+    "@tanstack/react-router": "^1.129.8",
+    "@wagmi/core": "^2.18.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "ethers": "^5.7.2",
+    "lucide-react": "^0.525.0",
+    "noisejs": "^2.1.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tailwind-merge": "^3.3.1",
+    "three": "^0.178.0",
+    "three-stdlib": "^2.36.0",
+    "viem": "^2.33.1",
+    "wagmi": "^2.16.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.9.0",
-    "@types/react": "^19.0.10",
-    "@types/react-dom": "^19.0.4",
+    "@types/node": "^24.1.0",
+    "@types/noisejs": "^2.1.0",
+    "@types/react": "^18.3.23",
+    "@types/react-dom": "^18.3.7",
+    "@types/three": "^0.178.1",
     "@vitejs/plugin-react": "^4.3.1",
+    "autoprefixer": "^10.4.21",
     "eslint": "^9.9.0",
     "eslint-plugin-react-hooks": "^5.1.0-rc.0",
     "eslint-plugin-react-refresh": "^0.4.9",
     "globals": "^16.0.0",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^3.4.1",
+    "tw-animate-css": "^1.3.6",
     "typescript": "^5.5.3",
     "typescript-eslint": "^8.0.1",
-    "vite": "^6.2.0"
+    "vite": "^5.4.19"
   }
 }

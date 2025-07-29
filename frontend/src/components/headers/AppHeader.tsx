@@ -1,0 +1,71 @@
+import { Link } from "@tanstack/react-router";
+import { Button } from "../ui/button";
+import { Wallet, User, Settings } from "lucide-react";
+import FluidLogo from "../FluidLogo";
+
+export function AppHeader() {
+  return (
+    <header className="fixed top-0 left-0 right-0 z-50 backdrop-blur">
+      <div className="max-w-[1600px] mx-auto px-4 py-6">
+        <div className="bg-white/90 rounded-full px-6 flex items-center justify-between shadow-md">
+          {/* Logo & Brand */}
+          <Link
+            to="/app"
+            className="flex items-center gap-2 hover:scale-105 transition-all duration-300"
+          >
+            <FluidLogo />
+          </Link>
+
+          {/* Navigation */}
+          <nav className="hidden md:flex items-center gap-6 text-sm">
+            <Link
+              to="/app"
+              className="text-slate-700 hover:text-slate-900 transition-colors px-3 py-2 rounded-lg hover:bg-emerald-50"
+            >
+              Forest
+            </Link>
+            <Link
+              to="/app/game"
+              className="text-slate-700 hover:text-slate-900 transition-colors px-3 py-2 rounded-lg hover:bg-emerald-50"
+            >
+              Game
+            </Link>
+            <Link
+              to="/app"
+              className="text-slate-700 hover:text-slate-900 transition-colors px-3 py-2 rounded-lg hover:bg-emerald-50"
+            >
+              Rewards
+            </Link>
+            <Link
+              to="/app"
+              className="text-slate-700 hover:text-slate-900 transition-colors px-3 py-2 rounded-lg hover:bg-emerald-50"
+            >
+              Marketplace
+            </Link>
+          </nav>
+
+          {/* Actions */}
+          <div className="flex items-center gap-3">
+            <appkit-button />
+
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-slate-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-full"
+            >
+              <User size={16} />
+            </Button>
+
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-slate-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-full"
+            >
+              <Settings size={16} />
+            </Button>
+          </div>
+        </div>
+      </div>
+    </header>
+  );
+}
