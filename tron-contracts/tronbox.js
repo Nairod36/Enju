@@ -11,7 +11,7 @@ module.exports = {
     shasta: {
       privateKey: process.env.TRON_PRIVATE_KEY,
       userFeePercentage: 50,
-      feeLimit: 1e8,
+      feeLimit: 1e9, // Augmenté à 1 billion (1000 TRX)
       fullHost: "https://api.shasta.trongrid.io",
       network_id: "2"
     },
@@ -31,7 +31,13 @@ module.exports = {
     },
     compilers: {
       solc: {
-        version: "0.8.6"
+        version: "0.8.6", // Keep current version for compatibility
+        settings: {
+          optimizer: {
+            enabled: true,
+            runs: 200 // Recommended by Tron docs
+          }
+        }
       }
     }
   },
