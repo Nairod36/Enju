@@ -1,6 +1,7 @@
 import { ethers } from 'ethers';
 import { NearClient } from './near-client';
 import { TronClient } from './tron-client';
+import { PriceOracle } from './price-oracle';
 import { InchFusionTypes } from './types';
 
 /**
@@ -11,6 +12,7 @@ export class InchFusionResolver {
   private ethProvider: ethers.providers.JsonRpcProvider;
   private nearClient: NearClient;
   private tronClient: TronClient;
+  private priceOracle: PriceOracle;
   private resolverSigner: ethers.Wallet;
 
   // Official 1inch addresses
@@ -22,6 +24,7 @@ export class InchFusionResolver {
     this.resolverSigner = new ethers.Wallet(config.ethereum.privateKey, this.ethProvider);
     this.nearClient = new NearClient(config.near);
     this.tronClient = new TronClient(config.tron);
+    this.priceOracle = new PriceOracle();
     this.crossChainResolverAddress = config.ethereum.crossChainResolverAddress;
   }
 
@@ -58,13 +61,16 @@ export class InchFusionResolver {
       const escrowSrcAddress = await this.waitForEscrowCreation(params.secretHash);
       console.log(`📦 EscrowSrc detected: ${escrowSrcAddress}`);
 
-      // 2. Create corresponding NEAR HTLC
+      // 2. Calculate NEAR equivalent and create corresponding NEAR HTLC
+      const nearAmount = await this.priceOracle.convertEthToNear(params.amount);
+      console.log(`💱 Converting ${params.amount} ETH to ${nearAmount} NEAR`);
+      
       const nearContractId = await this.createNearHTLC({
         receiver: params.nearAccount,
         hashlock: this.hexToBytes(params.secretHash),
         timelock: params.timelock,
         ethAddress: params.ethRecipient,
-        amount: params.amount
+        amount: nearAmount
       });
 
       console.log(`📦 NEAR HTLC created: ${nearContractId}`);
@@ -98,7 +104,7 @@ export class InchFusionResolver {
     console.log('🔄 Processing NEAR → ETH swap via 1inch Fusion+');
 
     try {
-      // 1. Create NEAR HTLC first
+      // 1. Create NEAR HTLC first (amount already in NEAR from user)
       const nearContractId = await this.createNearHTLC({
         receiver: this.nearClient.getAccountId(),
         hashlock: this.hexToBytes(params.secretHash),
@@ -109,12 +115,15 @@ export class InchFusionResolver {
 
       console.log(`📦 NEAR HTLC created: ${nearContractId}`);
 
-      // 2. Create EscrowSrc using 1inch factory
+      // 2. Calculate ETH equivalent and create EscrowSrc using 1inch factory
+      const ethAmount = await this.priceOracle.convertNearToEth(params.amount);
+      console.log(`💱 Converting ${params.amount} NEAR to ${ethAmount} ETH`);
+      
       const escrowSrcAddress = await this.createEscrowSrc({
         secretHash: params.secretHash,
         timelock: params.timelock,
         ethRecipient: params.ethRecipient,
-        amount: params.amount
+        amount: ethAmount
       });
 
       console.log(`📦 EscrowSrc created: ${escrowSrcAddress}`);
@@ -292,9 +301,16 @@ export class InchFusionResolver {
       // 3. Wait for secret revelation and complete both sides
       const secret = await this.waitForSecretRevelation(params.secretHash);
 
-      // Complete Tron side
+      // Complete Tron side - calculate ETH equivalent amount
       if (tronResult.swapId) {
+        const ethAmount = await this.priceOracle.convertTrxToEth(params.amount);
+        console.log(`💱 Converting ${params.amount} TRX to ${ethAmount} ETH`);
+        
         await this.tronClient.completeSwap(tronResult.swapId, this.bytesToHex(secret));
+        
+        // Here you would send the ETH equivalent to params.ethRecipient
+        // This requires integration with your ETH bridge contract
+        console.log(`🚀 Should send ${ethAmount} ETH to ${params.ethRecipient}`);
       }
 
       return {
@@ -338,12 +354,15 @@ export class InchFusionResolver {
 
       console.log(`📦 Tron HTLC created: ${tronResult.swapId}`);
 
-      // 2. Create EscrowSrc using 1inch factory
+      // 2. Calculate ETH equivalent and create EscrowSrc using 1inch factory
+      const ethAmount = await this.priceOracle.convertTrxToEth(params.tronAmount);
+      console.log(`💱 Converting ${params.tronAmount} TRX to ${ethAmount} ETH`);
+      
       const escrowSrcAddress = await this.createEscrowSrc({
         secretHash: params.secretHash,
         timelock: params.timelock,
         ethRecipient: params.ethRecipient,
-        amount: params.tronAmount // Convert TRX to ETH equivalent
+        amount: ethAmount
       });
 
       console.log(`📦 EscrowSrc created: ${escrowSrcAddress}`);

@@ -15,7 +15,11 @@
       "Bash(git rm:*)",
       "Bash(sed:*)",
       "Bash(forge build:*)",
-      "Bash(forge install:*)"
+      "Bash(forge install:*)",
+      "Bash(tronbox compile:*)",
+      "Bash(npm install:*)",
+      "Bash(pnpm install:*)",
+      "Bash(npx ts-node:*)"
     ],
     "deny": []
   }

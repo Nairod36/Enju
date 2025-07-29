@@ -19,7 +19,9 @@ contract TronDirectBridge {
     
     event SwapCompleted(
         address indexed escrow,
-        bytes32 secret
+        bytes32 secret,
+        address indexed resolver,
+        uint256 amount
     );
     
     event SwapRefunded(
@@ -126,7 +128,10 @@ contract TronDirectBridge {
         
         swap.completed = true;
         
-        emit SwapCompleted(address(this), secret);
+        // Transfer TRX to resolver (who will handle the cross-chain transfer)
+        payable(msg.sender).transfer(swap.amount);
+        
+        emit SwapCompleted(address(this), secret, msg.sender, swap.amount);
     }
     
     /**
