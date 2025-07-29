@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { ArrowRight, TreePine } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
@@ -6,23 +5,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import FluidLogo from "@/components/FluidLogo";
 
 export default function HomePage() {
-  const [transactionHash, setTransactionHash] = useState<
-    `0x${string}` | undefined
-  >(undefined);
-  const [signedMsg, setSignedMsg] = useState("");
-  const [balance, setBalance] = useState("");
-
-  const receiveHash = (hash: `0x${string}`) => {
-    setTransactionHash(hash);
-  };
-
-  const receiveSignedMsg = (signedMsg: string) => {
-    setSignedMsg(signedMsg);
-  };
-
-  const receivebalance = (balance: string) => {
-    setBalance(balance);
-  };
 
   return (
     <div className="relative min-h-screen text-slate-800 font-sans selection:bg-emerald-200/60 selection:text-slate-900">
@@ -66,7 +48,7 @@ export default function HomePage() {
             </nav>
             {/* Button Right */}
             <div className="flex-1 flex justify-end">
-              <Link to="/transition">
+              <Link to="/app">
                 <Button className="rounded-full bg-emerald-600 hover:bg-emerald-700 text-white px-5 h-10">
                   Launch App
                 </Button>
@@ -89,7 +71,7 @@ export default function HomePage() {
             playful rewards, and subtle emerald touches.
           </p>
           <div className="mt-12 flex items-center justify-center gap-4">
-            <Link to="/transition">
+            <Link to="/app">
               <Button className="rounded-full bg-emerald-600 hover:bg-emerald-700 text-white px-8 h-12">
                 Get Started
               </Button>
@@ -142,7 +124,7 @@ export default function HomePage() {
               Colors serve information, with a subtle green accent.
             </p>
             <div className="mt-10 flex gap-3">
-              <Link to="/transition">
+              <Link to="/app">
                 <Button className="rounded-full bg-emerald-600 hover:bg-emerald-700 text-white px-6 h-11">
                   Launch App
                 </Button>
@@ -196,9 +178,9 @@ export default function HomePage() {
                 well-balanced green accent.
               </p>
               <div className="mt-10 flex justify-center">
-                <Link to="/transition">
+                <Link to="/app">
                   <Button className="rounded-full bg-emerald-600 hover:bg-emerald-700 text-white px-8 h-12">
-                    Connect Wallet
+                    Launch App
                   </Button>
                 </Link>
               </div>

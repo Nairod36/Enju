@@ -38,14 +38,20 @@ const GameContent: React.FC = () => {
           if (userIsland) {
             setIslandSeed(parseInt(userIsland.seed));
             setTreeCount(userIsland.treeCount || 0);
-            
+
             // Charger l'état complet de l'île après que l'île soit rendue
-            setTimeout(() => {
+            setTimeout(async () => {
               if (islandRef.current) {
                 islandRef.current.loadFromDatabase(userIsland);
+
+                // Si l'île n'a pas de données générées, sauvegarder les données actuelles
+                const hasGeneratedData =
+                  userIsland.islandData &&
+                  userIsland.islandData.landTiles &&
+                  userIsland.islandData.landTiles.length > 0;
               }
             }, 1000); // Délai pour s'assurer que l'île est rendue
-            
+
             setIsInitialized(true);
           }
         } catch (error) {
@@ -125,7 +131,7 @@ const GameContent: React.FC = () => {
 
     try {
       const currentState = islandRef.current.getCurrentState();
-      
+
       const updateData = {
         islandData: currentState.islandData,
         treeCount: currentState.treeCount,
@@ -133,11 +139,11 @@ const GameContent: React.FC = () => {
         chests: currentState.chests,
         usedTiles: currentState.usedTiles,
         totalTrees: currentState.treeCount,
-        healthScore: 100 // À calculer selon votre logique
+        healthScore: 100, // À calculer selon votre logique
       };
 
       const savedIsland = await autoSaveIsland(activeIsland.id, updateData);
-      
+
       if (savedIsland) {
         alert("✅ Île sauvegardée avec succès !");
       } else {
