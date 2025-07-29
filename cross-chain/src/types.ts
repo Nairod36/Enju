@@ -1,4 +1,4 @@
-// Simple types for cross-chain operations (no complex API stuff)
+// 1inch Fusion+ Cross-Chain Types (Simplified)
 
 export interface SwapRequest {
   id: string;
@@ -42,4 +42,54 @@ export interface Config {
     privateKey: string;
     htlcContract: string;
   };
+}
+
+// 1inch Fusion+ specific types
+export namespace InchFusionTypes {
+  export interface Config {
+    ethereum: {
+      rpcUrl: string;
+      chainId: number;
+      privateKey: string;
+      crossChainResolverAddress: string;
+    };
+    near: {
+      networkId: string;
+      nodeUrl: string;
+      accountId: string;
+      privateKey: string;
+      contractId: string;
+    };
+  }
+
+  export interface EthToNearSwap {
+    secretHash: string;
+    timelock: number;
+    nearAccount: string;
+    ethRecipient: string;
+    amount: string;
+  }
+
+  export interface NearToEthSwap {
+    secretHash: string;
+    timelock: number;
+    ethRecipient: string;
+    amount: string;
+  }
+
+  export interface SwapResult {
+    success: boolean;
+    escrowSrcAddress?: string;
+    nearContractId?: string;
+    secret?: string;
+    error?: string;
+  }
+
+  export interface ResolverStatus {
+    initialized: boolean;
+    ethAddress: string;
+    nearAccount: string;
+    escrowFactory: string;
+    crossChainResolver: string;
+  }
 }

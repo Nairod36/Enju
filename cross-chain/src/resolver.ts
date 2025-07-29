@@ -129,16 +129,73 @@ export class CrossChainResolver {
   }
 
   /**
-   * Process NEAR → ETH swap (simplified)
+   * Process NEAR → ETH swap
    */
   private async processNearToEth(request: SwapRequest, status: SwapStatus): Promise<SwapStatus> {
-    console.log('🚧 NEAR → ETH swap (simplified implementation)');
+    console.log('📝 Step 1: Generate HTLC parameters for NEAR → ETH');
     
-    // Similar logic but reversed
-    status.status = 'completed';
-    status.ethTxHash = 'mock-eth-tx';
-    status.nearTxHash = 'mock-near-tx';
+    // Generate HTLC parameters
+    const secret = Utils.generateSecret();
+    const hashlock = Utils.generateHashlockBytes32(secret);
+    const timelock = Utils.getFutureTimestamp();
     
+    const htlcParams: HTLCParams = {
+      secret,
+      hashlock,
+      timelock,
+      contractId: ''
+    };
+
+    console.log('🔐 HTLC params generated:', {
+      hashlock: hashlock.substring(0, 10) + '...',
+      timelock: new Date(timelock).toISOString()
+    });
+
+    // Step 1: Create HTLC on NEAR first
+    console.log('📝 Step 2: Create HTLC on NEAR');
+    const hashlockBytes = Utils.hexToUint8Array(hashlock);
+    
+    const nearResult = await this.nearClient.createHTLC(
+      request.userNearAccount,
+      request.amount,
+      hashlockBytes,
+      timelock,
+      request.userEthAddress
+    );
+
+    status.nearTxHash = nearResult.txHash;
+
+    console.log('✅ NEAR HTLC created:', {
+      contractId: nearResult.contractId
+    });
+
+    // Step 2: Create corresponding HTLC on Ethereum
+    console.log('📝 Step 3: Create HTLC on Ethereum');
+    
+    // Convert NEAR amount to ETH equivalent (simplified)
+    const ethAmount = this.convertNearToEth(request.amount);
+    
+    const ethResult = await this.ethClient.createHTLCEth(
+      request.userEthAddress,
+      ethAmount,
+      hashlock,
+      timelock,
+      request.userNearAccount
+    );
+
+    htlcParams.contractId = ethResult.contractId;
+    status.ethTxHash = ethResult.txHash;
+    status.htlcParams = htlcParams;
+    status.status = 'locked';
+
+    console.log('✅ Ethereum HTLC created:', {
+      contractId: ethResult.contractId.substring(0, 10) + '...',
+      txHash: ethResult.txHash.substring(0, 10) + '...'
+    });
+
+    console.log('🎉 Cross-chain NEAR → ETH swap setup complete!');
+    console.log('💡 User can now reveal secret to claim funds on both chains');
+
     this.activeSwaps.set(request.id, status);
     return status;
   }
@@ -151,6 +208,16 @@ export class CrossChainResolver {
     const ethBigInt = BigInt(ethAmount);
     const nearAmount = ethBigInt * BigInt(1000);
     return nearAmount.toString();
+  }
+
+  /**
+   * Simple NEAR to ETH conversion (mock)
+   */
+  private convertNearToEth(nearAmount: string): string {
+    // Mock conversion: 1000 NEAR = 1 ETH (simplified)
+    const nearBigInt = BigInt(nearAmount);
+    const ethAmount = nearBigInt / BigInt(1000);
+    return ethAmount.toString();
   }
 
   /**

@@ -35,10 +35,12 @@ contract HTLCTest is Test {
         uint256 amount,
         bytes32 hashlock,
         uint256 timelock,
-        string nearAccount
+        string nearAccount,
+        uint256 startPrice,
+        uint256 minPrice
     );
     
-    event HTLCWithdrawn(bytes32 indexed contractId, bytes32 preimage);
+    event HTLCWithdrawn(bytes32 indexed contractId, bytes32 preimage, uint256 finalPrice);
     event HTLCRefunded(bytes32 indexed contractId);
     
     function setUp() public {
@@ -57,7 +59,7 @@ contract HTLCTest is Test {
     function testCreateHTLCWithERC20() public {
         vm.prank(sender);
         
-        bytes32 contractId = htlc.createHTLC(
+        bytes32 contractId = htlc.createHTLC_Legacy(
             receiver,
             address(token),
             amount,
@@ -85,7 +87,7 @@ contract HTLCTest is Test {
     function testCreateHTLCWithETH() public {
         vm.prank(sender);
         
-        bytes32 contractId = htlc.createHTLCEth{value: 1 ether}(
+        bytes32 contractId = htlc.createHTLCEth_Legacy{value: 1 ether}(
             receiver,
             hashlock,
             timelock,
@@ -110,7 +112,7 @@ contract HTLCTest is Test {
     
     function testWithdrawWithValidSecret() public {
         vm.prank(sender);
-        bytes32 contractId = htlc.createHTLC(
+        bytes32 contractId = htlc.createHTLC_Legacy(
             receiver,
             address(token),
             amount,
@@ -133,7 +135,7 @@ contract HTLCTest is Test {
     
     function testWithdrawETHWithValidSecret() public {
         vm.prank(sender);
-        bytes32 contractId = htlc.createHTLCEth{value: 1 ether}(
+        bytes32 contractId = htlc.createHTLCEth_Legacy{value: 1 ether}(
             receiver,
             hashlock,
             timelock,
@@ -154,7 +156,7 @@ contract HTLCTest is Test {
     
     function testFailWithdrawWithInvalidSecret() public {
         vm.prank(sender);
-        bytes32 contractId = htlc.createHTLC(
+        bytes32 contractId = htlc.createHTLC_Legacy(
             receiver,
             address(token),
             amount,
@@ -171,7 +173,7 @@ contract HTLCTest is Test {
     
     function testFailWithdrawByWrongReceiver() public {
         vm.prank(sender);
-        bytes32 contractId = htlc.createHTLC(
+        bytes32 contractId = htlc.createHTLC_Legacy(
             receiver,
             address(token),
             amount,
@@ -186,7 +188,7 @@ contract HTLCTest is Test {
     
     function testRefundAfterTimelock() public {
         vm.prank(sender);
-        bytes32 contractId = htlc.createHTLC(
+        bytes32 contractId = htlc.createHTLC_Legacy(
             receiver,
             address(token),
             amount,
@@ -212,7 +214,7 @@ contract HTLCTest is Test {
     
     function testRefundETHAfterTimelock() public {
         vm.prank(sender);
-        bytes32 contractId = htlc.createHTLCEth{value: 1 ether}(
+        bytes32 contractId = htlc.createHTLCEth_Legacy{value: 1 ether}(
             receiver,
             hashlock,
             timelock,
@@ -236,7 +238,7 @@ contract HTLCTest is Test {
     
     function testFailRefundBeforeTimelock() public {
         vm.prank(sender);
-        bytes32 contractId = htlc.createHTLC(
+        bytes32 contractId = htlc.createHTLC_Legacy(
             receiver,
             address(token),
             amount,
@@ -251,7 +253,7 @@ contract HTLCTest is Test {
     
     function testFailRefundByWrongSender() public {
         vm.prank(sender);
-        bytes32 contractId = htlc.createHTLC(
+        bytes32 contractId = htlc.createHTLC_Legacy(
             receiver,
             address(token),
             amount,
@@ -268,7 +270,7 @@ contract HTLCTest is Test {
     
     function testCheckPreimage() public {
         vm.prank(sender);
-        bytes32 contractId = htlc.createHTLC(
+        bytes32 contractId = htlc.createHTLC_Legacy(
             receiver,
             address(token),
             amount,
@@ -285,7 +287,7 @@ contract HTLCTest is Test {
     
     function testFailCreateHTLCWithZeroAmount() public {
         vm.prank(sender);
-        htlc.createHTLC(
+        htlc.createHTLC_Legacy(
             receiver,
             address(token),
             0, // Zero amount
@@ -297,7 +299,7 @@ contract HTLCTest is Test {
     
     function testFailCreateHTLCWithPastTimelock() public {
         vm.prank(sender);
-        htlc.createHTLC(
+        htlc.createHTLC_Legacy(
             receiver,
             address(token),
             amount,
@@ -309,7 +311,7 @@ contract HTLCTest is Test {
     
     function testFailDoubleWithdraw() public {
         vm.prank(sender);
-        bytes32 contractId = htlc.createHTLC(
+        bytes32 contractId = htlc.createHTLC_Legacy(
             receiver,
             address(token),
             amount,
@@ -328,7 +330,7 @@ contract HTLCTest is Test {
     
     function testFailDoubleRefund() public {
         vm.prank(sender);
-        bytes32 contractId = htlc.createHTLC(
+        bytes32 contractId = htlc.createHTLC_Legacy(
             receiver,
             address(token),
             amount,
@@ -349,7 +351,7 @@ contract HTLCTest is Test {
     
     function testFailWithdrawAfterRefund() public {
         vm.prank(sender);
-        bytes32 contractId = htlc.createHTLC(
+        bytes32 contractId = htlc.createHTLC_Legacy(
             receiver,
             address(token),
             amount,

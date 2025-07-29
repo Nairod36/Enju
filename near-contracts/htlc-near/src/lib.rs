@@ -20,11 +20,28 @@ pub struct HTLCContract {
     pub eth_address: String,
 }
 
+// Cross-chain swap extension for 1inch Fusion+
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
+#[serde(crate = "near_sdk::serde")]
+pub struct CrossChainHTLC {
+    pub sender: AccountId,
+    pub receiver: AccountId,
+    pub amount: U128,
+    pub hashlock: Vec<u8>,
+    pub timelock: Timestamp,
+    pub withdrawn: bool,
+    pub refunded: bool,
+    pub eth_address: String,
+    pub eth_tx_hash: Option<String>, // For verification
+}
+
 #[near_bindgen]
 #[derive(BorshDeserialize, BorshSerialize, PanicOnDefault)]
 pub struct HTLCNear {
     contracts: UnorderedMap<String, HTLCContract>,
+    cross_chain_contracts: UnorderedMap<String, CrossChainHTLC>,
     owner: AccountId,
+    authorized_resolvers: UnorderedMap<AccountId, bool>,
 }
 
 #[near_bindgen]
@@ -33,7 +50,9 @@ impl HTLCNear {
     pub fn new(owner: AccountId) -> Self {
         Self {
             contracts: UnorderedMap::new(b"c"),
-            owner,
+            cross_chain_contracts: UnorderedMap::new(b"cc"),
+            owner: owner.clone(),
+            authorized_resolvers: UnorderedMap::new(b"r"),
         }
     }
 
@@ -205,6 +224,143 @@ impl HTLCNear {
 
     pub fn get_owner(&self) -> AccountId {
         self.owner.clone()
+    }
+
+    // ======= CROSS-CHAIN METHODS FOR 1INCH FUSION+ =======
+
+    /// Create a cross-chain HTLC for NEAR → ETH swap
+    #[payable]
+    pub fn create_cross_chain_htlc(
+        &mut self,
+        receiver: AccountId,
+        hashlock: Base64VecU8,
+        timelock: Timestamp,
+        eth_address: String,
+    ) -> String {
+        let sender = env::predecessor_account_id();
+        let amount = env::attached_deposit();
+
+        assert!(amount > NearToken::from_yoctonear(0), "Amount must be greater than 0");
+        assert!(
+            timelock > env::block_timestamp_ms(),
+            "Timelock must be in the future"
+        );
+        assert!(!hashlock.0.is_empty(), "Hashlock cannot be empty");
+        assert!(hashlock.0.len() == 32, "Hashlock must be 32 bytes");
+        assert!(!eth_address.is_empty(), "ETH address required");
+
+        let contract_id = format!(
+            "cc-{}-{}-{}-{}",
+            sender,
+            receiver,
+            amount,
+            env::block_timestamp_ms()
+        );
+
+        let contract = CrossChainHTLC {
+            sender: sender.clone(),
+            receiver,
+            amount: U128(amount.as_yoctonear()),
+            hashlock: hashlock.0,
+            timelock,
+            withdrawn: false,
+            refunded: false,
+            eth_address,
+            eth_tx_hash: None,
+        };
+
+        self.cross_chain_contracts.insert(&contract_id, &contract);
+
+        env::log_str(&format!(
+            "Cross-chain HTLC created: {}, sender: {}, amount: {}, timelock: {}",
+            contract_id, sender, amount, timelock
+        ));
+
+        contract_id
+    }
+
+    /// Complete cross-chain swap with preimage
+    pub fn complete_cross_chain_swap(&mut self, contract_id: String, preimage: Base64VecU8, eth_tx_hash: String) {
+        let mut contract = self
+            .cross_chain_contracts
+            .get(&contract_id)
+            .expect("Contract does not exist");
+
+        assert!(!contract.withdrawn, "Already withdrawn");
+        assert!(!contract.refunded, "Already refunded");
+        assert!(
+            env::predecessor_account_id() == contract.receiver,
+            "Only receiver can withdraw"
+        );
+        assert!(
+            env::block_timestamp_ms() <= contract.timelock,
+            "Timelock expired"
+        );
+
+        // Verify preimage
+        let hash = sha2::Sha256::digest(&preimage.0);
+        assert_eq!(
+            hash.as_slice(),
+            &contract.hashlock,
+            "Invalid preimage"
+        );
+
+        contract.withdrawn = true;
+        contract.eth_tx_hash = Some(eth_tx_hash.clone());
+        self.cross_chain_contracts.insert(&contract_id, &contract);
+
+        Promise::new(contract.receiver.clone()).transfer(NearToken::from_yoctonear(contract.amount.0));
+
+        env::log_str(&format!(
+            "Cross-chain HTLC completed: {}, receiver: {}, eth_tx: {}",
+            contract_id, contract.receiver, eth_tx_hash
+        ));
+    }
+
+    /// Refund cross-chain HTLC after timelock
+    pub fn refund_cross_chain(&mut self, contract_id: String) {
+        let mut contract = self
+            .cross_chain_contracts
+            .get(&contract_id)
+            .expect("Contract does not exist");
+
+        assert!(!contract.withdrawn, "Already withdrawn");
+        assert!(!contract.refunded, "Already refunded");
+        assert!(
+            env::predecessor_account_id() == contract.sender,
+            "Only sender can refund"
+        );
+        assert!(
+            env::block_timestamp_ms() > contract.timelock,
+            "Timelock not expired"
+        );
+
+        contract.refunded = true;
+        self.cross_chain_contracts.insert(&contract_id, &contract);
+
+        Promise::new(contract.sender.clone()).transfer(NearToken::from_yoctonear(contract.amount.0));
+
+        env::log_str(&format!(
+            "Cross-chain HTLC refunded: {}, sender: {}",
+            contract_id, contract.sender
+        ));
+    }
+
+    /// Get cross-chain contract details
+    pub fn get_cross_chain_contract(&self, contract_id: String) -> Option<CrossChainHTLC> {
+        self.cross_chain_contracts.get(&contract_id)
+    }
+
+    /// Authorize resolver
+    pub fn authorize_resolver(&mut self, resolver: AccountId) {
+        assert_eq!(env::predecessor_account_id(), self.owner, "Only owner");
+        self.authorized_resolvers.insert(&resolver, &true);
+        env::log_str(&format!("Resolver authorized: {}", resolver));
+    }
+
+    /// Check if resolver is authorized
+    pub fn is_authorized_resolver(&self, resolver: AccountId) -> bool {
+        self.authorized_resolvers.get(&resolver).unwrap_or(false)
     }
 }
 

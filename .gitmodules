@@ -1,3 +1,6 @@
 [submodule "contracts/lib/openzeppelin-contracts"]
 	path = contracts/lib/openzeppelin-contracts
 	url = https://github.com/OpenZeppelin/openzeppelin-contracts
+[submodule "eth-contracts/lib/cross-chain-swap"]
+	path = eth-contracts/lib/cross-chain-swap
+	url = https://github.com/1inch/cross-chain-swap
