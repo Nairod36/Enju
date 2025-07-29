@@ -5,6 +5,7 @@ import { parseEther } from 'viem';
 interface BridgeResult {
   success: boolean;
   txHash?: string;
+  hashlock?: string;
   error?: string;
 }
 
@@ -96,7 +97,7 @@ export function useBridge() {
         amount
       });
 
-      return { success: true, txHash: hash };
+      return { success: true, txHash: hash, hashlock: hashlockHex };
     } catch (error) {
       console.error('ETH to NEAR bridge failed:', error);
       throw error;

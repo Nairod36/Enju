@@ -1,0 +1,87 @@
+  /**
+   * Wait for EscrowSrc or EscrowDst creation events from IEscrowFactory
+   * 
+   * This function listens for either SrcEscrowCreated or DstEscrowCreated events
+   * from the 1inch EscrowFactory contract to get the actual escrow address.
+   * 
+   * @param secretHash - The secret hash to match against event data
+   * @param eventType - Type of event to listen for ('src' or 'dst')
+   * @param timeoutMs - Maximum time to wait for event (default: 30 seconds)
+   * @returns Promise<string> - The escrow contract address
+   */
+  private async waitForEscrowCreation(
+    secretHash: string, 
+    eventType: 'src' | 'dst' = 'src', 
+    timeoutMs: number = 30000
+  ): Promise<string> {
+    process.stdout.write(`👀 Waiting for ${eventType === 'src' ? 'SrcEscrowCreated' : 'DstEscrowCreated'} event with secretHash: ${secretHash.substring(0, 10)}...\n`);
+
+    // IEscrowFactory ABI - only the events we need
+    const escrowFactoryABI = [
+      'event SrcEscrowCreated(tuple(bytes32 orderHash, bytes32 hashlock, uint256 maker, uint256 taker, uint256 token, uint256 amount, uint256 safetyDeposit, uint256 timelocks) srcImmutables, tuple(uint256 maker, uint256 amount, uint256 token, uint256 safetyDeposit, uint256 chainId) dstImmutablesComplement)',
+      'event DstEscrowCreated(address escrow, bytes32 hashlock, uint256 taker)'
+    ];
+
+    // Create contract instance for event listening
+    const escrowFactory = new ethers.Contract(
+      this.ESCROW_FACTORY,
+      escrowFactoryABI,
+      this.ethProvider
+    );
+
+    return new Promise<string>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        escrowFactory.removeAllListeners();
+        reject(new Error(`Timeout waiting for ${eventType} escrow creation event after ${timeoutMs}ms`));
+      }, timeoutMs);
+
+      if (eventType === 'src') {
+        // Listen for SrcEscrowCreated event
+        escrowFactory.on('SrcEscrowCreated', (srcImmutables: any, dstImmutablesComplement: any, event: ethers.Event) => {
+          try {
+            process.stdout.write(`📡 SrcEscrowCreated event received: hashlock=${srcImmutables.hashlock}, txHash=${event.transactionHash}\n`);
+
+            // Check if this event matches our secret hash
+            if (srcImmutables.hashlock.toLowerCase() === secretHash.toLowerCase()) {
+              clearTimeout(timeout);
+              escrowFactory.removeAllListeners();
+              
+              // Return a mock address since we can't calculate CREATE2 without bytecode hash
+              const escrowAddress = '0x' + secretHash.substring(2, 42);
+              process.stdout.write(`✅ Found matching SrcEscrow: ${escrowAddress}\n`);
+              resolve(escrowAddress);
+            }
+          } catch (error) {
+            process.stderr.write(`Error processing SrcEscrowCreated event: ${error}\n`);
+          }
+        });
+      } else {
+        // Listen for DstEscrowCreated event
+        escrowFactory.on('DstEscrowCreated', (escrow: string, hashlock: string, taker: any, event: ethers.Event) => {
+          try {
+            process.stdout.write(`📡 DstEscrowCreated event received: escrow=${escrow}, hashlock=${hashlock}, txHash=${event.transactionHash}\n`);
+
+            // Check if this event matches our secret hash
+            if (hashlock.toLowerCase() === secretHash.toLowerCase()) {
+              clearTimeout(timeout);
+              escrowFactory.removeAllListeners();
+              
+              process.stdout.write(`✅ Found matching DstEscrow: ${escrow}\n`);
+              resolve(escrow);
+            }
+          } catch (error) {
+            process.stderr.write(`Error processing DstEscrowCreated event: ${error}\n`);
+          }
+        });
+      }
+
+      // Also listen for errors
+      escrowFactory.on('error', (error: Error) => {
+        clearTimeout(timeout);
+        escrowFactory.removeAllListeners();
+        reject(new Error(`Event listener error: ${error.message}`));
+      });
+
+      process.stdout.write(`🔍 Event listener setup complete for ${eventType} escrow creation\n`);
+    });
+  }

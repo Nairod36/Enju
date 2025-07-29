@@ -142,3 +142,33 @@ model IslandUsedTile {
   @@index([islandId])
   @@map("island_used_tiles")
 }
+
+model EscrowEvent {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Event details
+  eventType     String   @map("event_type") // 'SrcEscrowCreated' | 'DstEscrowCreated'
+  escrowAddress String   @map("escrow_address")
+  hashlock      String
+  txHash        String   @unique @map("tx_hash")
+  blockNumber   Int      @map("block_number")
+  
+  // Optional fields based on event type
+  orderHash     String?  @map("order_hash")
+  maker         String?
+  taker         String?
+  amount        Float?
+  token         String?
+  chainId       Int      @map("chain_id")
+  
+  // Processing status
+  processed     Boolean  @default(false)
+
+  @@index([hashlock])
+  @@index([eventType])
+  @@index([createdAt])
+  @@index([processed])
+  @@map("escrow_events")
+}

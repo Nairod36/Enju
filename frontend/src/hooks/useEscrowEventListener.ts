@@ -39,7 +39,8 @@ export function useEscrowEventListener() {
   const publicClient = usePublicClient();
 
   // 1inch EscrowFactory address on Ethereum mainnet
-  const ESCROW_FACTORY_ADDRESS = '0xa7bCb4EAc8964306F9e3764f67Db6A7af6DdF99A';
+  // const ESCROW_FACTORY_ADDRESS = '0xa7bCb4EAc8964306F9e3764f67Db6A7af6DdF99A';
+  const ESCROW_FACTORY_ADDRESS = '0x14835B093D320AA5c9806BBC64C17F0F2546D9EE';
 
   // Simplified ABI for event listening
   const ESCROW_FACTORY_ABI = [

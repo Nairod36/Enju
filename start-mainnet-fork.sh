@@ -14,6 +14,8 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
+export ETH_RPC_URL="https://eth-mainnet.g.alchemy.com/v2/W3lWbWV5WXrOPo5S6kGh9PlT5gCblAEg"
+
 echo -e "${BLUE}🔗 Starting Ethereum Mainnet Fork...${NC}"
 
 # Default to free RPC if not set
