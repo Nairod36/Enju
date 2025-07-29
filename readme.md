@@ -1,91 +1,123 @@
-# 1inch Fusion+ Cross-Chain Extension: ETH ↔ NEAR
+# UniteDeFi Bridge - 1inch Fusion+ Multi-Chain Extension
 
-## 🎯 Implementation Summary
+## 🎯 Project Overview
 
-This project implements a **novel extension for 1inch Cross-chain Swap (Fusion+)** that enables bidirectional atomic swaps between Ethereum and NEAR Protocol, following the official 1inch architecture and using battle-tested contracts.
-
-## ✅ Requirements Fulfilled
-
-### Core Requirements
-- ✅ **Bidirectional Swaps**: ETH ↔ NEAR swaps in both directions
-- ✅ **Hashlock/Timelock Preservation**: SHA256 + timestamp for non-EVM (NEAR)
-- ✅ **Onchain Execution**: Production-ready smart contracts
-- ✅ **1inch Infrastructure**: Uses official EscrowFactory at `0xa7bcb4eac8964306f9e3764f67db6a7af6ddf99a`
+**UniteDeFi Bridge** extends the 1inch Fusion+ protocol to support **ETH ↔ NEAR ↔ TRON** atomic swaps with automatic price conversion using real-time market rates.
 
 ### Key Features
-- **Official 1inch Integration**: Built on proven cross-chain-swap infrastructure
-- **Authorized Resolver System**: Secure cross-chain execution
-- **Emergency Recovery**: Owner-controlled safety mechanisms
-- **Atomic Guarantees**: Success or complete reversion
+- ✅ **Multi-Chain Support**: ETH, NEAR, and TRON integration
+- ✅ **Real-Time Price Oracle**: Automatic conversions using CoinGecko/Binance APIs
+- ✅ **1inch Infrastructure**: Built on official EscrowFactory (`0xa7bcb4eac8964306f9e3764f67db6a7af6ddf99a`)
+- ✅ **Atomic Swaps**: HTLC-based with SHA256 hashlock + timelock
+- ✅ **Production Ready**: Deployed contracts and working frontend
 
 ## 🏗️ Architecture
 
-### Ethereum Side
-```solidity
-InchCrossChainResolver.sol
-├── Uses official 1inch EscrowFactory (0xa7bcb4...)
-├── Creates EscrowSrc contracts for ETH → NEAR
-├── Manages cross-chain swap coordination
-└── Implements resolver authorization system
 ```
-
-### NEAR Side
-```rust
-lib.rs (enhanced HTLC)
-├── Cross-chain HTLC creation
-├── SHA256 hashlock verification
-├── Timelock enforcement
-└── Atomic completion/refund
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   ETHEREUM      │    │      NEAR       │    │      TRON       │
+│                 │    │                 │    │                 │
+│ InchDirectBridge│◄──►│  htlc-near.rs   │    │TronDirectBridge │
+│ EscrowFactory   │    │  Cross-chain    │    │ HTLC + Events   │
+│ 1inch Fusion+   │    │  HTLC Support   │    │ TRX Handling    │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+         ▲                       ▲                       ▲
+         │                       │                       │
+         └───────────────────────┼───────────────────────┘
+                                 ▼
+                    ┌─────────────────────────┐
+                    │    Price Oracle         │
+                    │  - CoinGecko API        │
+                    │  - Binance Backup       │
+                    │  - 30s Cache            │
+                    │  - Auto Conversions     │
+                    └─────────────────────────┘
 ```
 
 ## 🚀 Quick Start
 
-### 1. Deploy Contracts
+### 1. Clone and Install
 ```bash
-# Deploy Ethereum resolver
-cd eth-contracts
-forge script script/DeployInchHTLC.s.sol:DeployInchCrossChainResolver --broadcast
+git clone <repository>
+cd UniteDeFi-Mokuen
+pnpm install  # Install all dependencies
+```
 
-# Deploy NEAR contract
+### 2. Environment Setup
+```bash
+# Backend (.env)
+cp backend/.env.example backend/.env
+
+# Add your configuration:
+TRON_PRIVATE_KEY=your_tron_private_key
+TRON_API_KEY=your_trongrid_api_key
+TRON_BRIDGE_CONTRACT=deployed_contract_address
+```
+
+### 3. Deploy Contracts
+
+#### Ethereum
+```bash
+cd eth-contracts
+forge script script/DeployInchDirectBridge.s.sol --broadcast
+```
+
+#### NEAR
+```bash
 cd near-contracts
 ./build.sh && ./deploy.sh <account-id>
 ```
 
-### 2. Test Cross-Chain Swap
-
-#### ETH → NEAR
-```javascript
-// 1. Create escrow using 1inch factory
-const immutables = {
-    token: tokenAddress,
-    amount: ethers.utils.parseEther("1"),
-    hashlock: sha256(secret),
-    // ... other fields
-};
-
-const swapId = await resolver.createETHToNEARSwap(immutables, "user.near");
-
-// 2. Complete on NEAR
-await nearContract.complete_cross_chain_swap({
-    contract_id: swapId,
-    preimage: Array.from(secret),
-    eth_tx_hash: "0x..."
-});
+#### Tron
+```bash
+# Get energy first: https://shasta.tronex.io/
+TRON_PRIVATE_KEY=<key> tronbox migrate --network shasta
 ```
 
-#### NEAR → ETH
-```javascript
-// 1. Create NEAR HTLC
-const contractId = await nearContract.create_cross_chain_htlc({
-    receiver: "resolver.near",
-    hashlock: Array.from(hashlock),
-    timelock: Date.now() + 86400000,
-    eth_address: "0x742d35Cc6634C0532925a3b8D2DC"
-});
+### 4. Start Services
+```bash
+# Backend API
+cd backend && npm run start:dev
 
-// 2. Complete on Ethereum
-await resolver.completeSwap(swapId, secret, immutables);
+# Frontend
+cd frontend && npm run dev
+
+# Bridge Resolver
+cd cross-chain && npm run relayer
 ```
+
+## 💱 Supported Swaps
+
+| From | To | Conversion | Example |
+|------|----|-----------| --------|
+| ETH | NEAR | Auto price | 0.1 ETH → ~140 NEAR |
+| NEAR | ETH | Auto price | 100 NEAR → ~0.071 ETH |
+| ETH | TRX | Auto price | 0.1 ETH → ~1120 TRX |
+| TRX | ETH | Auto price | 1000 TRX → ~0.089 ETH |
+
+**Fees**: 0.3% bridge fee + gas costs
+
+## 🔧 Technical Components
+
+### Smart Contracts
+- **InchDirectBridge.sol** - Ethereum HTLC with 1inch integration
+- **TronDirectBridge.sol** - Tron HTLC with TRX handling  
+- **lib.rs** - NEAR cross-chain HTLC contract
+
+### Backend Services
+- **Price Oracle** - Real-time ETH/NEAR/TRX rates with CoinGecko/Binance APIs
+- **Bridge API** - REST endpoints for swap management
+- **Event Monitor** - Cross-chain event listening and coordination
+- **Resolver Service** - Atomic swap execution with price conversions
+
+### Enju - 3D Frontend Experience
+- **React + Three.js** - Immersive 3D environment powered by `@react-three/fiber`
+- **Dynamic Island Ecosystem** - Personal floating islands that evolve with transactions
+- **Transaction Visualization** - Bridge swaps generate trees, chests, and expand your world
+- **Multi-Wallet Support** - MetaMask, NEAR Wallet, TronLink integration
+- **Interactive Elements** - 3D characters, animated decorations, environmental growth
+- **Persistent World** - Island state saves and loads with your transaction history
+- **Procedural Generation** - Islands created from transaction seeds using noise algorithms
 
 ## 🔒 Security Features
 
@@ -148,30 +180,83 @@ cargo test test_cross_chain_htlc
 3. **Execute**: Coordinate between Ethereum and NEAR
 4. **Verify**: Ensure atomic completion or reversion
 
-## 🏆 Why This Implementation
+## 🎮 Enju - 3D DeFi Experience
 
-### Technical Excellence
-- **1inch Compliance**: Uses official infrastructure as required
-- **Production Ready**: Battle-tested contracts and patterns
-- **Clean Architecture**: Simple, auditable, and maintainable
+### Immersive Bridge Interface
+- **Dynamic 3D Island** - Your personal floating ecosystem that grows with transactions
+- **Transaction Visualization** - Bridge swaps spawn trees, chests, and island expansions  
+- **Interactive Elements** - 3D character, animated decorations, environmental evolution
+- **Persistent State** - Island saves/loads with your transaction history
 
-### Innovation Within Constraints
-- **Cross-Chain HTLCs**: Preserves hashlock/timelock for non-EVM
-- **Authorized Execution**: Secure resolver coordination
-- **Emergency Safety**: Comprehensive failure recovery
+### Technical Implementation
+- **React Three Fiber** - WebGL-powered 3D rendering in browser
+- **Three.js** - Advanced 3D graphics and animations
+- **Procedural Generation** - Islands generated from transaction seeds
+- **Multi-Wallet Integration** - Seamless Web3 wallet connections
+
+### User Experience
+- **Gamified Bridging** - Each swap grows your digital world
+- **Visual Transaction History** - See your DeFi journey in 3D space
+- **Social Elements** - Shareable island states and achievements
+- **Mobile Responsive** - Works across devices with optimized rendering
+
+## 🏆 Why UniteDeFi Bridge
+
+### Technical Excellence  
+- **1inch Fusion+ Integration** - Built on battle-tested infrastructure
+- **Real-Time Price Oracle** - Automatic conversions with dual API sources
+- **Multi-Chain Support** - ETH, NEAR, and TRON ecosystems united
+- **Production Ready** - Fully tested contracts and services
+
+### User Innovation
+- **Enju 3D Interface** - First gamified cross-chain bridge experience
+- **Automatic Conversions** - No manual rate calculations needed
+- **Visual Progress** - Watch your island evolve with each transaction
+- **Seamless UX** - Complex bridging made simple and engaging
 
 ### Ecosystem Impact
-- **NEAR Integration**: Brings 1inch liquidity to NEAR Protocol
-- **Atomic Security**: True cross-chain atomic swaps
-- **Open Source**: Fully auditable and extensible
+- **Liquidity Bridge** - Connect major blockchain ecosystems
+- **DeFi Gamification** - Make complex operations intuitive and fun
+- **Open Innovation** - Extensible architecture for community building
 
-## 📞 Support
+## 🌟 Enju Features Showcase
 
-- **Discord Messages**: Followed all guidance from 1inch team
-- **Official Contracts**: Uses mandated EscrowFactory address
-- **Battle-Tested**: Built on proven 1inch infrastructure
-- **Clean Implementation**: Simple, focused, and secure
+### 3D Transaction Visualization
+```typescript
+// Every bridge transaction grows your island
+const transaction = await executeBridge({
+  fromAmount: '0.1',
+  fromChain: 'ethereum',
+  toChain: 'tron'
+});
+
+// Island automatically spawns new tree/chest
+island.addRandomTree(); // Based on transaction hash
+island.enlargeIsland(); // After major swaps
+```
+
+### Dynamic World Generation
+- **Hex-tile Islands** - Procedurally generated from your wallet address
+- **Animated Trees** - Grow with each successful swap
+- **Treasure Chests** - Appear for large volume transactions  
+- **Floating Animation** - Islands gently bob in 3D space
+- **Environmental Effects** - Water reflections, particle systems
+
+### Gamified Bridge Experience
+- **Visual Feedback** - See immediate 3D response to transactions
+- **Progress Tracking** - Island size reflects your bridge usage
+- **Achievement System** - Unlock new decorations and expansions
+- **Social Sharing** - Export and share your unique island
+
+## 📞 Support & Resources
+
+- **GitHub**: [Repository Link]
+- **Documentation**: See `/docs` folder
+- **Discord**: 1inch Community
+- **Testnet Faucets**:
+  - NEAR: https://wallet.testnet.near.org/
+  - Tron: https://shasta.tronex.io/
 
 ---
 
-**🎯 This implementation demonstrates how 1inch Fusion+ can be properly extended to non-EVM chains while maintaining the security, atomicity, and reliability that 1inch users expect.**
+**🎯 UniteDeFi Bridge: Where DeFi meets immersive 3D experiences. Bringing 1inch Fusion+ liquidity to NEAR and Tron ecosystems with gamified interfaces and automatic price discovery.**
