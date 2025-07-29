@@ -1,14 +1,16 @@
 import { ethers } from 'ethers';
 import { NearClient } from './near-client';
+import { TronClient } from './tron-client';
 import { InchFusionTypes } from './types';
 
 /**
- * 1inch Fusion+ Cross-Chain Resolver for ETH ↔ NEAR
- * Simplified implementation using official 1inch infrastructure
+ * 1inch Fusion+ Cross-Chain Resolver for ETH ↔ NEAR ↔ TRON
+ * Extended implementation supporting Tron blockchain
  */
 export class InchFusionResolver {
   private ethProvider: ethers.providers.JsonRpcProvider;
   private nearClient: NearClient;
+  private tronClient: TronClient;
   private resolverSigner: ethers.Wallet;
 
   // Official 1inch addresses
@@ -19,6 +21,7 @@ export class InchFusionResolver {
     this.ethProvider = new ethers.providers.JsonRpcProvider(config.ethereum.rpcUrl);
     this.resolverSigner = new ethers.Wallet(config.ethereum.privateKey, this.ethProvider);
     this.nearClient = new NearClient(config.near);
+    this.tronClient = new TronClient(config.tron);
     this.crossChainResolverAddress = config.ethereum.crossChainResolverAddress;
   }
 
@@ -254,6 +257,111 @@ export class InchFusionResolver {
   private bytesToHex(bytes: Uint8Array): string {
     return ethers.utils.hexlify(bytes);
   }
+
+  /**
+   * Process ETH → TRON swap
+   */
+  async processEthToTronSwap(params: {
+    secretHash: string;
+    timelock: number;
+    tronAccount: string;
+    ethRecipient: string;
+    amount: string;
+  }): Promise<InchFusionTypes.SwapResult> {
+    console.log('🔄 Processing ETH → TRON swap via 1inch Fusion+');
+
+    try {
+      // 1. Monitor for EscrowSrc creation event
+      const escrowSrcAddress = await this.waitForEscrowCreation(params.secretHash);
+      console.log(`📦 EscrowSrc detected: ${escrowSrcAddress}`);
+
+      // 2. Create corresponding Tron HTLC
+      const tronResult = await this.tronClient.createTronBridge(
+        params.secretHash,
+        params.tronAccount,
+        'ethereum',
+        params.amount
+      );
+
+      if (!tronResult.success) {
+        throw new Error(`Tron bridge creation failed: ${tronResult.error}`);
+      }
+
+      console.log(`📦 Tron HTLC created: ${tronResult.swapId}`);
+
+      // 3. Wait for secret revelation and complete both sides
+      const secret = await this.waitForSecretRevelation(params.secretHash);
+
+      // Complete Tron side
+      if (tronResult.swapId) {
+        await this.tronClient.completeSwap(tronResult.swapId, this.bytesToHex(secret));
+      }
+
+      return {
+        success: true,
+        escrowSrcAddress,
+        secret: this.bytesToHex(secret)
+      };
+
+    } catch (error) {
+      console.error('❌ ETH → TRON swap failed:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
+      };
+    }
+  }
+
+  /**
+   * Process TRON → ETH swap
+   */
+  async processTronToEthSwap(params: {
+    secretHash: string;
+    timelock: number;
+    ethRecipient: string;
+    tronAmount: string;
+  }): Promise<InchFusionTypes.SwapResult> {
+    console.log('🔄 Processing TRON → ETH swap via 1inch Fusion+');
+
+    try {
+      // 1. Create Tron HTLC first
+      const tronResult = await this.tronClient.createTronBridge(
+        params.secretHash,
+        params.ethRecipient,
+        'ethereum',
+        params.tronAmount
+      );
+
+      if (!tronResult.success) {
+        throw new Error(`Tron bridge creation failed: ${tronResult.error}`);
+      }
+
+      console.log(`📦 Tron HTLC created: ${tronResult.swapId}`);
+
+      // 2. Create EscrowSrc using 1inch factory
+      const escrowSrcAddress = await this.createEscrowSrc({
+        secretHash: params.secretHash,
+        timelock: params.timelock,
+        ethRecipient: params.ethRecipient,
+        amount: params.tronAmount // Convert TRX to ETH equivalent
+      });
+
+      console.log(`📦 EscrowSrc created: ${escrowSrcAddress}`);
+
+      return {
+        success: true,
+        escrowSrcAddress
+      };
+
+    } catch (error) {
+      console.error('❌ TRON → ETH swap failed:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
+      };
+    }
+  }
+
 
   /**
    * Get resolver status
