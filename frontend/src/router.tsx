@@ -8,7 +8,6 @@ import HomePage from "./pages/HomePage";
 import { AppPage } from "./pages/app/AppPage";
 import { AppDashboard } from "./pages/app/AppDashboard";
 import ThreePage from "./pages/app/ThreePage";
-import Rewards from "./pages/app/Rewards";
 
 const rootRoute = createRootRoute({
   component: () => (
@@ -36,12 +35,6 @@ const appDashboardRoute = createRoute({
   component: AppDashboard,
 });
 
-const RewardsRoute = createRoute({
-  getParentRoute: () => appRoute,
-  path: "/rewards",
-  component: Rewards,
-});
-
 const ThreeDGameRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/app/game",
@@ -52,7 +45,6 @@ const routeTree = rootRoute.addChildren([
   homeRoute,
   appRoute.addChildren([appDashboardRoute]),
   ThreeDGameRoute,
-  RewardsRoute,
 ]);
 
 export const router = createRouter({ routeTree });
