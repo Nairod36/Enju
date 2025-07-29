@@ -5,9 +5,9 @@ import FluidLogo from "../FluidLogo";
 
 export function AppHeader() {
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 backdrop-blur">
-      <div className="max-w-[1600px] mx-auto px-4 py-6">
-        <div className="bg-white/90 rounded-full px-6 flex items-center justify-between shadow-md">
+    <header className="top-0 left-0 right-0 z-50 backdrop-blur">
+      <div className="max-w-full mx-auto py-2">
+        <div className="px-14 flex items-center justify-between border-b">
           {/* Logo & Brand */}
           <Link
             to="/app"
@@ -31,7 +31,7 @@ export function AppHeader() {
               Game
             </Link>
             <Link
-              to="/app"
+              to="/app/rewards"
               className="text-slate-700 hover:text-slate-900 transition-colors px-3 py-2 rounded-lg hover:bg-emerald-50"
             >
               Rewards

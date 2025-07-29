@@ -22,20 +22,7 @@ export interface UpdateIslandRequest {
   usedTiles?: string[];
 }
 
-export interface IslandResponse {
-  id: string;
-  name: string;
-  seed: string;
-  isActive: boolean;
-  islandData: any;
-  treeCount: number;
-  createdAt: string;
-  lastModified: string;
-  version: string;
-  userTrees?: any[];
-  chests?: any[];
-  usedTiles?: string[];
-}
+export type IslandResponse = any;
 
 class IslandsService {
   private getAuthHeaders() {
@@ -207,7 +194,7 @@ class IslandsService {
       // Sauvegarder les données originales avec un suffixe
       localStorage.setItem('saved_islands_backup', localData);
       localStorage.removeItem('saved_islands');
-      
+
       console.log('🎉 Migration completed! Original data backed up as saved_islands_backup');
     } catch (error) {
       console.error('❌ Migration failed:', error);

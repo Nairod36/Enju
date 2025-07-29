@@ -6,7 +6,7 @@ export function AppPage() {
     <div className="min-h-screen text-slate-800 font-sans selection:bg-emerald-200/60 selection:text-slate-900">
       {/* Light backgrounds with subtle green accents */}
       <div className="fixed inset-0 bg-gradient-to-br from-white to-emerald-50/40" />
-      
+
       {/* Subtle animated background elements */}
       <div className="fixed inset-0 opacity-30">
         <div className="absolute top-20 left-20 w-72 h-72 bg-emerald-500/10 rounded-full blur-3xl animate-pulse" />
@@ -14,7 +14,7 @@ export function AppPage() {
       </div>
 
       <AppHeader />
-      <main className="relative z-10 pt-32">
+      <main className="relative z-10">
         <Outlet />
       </main>
     </div>

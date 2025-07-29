@@ -54,9 +54,68 @@ export const FloatingIsland = React.forwardRef<
   // État de l'île (initiale ou agrandie)
   const [islandData, setIslandData] = useState<any>(null);
 
+  // Fonction helper pour créer les arbres manquants
+  const createMissingTrees = (count: number) => {
+    for (let i = 0; i < count; i++) {
+      setTimeout(() => {
+        if (!islandData?.landTiles || islandData.landTiles.length === 0) {
+          return;
+        }
+
+        // Obtenir les tuiles utilisées actuelles + positions des maisons
+        setUsedTiles(currentUsedTiles => {
+          // Calculer les positions occupées par les maisons
+          const houseOccupiedTiles = new Set<string>();
+          if (islandData.houses) {
+            islandData.houses.forEach((house: any) => {
+              // Trouver la tuile la plus proche de la maison
+              const closestTile = islandData.landTiles.reduce((closest: any, tile: any) => {
+                const houseDist = Math.sqrt(
+                  Math.pow(house.position[0] - tile.position[0], 2) +
+                  Math.pow(house.position[2] - tile.position[2], 2)
+                );
+                const closestDist = Math.sqrt(
+                  Math.pow(house.position[0] - closest.position[0], 2) +
+                  Math.pow(house.position[2] - closest.position[2], 2)
+                );
+                return houseDist < closestDist ? tile : closest;
+              });
+              houseOccupiedTiles.add(closestTile.key);
+            });
+          }
+
+          const availableTiles = islandData.landTiles.filter(
+            (tile: any) => !currentUsedTiles.has(tile.key) && 
+                          !houseOccupiedTiles.has(tile.key) && 
+                          tile.height > 0.5
+          );
+
+          if (availableTiles.length === 0) {
+            return currentUsedTiles;
+          }
+
+          const tile = availableTiles[Math.floor(Math.random() * availableTiles.length)];
+
+          const newTree: TreeData = {
+            id: `missing-tree-${Date.now()}-${Math.random().toString(36).substr(2, 9)}-${i}`,
+            position: [
+              tile.position[0] + (Math.random() - 0.5) * 0.3,
+              tile.position[1] + tile.height / 2,
+              tile.position[2] + (Math.random() - 0.5) * 0.3,
+            ],
+            scale: 0.6 + Math.random() * 0.4,
+            birthTime: Date.now() - (1000 * 60 * 60 * 24), // Arbre "mature"
+          };
+
+          setUserTrees((prev) => [...prev, newTree]);
+          return new Set(currentUsedTiles).add(tile.key);
+        });
+      }, i * 300); // Délai entre chaque arbre
+    }
+  };
+
   // Génération initiale - utiliser le système original COMPLET
   useEffect(() => {
-    console.log("🎯 Génération initiale avec relief et biomes");
     const island = generateIsland(seed);
     setIslandData(island);
 
@@ -75,7 +134,6 @@ export const FloatingIsland = React.forwardRef<
         state: 'idle',
         lastPositionUpdate: Date.now()
       };
-      console.log("🧑 Personnage créé à la position:", characterData.position);
       setCharacter(characterData);
     }
   }, [seed]);
@@ -86,16 +144,36 @@ export const FloatingIsland = React.forwardRef<
   useImperativeHandle(ref, () => ({
     addRandomTree: () => {
       if (!currentIslandData.landTiles || currentIslandData.landTiles.length === 0) {
-        console.warn("❌ landTiles non disponibles");
         return;
       }
 
+      // Calculer les positions occupées par les maisons
+      const houseOccupiedTiles = new Set<string>();
+      if (currentIslandData.houses) {
+        currentIslandData.houses.forEach((house: any) => {
+          // Trouver la tuile la plus proche de la maison
+          const closestTile = currentIslandData.landTiles.reduce((closest: any, tile: any) => {
+            const houseDist = Math.sqrt(
+              Math.pow(house.position[0] - tile.position[0], 2) +
+              Math.pow(house.position[2] - tile.position[2], 2)
+            );
+            const closestDist = Math.sqrt(
+              Math.pow(house.position[0] - closest.position[0], 2) +
+              Math.pow(house.position[2] - closest.position[2], 2)
+            );
+            return houseDist < closestDist ? tile : closest;
+          });
+          houseOccupiedTiles.add(closestTile.key);
+        });
+      }
+
       const availableTiles = currentIslandData.landTiles.filter(
-        (tile) => !usedTiles.has(tile.key)
+        (tile) => !usedTiles.has(tile.key) && 
+                  !houseOccupiedTiles.has(tile.key) && 
+                  tile.height > 0.5
       );
 
       if (availableTiles.length === 0) {
-        console.warn("❌ Plus de tuiles disponibles pour planter");
         return;
       }
 
@@ -103,7 +181,7 @@ export const FloatingIsland = React.forwardRef<
         availableTiles[Math.floor(Math.random() * availableTiles.length)];
 
       const newTree: TreeData = {
-        id: `tree-${Date.now()}-${Math.random()}`,
+        id: `tree-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         position: [
           tile.position[0] + (Math.random() - 0.5) * 0.3,
           tile.position[1] + tile.height / 2,
@@ -121,7 +199,6 @@ export const FloatingIsland = React.forwardRef<
       if (isEnlarging || !islandData) return;
       
       setIsEnlarging(true);
-      console.log("🔍 AGRANDISSEMENT avec relief et biomes...");
       
       // Utiliser l'agrandissement complet qui préserve toutes les features
       const enlargedIsland = enlargeIsland(seed, islandData);
@@ -131,12 +208,10 @@ export const FloatingIsland = React.forwardRef<
       
       setTimeout(() => {
         setIsEnlarging(false);
-        console.log("✅ Agrandissement terminé avec features complètes");
       }, 200);
     },
     spawnChest: () => {
       if (!currentIslandData.landTiles || currentIslandData.landTiles.length === 0) {
-        console.warn("❌ Impossible de placer un coffre, pas de tuiles terrestres");
         return;
       }
 
@@ -146,7 +221,6 @@ export const FloatingIsland = React.forwardRef<
       );
 
       if (availableTiles.length === 0) {
-        console.warn("❌ Plus de tuiles disponibles pour placer un coffre");
         return;
       }
 
@@ -169,7 +243,6 @@ export const FloatingIsland = React.forwardRef<
     },
     saveIsland: (customName?: string) => {
       if (!islandData) {
-        console.warn("❌ Aucune île à sauvegarder");
         return null;
       }
 
@@ -186,7 +259,6 @@ export const FloatingIsland = React.forwardRef<
         setCurrentIslandId(id);
         return id;
       } catch (error) {
-        console.error("❌ Erreur lors de la sauvegarde:", error);
         return null;
       }
     },
@@ -194,7 +266,6 @@ export const FloatingIsland = React.forwardRef<
       try {
         const savedIsland = IslandStorageService.loadIsland(id);
         if (!savedIsland) {
-          console.warn("❌ Île non trouvée");
           return false;
         }
 
@@ -212,16 +283,13 @@ export const FloatingIsland = React.forwardRef<
         setIsEnlarging(false);
         setCharacter(null);
 
-        console.log(`✅ Île "${savedIsland.name}" chargée avec succès`);
         return true;
       } catch (error) {
-        console.error("❌ Erreur lors du chargement:", error);
         return false;
       }
     },
     loadFromDatabase: (dbIsland: any) => {
       try {
-        console.log("🔄 Chargement de l'île depuis la base de données...", dbIsland);
         
         // Vérifier si l'île a des données générées
         const hasGeneratedData = dbIsland.islandData && 
@@ -230,30 +298,49 @@ export const FloatingIsland = React.forwardRef<
         
         if (hasGeneratedData) {
           // L'île a déjà des données générées, les restaurer
-          console.log("✅ Île avec données existantes détectée");
           setIslandData(dbIsland.islandData);
         } else {
           // L'île n'a pas de données générées, garder les données actuelles (générées)
-          console.log("⚠️ Île sans données détectée, conservation des données générées");
           // Ne pas écraser islandData si elle est déjà générée
         }
         
         // Restaurer les arbres utilisateur
-        if (dbIsland.userTrees && dbIsland.userTrees.length > 0) {
-          setUserTrees(dbIsland.userTrees);
-          console.log(`✅ ${dbIsland.userTrees.length} arbres restaurés`);
+        const treesToRestore = dbIsland.userTrees || [];
+        const totalTreesExpected = dbIsland.totalTrees || 0;
+        
+        // Vérifier si les arbres sont valides (pas des tableaux vides)
+        const validTrees = treesToRestore.filter(tree => 
+          tree && 
+          typeof tree === 'object' && 
+          tree.id && 
+          tree.position && 
+          tree.position.length === 3
+        );
+        
+        
+        if (validTrees.length > 0) {
+          setUserTrees(validTrees);
+        } else {
+          setUserTrees([]); // Nettoyer les tableaux vides
+        }
+        
+        // Créer les arbres manquants basé sur les arbres valides vs totalTrees
+        const missingTreesCount = totalTreesExpected - validTrees.length;
+        if (missingTreesCount > 0) {
+          // Utiliser un état temporaire pour créer les arbres manquants
+          setTimeout(() => {
+            createMissingTrees(missingTreesCount);
+          }, 2000);
         }
         
         // Restaurer les coffres
         if (dbIsland.chests && dbIsland.chests.length > 0) {
           setChests(dbIsland.chests);
-          console.log(`✅ ${dbIsland.chests.length} coffres restaurés`);
         }
         
         // Restaurer les tuiles utilisées
         if (dbIsland.usedTiles && dbIsland.usedTiles.length > 0) {
           setUsedTiles(new Set(dbIsland.usedTiles));
-          console.log(`✅ ${dbIsland.usedTiles.length} tuiles utilisées restaurées`);
         }
         
         // Restaurer le nombre d'arbres
@@ -264,10 +351,8 @@ export const FloatingIsland = React.forwardRef<
         // Mettre à jour l'ID de l'île courante
         setCurrentIslandId(dbIsland.id);
         
-        console.log(`✅ Île "${dbIsland.name}" chargée depuis la base de données`);
         return true;
       } catch (error) {
-        console.error("❌ Erreur lors du chargement depuis la base:", error);
         return false;
       }
     },
@@ -400,7 +485,7 @@ export const FloatingIsland = React.forwardRef<
           {/* Rochers */}
           {currentIslandData.rocks.map((rock, index) => (
             <Rock
-              key={`rock-${index}-${Date.now()}`}
+              key={`rock-${index}-${rock.position.join('-')}`}
               position={rock.position}
               scale={rock.scale}
               color={rock.color}
@@ -411,7 +496,7 @@ export const FloatingIsland = React.forwardRef<
           {/* Maisons */}
           {currentIslandData.houses.map((house, index) => (
             <House
-              key={`house-${index}-${Date.now()}`}
+              key={`house-${index}-${house.position.join('-')}`}
               position={house.position}
               scale={house.scale}
               rotation={house.rotation}
@@ -421,15 +506,17 @@ export const FloatingIsland = React.forwardRef<
       )}
 
       {/* Arbres ajoutés par l'utilisateur */}
-      {userTrees.map((tree) => (
-        <AnimatedTree
-          key={tree.id}
-          data={tree}
-          onRemove={(id) =>
-            setUserTrees((prev) => prev.filter((t) => t.id !== id))
-          }
-        />
-      ))}
+      {userTrees
+        .filter(tree => tree && tree.id && tree.position) // Filtrer les arbres valides
+        .map((tree) => (
+          <AnimatedTree
+            key={tree.id}
+            data={tree}
+            onRemove={(id) =>
+              setUserTrees((prev) => prev.filter((t) => t.id !== id))
+            }
+          />
+        ))}
 
 
       {/* Coffres */}

@@ -146,7 +146,7 @@ export const AnimatedTree: React.FC<{
     <group ref={groupRef} position={data.position}>
       {/* Particules de croissance */}
       {growth < 0.5 && (
-        <mesh position={[0, growth * 2, 0]}>
+        <mesh key="growth-particles" position={[0, growth * 2, 0]}>
           <sphereGeometry args={[0.2, 8, 8]} />
           <meshStandardMaterial
             color="#90ee90"
@@ -159,22 +159,22 @@ export const AnimatedTree: React.FC<{
       )}
 
       {/* Tronc */}
-      <mesh position={[0, 0.15, 0]} castShadow>
+      <mesh key="trunk" position={[0, 0.15, 0]} castShadow>
         <cylinderGeometry args={[0.08, 0.1, 0.3, 6]} />
         <meshStandardMaterial color="#3e2918" roughness={1} />
       </mesh>
 
       {/* Feuillage - 3 niveaux */}
-      <mesh position={[0, 0.5, 0]} castShadow>
+      <mesh key="foliage-1" position={[0, 0.5, 0]} castShadow>
         <coneGeometry args={[0.4, 0.6, 6]} />
         <meshStandardMaterial color={treeColor} roughness={0.9} />
       </mesh>
-      <mesh position={[0, 0.85, 0]} castShadow>
+      <mesh key="foliage-2" position={[0, 0.85, 0]} castShadow>
         <coneGeometry args={[0.3, 0.5, 6]} />
         <meshStandardMaterial color={treeColor} roughness={0.9} />
       </mesh>
       {growth > 0.7 && (
-        <mesh position={[0, 1.15, 0]} castShadow>
+        <mesh key="foliage-3" position={[0, 1.15, 0]} castShadow>
           <coneGeometry args={[0.2, 0.4, 6]} />
           <meshStandardMaterial color={treeColor} roughness={0.9} />
         </mesh>
@@ -192,10 +192,10 @@ export const Rock: React.FC<{
 }> = ({ position, scale, color = "#555555", type = 0 }) => {
   // Géométries variées selon le type
   const geometries = [
-    <dodecahedronGeometry args={[0.2, 0]} />, // Volcanique - forme complexe
-    <octahedronGeometry args={[0.25, 0]} />,  // Crête - forme pointue  
-    <icosahedronGeometry args={[0.22, 0]} />, // Variée - forme irrégulière
-    <boxGeometry args={[0.3, 0.2, 0.25]} />   // Côtière - forme érodée
+    <dodecahedronGeometry key="volcanic" args={[0.2, 0]} />, // Volcanique - forme complexe
+    <octahedronGeometry key="ridge" args={[0.25, 0]} />,  // Crête - forme pointue  
+    <icosahedronGeometry key="varied" args={[0.22, 0]} />, // Variée - forme irrégulière
+    <boxGeometry key="coastal" args={[0.3, 0.2, 0.25]} />   // Côtière - forme érodée
   ];
 
   return (
