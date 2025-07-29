@@ -53,6 +53,7 @@ export class UsersService {
   }
 
   async connectWallet(connectWalletDto: ConnectWalletDto): Promise<AuthResponseDto> {
+
     const { walletAddress, signature, message } = connectWalletDto;
 
     if (!ethers.utils.isAddress(walletAddress)) {
@@ -69,11 +70,17 @@ export class UsersService {
 
     const expectedMessage = `Please sign this message to authenticate with Mokuen SwapForest: ${user.nonce}`;
     if (message !== expectedMessage) {
-      throw new InvalidSignatureException('Invalid message');
+      // Si l'utilisateur est déjà connecté et le message semble valide (commence par le bon préfixe),
+      // on peut accepter un ancien nonce pour éviter les problèmes de concurrence
+      const messagePrefix = 'Please sign this message to authenticate with Mokuen SwapForest: nonce-';
+      if (!user.isConnected || !message.startsWith(messagePrefix)) {
+        throw new InvalidSignatureException('Invalid message');
+      }
     }
 
     try {
       const recoveredAddress = ethers.utils.verifyMessage(message, signature);
+      
       if (recoveredAddress.toLowerCase() !== walletAddress.toLowerCase()) {
         throw new InvalidSignatureException('Invalid signature');
       }
@@ -84,67 +91,71 @@ export class UsersService {
     const isNewUser = !user.isConnected && !user.lastLoginAt;
 
     // Utiliser une transaction pour créer user + biome si nouveau
-    const result = await this.prisma.$transaction(async (prisma) => {
-      const updatedUser = await prisma.user.update({
-        where: { walletAddress: walletAddress.toLowerCase() },
-        data: {
-          isConnected: true,
-          lastLoginAt: new Date(),
-          lastActivityAt: new Date(),
-          chainId: connectWalletDto.chainId || 1,
-          nonce: null,
-          // S'assurer que les champs Decimal ont des valeurs
-          tokenBalance: isNewUser ? 0 : undefined,
-          ...(isNewUser && {
-            level: 1,
-            experience: 0,
-            activityScore: 10, // Points de démarrage
-          }),
-        },
-      });
-
-      // Créer l'île initiale si nouveau utilisateur
-      if (isNewUser) {
-        const defaultSeed = Math.floor(Math.random() * 1000000);
-        
-        await prisma.island.create({
+    try {
+      const result = await this.prisma.$transaction(async (prisma) => {
+        const updatedUser = await prisma.user.update({
+          where: { walletAddress: walletAddress.toLowerCase() },
           data: {
-            userId: updatedUser.id,
-            name: 'Ma Première Île',
-            seed: BigInt(defaultSeed),
-            description: 'Le début de mon aventure insulaire',
-            isActive: true,
-            islandData: {
-              landTiles: [],
-              waterTiles: [],
-              rocks: [],
-              houses: [],
-              totalTiles: 50,
-              waterColor: '#4682B4'
-            },
-            treeCount: 0,
-            totalTrees: 0,
-            healthScore: 100,
-            version: '1.0.0'
+            isConnected: true,
+            lastLoginAt: new Date(),
+            lastActivityAt: new Date(),
+            chainId: connectWalletDto.chainId || 1,
+            // S'assurer que les champs Decimal ont des valeurs
+            tokenBalance: isNewUser ? 0 : undefined,
+            ...(isNewUser && {
+              level: 1,
+              experience: 0,
+              activityScore: 10, // Points de démarrage
+            }),
           },
         });
-      }
 
-      return updatedUser;
-    });
+        // Créer l'île initiale si nouveau utilisateur
+        if (isNewUser) {
+          const defaultSeed = Math.floor(Math.random() * 1000000);
+          
+          await prisma.island.create({
+            data: {
+              userId: updatedUser.id,
+              name: 'Ma Première Île',
+              seed: BigInt(defaultSeed),
+              description: 'Le début de mon aventure insulaire',
+              isActive: true,
+              islandData: {
+                landTiles: [],
+                waterTiles: [],
+                rocks: [],
+                houses: [],
+                totalTiles: 50,
+                waterColor: '#4682B4'
+              },
+              treeCount: 0,
+              totalTrees: 0,
+              healthScore: 100,
+              version: '1.0.0'
+            },
+          });
+        }
 
-    const payload = {
-      sub: result.id,
-      walletAddress: result.walletAddress,
-      username: result.username
-    };
-    const accessToken = this.jwtService.sign(payload);
+        return updatedUser;
+      });
 
-    return {
-      accessToken,
-      user: this.usersUtils.transformToResponseDto(result),
-      isNewUser,
-    };
+      const payload = {
+        sub: result.id,
+        walletAddress: result.walletAddress,
+        username: result.username
+      };
+      const accessToken = this.jwtService.sign(payload);
+
+      return {
+        accessToken,
+        user: this.usersUtils.transformToResponseDto(result),
+        isNewUser,
+      };
+    } catch (error) {
+      console.error('❌ Erreur dans transaction:', error);
+      throw error;
+    }
   }
 
   async disconnectWallet(userId: string): Promise<void> {

@@ -6,7 +6,6 @@ import {
 } from "@tanstack/react-router";
 import { Header } from "./components/headers/Header";
 import HomePage from "./pages/HomePage";
-import { TransitionPage } from "./pages/TransitionPage";
 import { AppPage } from "./pages/app/AppPage";
 import { AppDashboard } from "./pages/app/AppDashboard";
 import ThreePage from "./pages/app/ThreePage";
@@ -25,12 +24,6 @@ const homeRoute = createRoute({
   component: HomePage,
 });
 
-const transitionRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: "/transition",
-  component: TransitionPage,
-});
-
 const appRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/app",
@@ -45,13 +38,12 @@ const appDashboardRoute = createRoute({
 
 const ThreeDGameRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: "/game",
+  path: "/app/game",
   component: ThreePage,
 });
 
 const routeTree = rootRoute.addChildren([
   homeRoute,
-  transitionRoute,
   appRoute.addChildren([appDashboardRoute]),
   ThreeDGameRoute,
 ]);

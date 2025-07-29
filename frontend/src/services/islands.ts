@@ -90,9 +90,7 @@ class IslandsService {
   }
 
   async ensureUserHasIsland(): Promise<IslandResponse> {
-    const response = await fetch(`${API_BASE_URL}/islands/ensure`, {
-      headers: this.getAuthHeaders(),
-    });
+    const response = await authService.makeAuthenticatedRequest(`${API_BASE_URL}/islands/ensure`);
 
     if (!response.ok) {
       throw new Error('Failed to ensure user island');

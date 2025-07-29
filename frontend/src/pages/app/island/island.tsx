@@ -223,9 +223,19 @@ export const FloatingIsland = React.forwardRef<
       try {
         console.log("🔄 Chargement de l'île depuis la base de données...", dbIsland);
         
-        // Restaurer les données de l'île depuis la base
-        if (dbIsland.islandData) {
+        // Vérifier si l'île a des données générées
+        const hasGeneratedData = dbIsland.islandData && 
+          dbIsland.islandData.landTiles && 
+          dbIsland.islandData.landTiles.length > 0;
+        
+        if (hasGeneratedData) {
+          // L'île a déjà des données générées, les restaurer
+          console.log("✅ Île avec données existantes détectée");
           setIslandData(dbIsland.islandData);
+        } else {
+          // L'île n'a pas de données générées, garder les données actuelles (générées)
+          console.log("⚠️ Île sans données détectée, conservation des données générées");
+          // Ne pas écraser islandData si elle est déjà générée
         }
         
         // Restaurer les arbres utilisateur

@@ -19,24 +19,52 @@ export const useAuth = () => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isConnecting, setIsConnecting] = useState(false);
   
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
 
-  // Load user from localStorage on mount
+  // Load user from localStorage on mount and validate token
   useEffect(() => {
-    const userData = authService.getUserData();
-    const token = authService.getToken();
-    
-    if (userData && token) {
-      setUser(userData);
-      setIsAuthenticated(true);
-    }
+    const validateStoredAuth = async () => {
+      const userData = authService.getUserData();
+      const token = authService.getToken();
+      
+      if (userData && token) {
+        setIsLoading(true);
+        try {
+          // Valider le token en faisant un appel API
+          const profile = await authService.getProfile();
+          setUser(profile);
+          setIsAuthenticated(true);
+        } catch (error) {
+          // Token invalide, nettoyer et déconnecter
+          authService.logout();
+          setUser(null);
+          setIsAuthenticated(false);
+        } finally {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    validateStoredAuth();
+  }, []);
+
+  // Listen for auth expiration events
+  useEffect(() => {
+    const handleAuthExpired = () => {
+      setUser(null);
+      setIsAuthenticated(false);
+    };
+
+    window.addEventListener('auth:expired', handleAuthExpired);
+    return () => window.removeEventListener('auth:expired', handleAuthExpired);
   }, []);
 
   // Handle wallet connection/disconnection
   useEffect(() => {
-    if (isConnected && address && !isAuthenticated) {
+    if (isConnected && address && !isAuthenticated && !isLoading) {
       // Délai pour s'assurer que la connexion wallet est complète
       const timer = setTimeout(() => {
         handleWalletConnect();
@@ -45,28 +73,28 @@ export const useAuth = () => {
     } else if (!isConnected && isAuthenticated) {
       handleDisconnect();
     }
-  }, [isConnected, address, isAuthenticated]);
+  }, [isConnected, address, isAuthenticated, isLoading]);
+
 
   const handleWalletConnect = async () => {
-    if (!address) return;
+    if (!address || isLoading || isConnecting) {
+      return;
+    }
     
+    setIsConnecting(true);
     setIsLoading(true);
+    
     try {
       const response: AuthResponse = await authService.connectWallet(address, chainId);
       setUser(response.user);
       setIsAuthenticated(true);
-      
-      if (response.isNewUser) {
-        console.log('Welcome new user!', response.user);
-      } else {
-        console.log('Welcome back!', response.user);
-      }
     } catch (error) {
       console.error('Failed to authenticate:', error);
       setUser(null);
       setIsAuthenticated(false);
     } finally {
       setIsLoading(false);
+      setIsConnecting(false);
     }
   };
 
@@ -74,6 +102,7 @@ export const useAuth = () => {
     authService.logout();
     setUser(null);
     setIsAuthenticated(false);
+    setIsLoading(false);
   };
 
   const refreshProfile = async () => {
