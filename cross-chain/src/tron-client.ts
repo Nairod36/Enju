@@ -261,13 +261,18 @@ export class TronClient {
    * Generate random secret for HTLC
    */
   generateSecret(): string {
-    return this.tronWeb.utils.crypto.generateRandom();
+    // Generate 32-byte random secret
+    const randomBytes = require('crypto').randomBytes(32);
+    return '0x' + randomBytes.toString('hex');
   }
 
   /**
    * Generate hashlock from secret
    */
   generateHashlock(secret: string): string {
-    return this.tronWeb.utils.crypto.sha256(secret);
+    const crypto = require('crypto');
+    const secretBytes = Buffer.from(secret.replace('0x', ''), 'hex');
+    const hash = crypto.createHash('sha256').update(secretBytes).digest();
+    return '0x' + hash.toString('hex');
   }
 }

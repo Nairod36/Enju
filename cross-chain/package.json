@@ -9,6 +9,9 @@
     "dev": "ts-node src/index.ts",
     "relayer": "ts-node src/relayer-daemon.ts",
     "relayer:prod": "npm run build && node dist/relayer-daemon.js",
+    "resolver": "tsx src/start-resolver.ts start",
+    "resolver:test": "tsx src/start-resolver.ts test",
+    "test:bridge": "tsx src/test-bridge-flow.ts",
     "monitor": "ts-node src/event-monitor.ts",
     "test": "jest",
     "lint": "eslint src/**/*.ts"
@@ -28,6 +31,7 @@
     "eslint": "^8.49.0",
     "jest": "^29.7.0",
     "ts-node": "^10.9.1",
+    "tsx": "^4.0.0",
     "typescript": "^5.2.2"
   }
 }
