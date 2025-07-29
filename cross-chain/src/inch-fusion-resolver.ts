@@ -10,7 +10,7 @@ export class InchFusionResolver {
   private ethProvider: ethers.providers.JsonRpcProvider;
   private nearClient: NearClient;
   private resolverSigner: ethers.Wallet;
-  
+
   // Official 1inch addresses
   private readonly ESCROW_FACTORY = '0xa7bcb4eac8964306f9e3764f67db6a7af6ddf99a';
   private crossChainResolverAddress: string;
@@ -27,19 +27,19 @@ export class InchFusionResolver {
    */
   async initialize(): Promise<void> {
     console.log('🔧 Initializing 1inch Fusion+ Resolver...');
-    
+
     await this.nearClient.initialize();
-    
+
     // Verify connection to Ethereum
     const balance = await this.resolverSigner.getBalance();
     console.log(`✅ Resolver ETH balance: ${ethers.utils.formatEther(balance)} ETH`);
-    
+
     // Verify 1inch contracts exist
     const escrowCode = await this.ethProvider.getCode(this.ESCROW_FACTORY);
     if (escrowCode === '0x') {
       throw new Error(`EscrowFactory not found at ${this.ESCROW_FACTORY}. Are you on the right network?`);
     }
-    
+
     console.log('✅ 1inch EscrowFactory verified');
     console.log('✅ Resolver initialized successfully');
   }
@@ -49,7 +49,7 @@ export class InchFusionResolver {
    */
   async processEthToNearSwap(params: InchFusionTypes.EthToNearSwap): Promise<InchFusionTypes.SwapResult> {
     console.log('🔄 Processing ETH → NEAR swap via 1inch Fusion+');
-    
+
     try {
       // 1. Monitor for EscrowSrc creation event
       const escrowSrcAddress = await this.waitForEscrowCreation(params.secretHash);
@@ -68,10 +68,10 @@ export class InchFusionResolver {
 
       // 3. Wait for secret revelation and complete both sides
       const secret = await this.waitForSecretRevelation(params.secretHash);
-      
+
       // Complete NEAR side
       await this.nearClient.completeSwap(nearContractId, secret);
-      
+
       return {
         success: true,
         escrowSrcAddress,
@@ -93,7 +93,7 @@ export class InchFusionResolver {
    */
   async processNearToEthSwap(params: InchFusionTypes.NearToEthSwap): Promise<InchFusionTypes.SwapResult> {
     console.log('🔄 Processing NEAR → ETH swap via 1inch Fusion+');
-    
+
     try {
       // 1. Create NEAR HTLC first
       const nearContractId = await this.createNearHTLC({
@@ -141,10 +141,10 @@ export class InchFusionResolver {
     // In a real implementation, this would listen for EscrowFactory events
     // For demo purposes, we simulate this
     console.log(`👀 Waiting for EscrowSrc creation with secretHash: ${secretHash.substring(0, 10)}...`);
-    
+
     // Simulate waiting
     await new Promise(resolve => setTimeout(resolve, 2000));
-    
+
     // Return a mock escrow address (in real implementation, get from event)
     return '0x' + secretHash.substring(2, 42);
   }
@@ -204,7 +204,7 @@ export class InchFusionResolver {
     );
 
     await tx.wait();
-    
+
     // Return the escrow address (would be extracted from events in real implementation)
     return tx.hash;
   }
@@ -223,7 +223,7 @@ export class InchFusionResolver {
 
     const tx = await resolverContract.registerNEARSwap(nearTxHash, secretHash, ethRecipient);
     await tx.wait();
-    
+
     console.log(`✅ Cross-chain swap registered on Ethereum`);
   }
 
@@ -232,11 +232,11 @@ export class InchFusionResolver {
    */
   private async waitForSecretRevelation(secretHash: string): Promise<Uint8Array> {
     console.log(`👀 Waiting for secret revelation for hash: ${secretHash.substring(0, 10)}...`);
-    
+
     // In real implementation, monitor both chains for withdrawal events
     // For demo, simulate secret revelation
     await new Promise(resolve => setTimeout(resolve, 3000));
-    
+
     // Return mock secret (in real implementation, extract from blockchain events)
     return new Uint8Array(32); // Mock secret
   }

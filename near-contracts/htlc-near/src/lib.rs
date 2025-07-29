@@ -50,7 +50,7 @@ impl HTLCNear {
     pub fn new(owner: AccountId) -> Self {
         Self {
             contracts: UnorderedMap::new(b"c"),
-            cross_chain_contracts: UnorderedMap::new(b"cc"),
+            cross_chain_contracts: UnorderedMap::new(b"cc".as_slice()),
             owner: owner.clone(),
             authorized_resolvers: UnorderedMap::new(b"r"),
         }
@@ -346,9 +346,19 @@ impl HTLCNear {
         ));
     }
 
-    /// Get cross-chain contract details
-    pub fn get_cross_chain_contract(&self, contract_id: String) -> Option<CrossChainHTLC> {
-        self.cross_chain_contracts.get(&contract_id)
+    /// Get cross-chain contract details (returns tuple instead of struct to avoid JsonSchema requirement)
+    pub fn get_cross_chain_contract(&self, contract_id: String) -> Option<(String, String, String, String, u64, bool, bool, String, Option<String>)> {
+        self.cross_chain_contracts.get(&contract_id).map(|contract| (
+            contract.sender.to_string(),
+            contract.receiver.to_string(),
+            contract.amount.0.to_string(),
+            hex::encode(&contract.hashlock),
+            contract.timelock,
+            contract.withdrawn,
+            contract.refunded,
+            contract.eth_address,
+            contract.eth_tx_hash
+        ))
     }
 
     /// Authorize resolver
