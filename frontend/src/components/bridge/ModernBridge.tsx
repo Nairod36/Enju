@@ -16,6 +16,7 @@ import { useWalletSelector } from "@near-wallet-selector/react-hook";
 import { ethers } from "ethers";
 import { BRIDGE_CONFIG } from "@/config/networks";
 import { useConversion } from "@/hooks/usePriceOracle";
+import { useTronWallet } from "@/hooks/useTronWallet";
 
 interface ModernBridgeProps {
   onBridgeSuccess?: (bridgeData: any) => void;
@@ -31,11 +32,13 @@ interface BridgeStats {
 const chainLogos = {
   ethereum: "🔷",
   near: "🔺",
+  tron: "🔴",
 };
 
 const chainNames = {
   ethereum: "Ethereum",
   near: "NEAR Protocol",
+  tron: "TRON",
 };
 
 export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
@@ -43,6 +46,15 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
   const { balance, isLoading: balanceLoading } = useCustomBalance();
   const { signedAccountId: nearAccountId, callFunction } = useWalletSelector();
   const nearConnected = !!nearAccountId;
+
+  // TRON wallet connection
+  const {
+    address: tronAddress,
+    isConnected: tronConnected,
+    balance: tronBalance,
+    callContract: callTronContract,
+    tronWeb,
+  } = useTronWallet();
 
   // Debug logging
   useEffect(() => {
@@ -102,9 +114,11 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
   }, [address, chainId]);
 
   const [fromAmount, setFromAmount] = useState("");
-  const [fromChain, setFromChain] = useState<"ethereum" | "near">("ethereum");
-  const [toChain, setToChain] = useState<"ethereum" | "near">("near");
-  
+  const [fromChain, setFromChain] = useState<"ethereum" | "near" | "tron">(
+    "ethereum"
+  );
+  const [toChain, setToChain] = useState<"ethereum" | "near" | "tron">("tron");
+
   // Use price oracle for real-time conversion
   const conversion = useConversion(fromAmount, fromChain, toChain);
   // Remove nearAccount state as it will come from wallet
@@ -166,23 +180,25 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
     // Check required connections based on bridge direction
     const needsEthWallet = fromChain === "ethereum" || toChain === "ethereum";
     const needsNearWallet = fromChain === "near" || toChain === "near";
+    const needsTronWallet = fromChain === "tron" || toChain === "tron";
 
     if (needsEthWallet && !isConnected) return;
     if (needsNearWallet && !nearConnected) return;
+    if (needsTronWallet && !tronConnected) return;
     if (!fromAmount) return;
 
     // Reset logs ref for new bridge
     bridgeLogsRef.current = [];
-    
+
     const newBridgeData = {
       fromAmount,
       fromChain,
       toChain,
       logs: [] as string[],
-      status: 'pending' as 'pending' | 'success' | 'error',
-      txHash: '',
-      secret: '',
-      hashlock: ''
+      status: "pending" as "pending" | "success" | "error",
+      txHash: "",
+      secret: "",
+      hashlock: "",
     };
 
     setBridgeData(newBridgeData as any);
@@ -194,41 +210,52 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
         await handleEthToNearBridge(newBridgeData);
       } else if (fromChain === "near" && toChain === "ethereum") {
         await handleNearToEthBridge(newBridgeData);
+      } else if (fromChain === "ethereum" && toChain === "tron") {
+        await handleEthToTronBridge(newBridgeData);
+      } else if (fromChain === "tron" && toChain === "ethereum") {
+        await handleTronToEthBridge(newBridgeData);
       }
     } catch (error) {
-      console.error('Bridge failed:', error);
+      console.error("Bridge failed:", error);
       updateBridgeLog(`❌ Bridge failed: ${error}`);
-      setBridgeData(prev => ({ ...prev, status: 'error' }));
+      setBridgeData((prev) => (prev ? { ...prev, status: "error" } : null));
       setIsLoading(false);
     }
   };
 
   const updateBridgeLog = (message: string) => {
     const timestampedMessage = `[${new Date().toLocaleTimeString()}] ${message}`;
-    console.log('📋 Bridge Log:', timestampedMessage);
-    
+    console.log("📋 Bridge Log:", timestampedMessage);
+
     // Ajouter à la référence stable
     bridgeLogsRef.current = [...bridgeLogsRef.current, timestampedMessage];
-    
-    setBridgeData(prev => {
+
+    setBridgeData((prev) => {
       if (!prev) return prev;
       return {
         ...prev,
-        logs: [...bridgeLogsRef.current]
+        logs: [...bridgeLogsRef.current],
       };
     });
+    setBridgeData((prev: any) => ({
+      ...prev,
+      logs: [
+        ...(prev?.logs || []),
+        `[${new Date().toLocaleTimeString()}] ${message}`,
+      ],
+    }));
   };
 
   const handleEthToNearBridge = async (bridgeData: any) => {
-    updateBridgeLog('🔑 Generating secret and hashlock...');
-    
+    updateBridgeLog("🔑 Generating secret and hashlock...");
+
     // Generate secret and hashlock
     const secret = ethers.utils.hexlify(ethers.utils.randomBytes(32));
     const hashlock = ethers.utils.keccak256(secret);
-    
+
     bridgeData.secret = secret;
     bridgeData.hashlock = hashlock;
-    
+
     updateBridgeLog(`🔒 Generated hashlock: ${hashlock.substring(0, 14)}...`);
     updateBridgeLog(`🚀 Initiating ETHEREUM → NEAR bridge...`);
     updateBridgeLog(`💰 Amount: ${fromAmount} ETHEREUM`);
@@ -236,22 +263,26 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
     updateBridgeLog(`📝 You need to sign with MetaMask...`);
 
     // Create ETH HTLC
-    const provider = new ethers.providers.Web3Provider(window.ethereum);
+    const provider = new ethers.providers.Web3Provider(window.ethereum as any);
     const signer = provider.getSigner();
-    
+
     const bridgeContract = new ethers.Contract(
       BRIDGE_CONFIG.contractAddress,
       [
-        'function createETHToNEARBridge(bytes32 hashlock, string calldata nearAccount) external payable returns (bytes32 swapId)',
-        'event EscrowCreated(address indexed escrow, bytes32 indexed hashlock, string nearAccount, uint256 amount)'
+        "function createETHToNEARBridge(bytes32 hashlock, string calldata nearAccount) external payable returns (bytes32 swapId)",
+        "event EscrowCreated(address indexed escrow, bytes32 indexed hashlock, string nearAccount, uint256 amount)",
       ],
       signer
     );
 
-    const tx = await bridgeContract.createETHToNEARBridge(hashlock, nearAccountId, {
-      value: ethers.utils.parseEther(fromAmount),
-      gasLimit: 500000,
-    });
+    const tx = await bridgeContract.createETHToNEARBridge(
+      hashlock,
+      nearAccountId,
+      {
+        value: ethers.utils.parseEther(fromAmount),
+        gasLimit: 500000,
+      }
+    );
 
     bridgeData.txHash = tx.hash;
     updateBridgeLog(`📝 Transaction sent: ${tx.hash.substring(0, 14)}...`);
@@ -261,8 +292,10 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
     updateBridgeLog(`✅ Transaction confirmed!`);
 
     // Parse events for escrow address
-    const escrowCreatedEvent = receipt.events?.find((event: any) => event.event === "EscrowCreated");
-    
+    const escrowCreatedEvent = receipt.events?.find(
+      (event: any) => event.event === "EscrowCreated"
+    );
+
     if (escrowCreatedEvent) {
       const { escrow, amount: eventAmount } = escrowCreatedEvent.args;
       updateBridgeLog(`📦 ETH HTLC created: ${escrow.substring(0, 14)}...`);
@@ -270,49 +303,53 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
 
       // Create NEAR HTLC
       await createNearHTLC(escrow, hashlock, eventAmount.toString());
-      
+
       updateBridgeLog(`✅ Bridge ready! Both ETH and NEAR HTLCs created.`);
       updateBridgeLog(`⏳ Bridge-listener will monitor and auto-complete...`);
-      
-      setBridgeData(prev => ({ ...prev, status: 'success' }));
+
+      setBridgeData((prev: any) => ({ ...prev, status: "success" }));
       setIsLoading(false);
-      
+
       onBridgeSuccess?.(bridgeData);
       loadBridgeStats();
     }
   };
 
   const handleNearToEthBridge = async (bridgeData: any) => {
-    updateBridgeLog('🔑 Getting hashlock from bridge-listener...');
-    
+    updateBridgeLog("🔑 Getting hashlock from bridge-listener...");
+
     // Get the test secret and hashlock that bridge-listener uses
     try {
       const response = await fetch(`${BRIDGE_CONFIG.listenerApi}/bridges`);
       const result = await response.json();
-      
+
       // Use bridge-listener's test values - NEAR uses SHA256, not keccak256!
-      const secret = '0x1111111111111111111111111111111111111111111111111111111111111111';
+      const secret =
+        "0x1111111111111111111111111111111111111111111111111111111111111111";
       // For NEAR, we need SHA256 hashlock, not keccak256
       const secretBytes = ethers.utils.arrayify(secret);
       const sha256Hash = ethers.utils.sha256(secretBytes);
       const hashlock = sha256Hash;
-      
+
       updateBridgeLog(`🔒 Using computed hashlock: ${hashlock}`);
-      
+
       bridgeData.secret = secret;
       bridgeData.hashlock = hashlock;
     } catch (error) {
       updateBridgeLog(`❌ Failed to get bridge-listener info: ${error}`);
       // Fallback to direct computation with SHA256
-      const secret = '0x1111111111111111111111111111111111111111111111111111111111111111';
+      const secret =
+        "0x1111111111111111111111111111111111111111111111111111111111111111";
       const secretBytes = ethers.utils.arrayify(secret);
       const sha256Hash = ethers.utils.sha256(secretBytes);
       const hashlock = sha256Hash;
       bridgeData.secret = secret;
       bridgeData.hashlock = hashlock;
     }
-    
-    updateBridgeLog(`🔒 Using hashlock: ${bridgeData.hashlock.substring(0, 14)}...`);
+
+    updateBridgeLog(
+      `🔒 Using hashlock: ${bridgeData.hashlock.substring(0, 14)}...`
+    );
     updateBridgeLog(`🚀 Initiating NEAR → ETHEREUM bridge...`);
     updateBridgeLog(`💰 Amount: ${fromAmount} NEAR`);
     updateBridgeLog(`📋 ETH destination: ${address}`);
@@ -320,24 +357,33 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
 
     try {
       // Create NEAR HTLC using the entered NEAR amount
-      const result = await createNearHTLC(address!, bridgeData.hashlock, fromAmount);
-      
+      const result = await createNearHTLC(
+        address!,
+        bridgeData.hashlock,
+        fromAmount
+      );
+
       updateBridgeLog(`✅ NEAR HTLC created successfully!`);
-      updateBridgeLog(`⏳ Bridge-listener will create ETH escrow and complete automatically...`);
-      
+      updateBridgeLog(
+        `⏳ Bridge-listener will create ETH escrow and complete automatically...`
+      );
+
       // Extract contract ID from result logs
-      let contractId = '';
+      let contractId = "";
       try {
-        console.log('🔍 Full NEAR result for contract ID extraction:', JSON.stringify(result, null, 2));
-        
+        console.log(
+          "🔍 Full NEAR result for contract ID extraction:",
+          JSON.stringify(result, null, 2)
+        );
+
         // Try different paths for logs
         const allLogs = [];
-        
+
         // Check direct logs
         if (result?.logs) {
           allLogs.push(...result.logs);
         }
-        
+
         // Check receipts_outcome logs
         if (result?.receipts_outcome) {
           for (const receipt of result.receipts_outcome) {
@@ -346,12 +392,15 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
             }
           }
         }
-        
-        console.log('🔍 All logs found for contract ID:', allLogs);
-        
+
+        console.log("🔍 All logs found for contract ID:", allLogs);
+
         for (const log of allLogs) {
-          console.log('🔍 Checking log for contract ID:', log);
-          if (log.includes('Cross-chain HTLC created:') || log.includes('HTLC created:')) {
+          console.log("🔍 Checking log for contract ID:", log);
+          if (
+            log.includes("Cross-chain HTLC created:") ||
+            log.includes("HTLC created:")
+          ) {
             // Try multiple patterns to extract contract ID
             let match = log.match(/(?:Cross-chain )?HTLC created:\s*([^,\s]+)/);
             if (!match) {
@@ -359,242 +408,428 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
             }
             if (match) {
               contractId = match[1].trim();
-              console.log('✅ Found contractId in logs:', contractId);
+              console.log("✅ Found contractId in logs:", contractId);
               break;
             }
           }
         }
-        
+
         if (contractId) {
           updateBridgeLog(`📋 Contract ID extracted: ${contractId}`);
         } else {
-          updateBridgeLog(`⚠️ Contract ID not found in logs - checking full transaction...`);
-          
+          updateBridgeLog(
+            `⚠️ Contract ID not found in logs - checking full transaction...`
+          );
+
           // If not in logs, check if it's in the result itself
           const resultStr = JSON.stringify(result);
-          console.log('🔍 Searching in full result string:', resultStr);
-          
+          console.log("🔍 Searching in full result string:", resultStr);
+
           // Look for contract ID patterns in the full result
           const idMatch = resultStr.match(/"cc-[^"]+"/);
           if (idMatch) {
-            contractId = idMatch[0].replace(/"/g, '');
-            console.log('✅ Found contractId in result:', contractId);
+            contractId = idMatch[0].replace(/"/g, "");
+            console.log("✅ Found contractId in result:", contractId);
             updateBridgeLog(`📋 Contract ID found in result: ${contractId}`);
           }
         }
       } catch (error) {
-        console.log('Could not extract contract ID from logs:', error);
+        console.log("Could not extract contract ID from logs:", error);
         updateBridgeLog(`⚠️ Could not extract contract ID: ${error}`);
       }
-      
+
       // Wait for bridge-listener to create ETH escrow, then complete NEAR HTLC
       updateBridgeLog(`✅ NEAR HTLC created! Waiting for ETH escrow...`);
-      
+
       setTimeout(async () => {
         updateBridgeLog(`🔄 Completing NEAR HTLC to finalize bridge...`);
         try {
           if (contractId) {
-            await completeNearHTLC(contractId, bridgeData.secret, bridgeData.hashlock);
-            updateBridgeLog(`✅ NEAR HTLC completed! Bridge should finalize now.`);
-            
-            setBridgeData(prev => ({ ...prev, status: 'success' }));
+            await completeNearHTLC(
+              contractId,
+              bridgeData.secret,
+              bridgeData.hashlock
+            );
+            updateBridgeLog(
+              `✅ NEAR HTLC completed! Bridge should finalize now.`
+            );
+
+            setBridgeData((prev) => ({ ...prev, status: "success" }));
             setIsLoading(false);
             monitorBridgeCompletion(bridgeData);
           } else {
             updateBridgeLog(`❌ No contract ID found - cannot complete`);
-            setBridgeData(prev => ({ ...prev, status: 'error' }));
+            setBridgeData((prev) => ({ ...prev, status: "error" }));
             setIsLoading(false);
           }
         } catch (error) {
-          console.error('Failed to complete NEAR HTLC:', error);
+          console.error("Failed to complete NEAR HTLC:", error);
           updateBridgeLog(`❌ Failed to complete NEAR HTLC: ${error}`);
-          setBridgeData(prev => ({ ...prev, status: 'error' }));
+          setBridgeData((prev) => ({ ...prev, status: "error" }));
           setIsLoading(false);
         }
       }, 10000); // Wait 10 seconds for bridge-listener to create ETH escrow
-      
     } catch (error) {
-      console.error('Failed to create NEAR HTLC:', error);
+      console.error("Failed to create NEAR HTLC:", error);
       updateBridgeLog(`❌ Failed to create NEAR HTLC: ${error}`);
-      setBridgeData(prev => ({ ...prev, status: 'error' }));
+      setBridgeData((prev) => ({ ...prev, status: "error" }));
       setIsLoading(false);
     }
+    // Create NEAR HTLC
+    const nearAmount = ethers.utils.parseEther(fromAmount).toString();
+    await createNearHTLC(address!, hashlock, nearAmount);
+
+    updateBridgeLog(`✅ NEAR HTLC created successfully!`);
+    updateBridgeLog(
+      `⏳ Bridge-listener will create ETH escrow automatically...`
+    );
+
+    setBridgeData((prev) => (prev ? { ...prev, status: "success" } : null));
+    setIsLoading(false);
+
+    onBridgeSuccess?.(bridgeData);
+    loadBridgeStats();
   };
 
   const monitorBridgeCompletion = async (bridgeData: any) => {
     const maxAttempts = 60; // 5 minutes
     let attempts = 0;
-    
+
     const checkCompletion = async () => {
       try {
         const response = await fetch(`${BRIDGE_CONFIG.listenerApi}/bridges`);
         const result = await response.json();
-        
+
         if (result.success) {
           // Look for completed bridge with matching hashlock
-          const completedBridge = result.data.find((bridge: any) => 
-            bridge.hashlock === bridgeData.hashlock && 
-            bridge.status === 'COMPLETED' &&
-            bridge.type === 'NEAR_TO_ETH'
+          const completedBridge = result.data.find(
+            (bridge: any) =>
+              bridge.hashlock === bridgeData.hashlock &&
+              bridge.status === "COMPLETED" &&
+              bridge.type === "NEAR_TO_ETH"
           );
-          
+
           if (completedBridge) {
-            updateBridgeLog(`✅ Bridge completed automatically by bridge-listener!`);
-            updateBridgeLog(`💰 You should have received ${fromAmount} NEAR worth of ETH!`);
-            
+            updateBridgeLog(
+              `✅ Bridge completed automatically by bridge-listener!`
+            );
+            updateBridgeLog(
+              `💰 You should have received ${fromAmount} NEAR worth of ETH!`
+            );
+
             // Show transaction proofs
             if (completedBridge.ethTxHash) {
-              updateBridgeLog(`📋 ETH Escrow Created: ${completedBridge.ethTxHash}`);
-              updateBridgeLog(`🔗 View ETH Escrow: https://etherscan.io/tx/${completedBridge.ethTxHash}`);
+              updateBridgeLog(
+                `📋 ETH Escrow Created: ${completedBridge.ethTxHash}`
+              );
+              updateBridgeLog(
+                `🔗 View ETH Escrow: https://etherscan.io/tx/${completedBridge.ethTxHash}`
+              );
             }
-            
+
             if (completedBridge.ethCompletionTxHash) {
-              updateBridgeLog(`📋 ETH Transfer Completed: ${completedBridge.ethCompletionTxHash}`);
-              updateBridgeLog(`🔗 View ETH Transfer: https://etherscan.io/tx/${completedBridge.ethCompletionTxHash}`);
+              updateBridgeLog(
+                `📋 ETH Transfer Completed: ${completedBridge.ethCompletionTxHash}`
+              );
+              updateBridgeLog(
+                `🔗 View ETH Transfer: https://etherscan.io/tx/${completedBridge.ethCompletionTxHash}`
+              );
             }
-            
+
             if (completedBridge.nearTxHash) {
               updateBridgeLog(`📋 NEAR HTLC: ${completedBridge.nearTxHash}`);
-              updateBridgeLog(`🔗 View NEAR TX: https://testnet.nearblocks.io/txns/${completedBridge.nearTxHash}`);
+              updateBridgeLog(
+                `🔗 View NEAR TX: https://testnet.nearblocks.io/txns/${completedBridge.nearTxHash}`
+              );
             }
-            
-            setBridgeData(prev => ({ ...prev, status: 'success' }));
+
+            setBridgeData((prev) => ({ ...prev, status: "success" }));
             setIsLoading(false);
             onBridgeSuccess?.(bridgeData);
             loadBridgeStats();
             return;
           }
         }
-        
+
         attempts++;
         if (attempts < maxAttempts) {
           updateBridgeLog(`⏳ Still waiting... (${attempts}/${maxAttempts})`);
           setTimeout(checkCompletion, 5000); // Check every 5 seconds
         } else {
           updateBridgeLog(`⚠️ Bridge timeout - check bridge-listener logs`);
-          setBridgeData(prev => ({ ...prev, status: 'error' }));
+          setBridgeData((prev) => ({ ...prev, status: "error" }));
           setIsLoading(false);
         }
-        
       } catch (error) {
-        console.error('Error checking bridge completion:', error);
+        console.error("Error checking bridge completion:", error);
         attempts++;
         if (attempts < maxAttempts) {
           setTimeout(checkCompletion, 5000);
         }
       }
     };
-    
+
     setTimeout(checkCompletion, 5000); // Start checking after 5 seconds
   };
 
-  const createNearHTLC = async (ethAddress: string, hashlock: string, nearAmountStr: string) => {
-    console.log('🔧 Creating NEAR HTLC with params:', {
+  const createNearHTLC = async (
+    ethAddress: string,
+    hashlock: string,
+    nearAmountStr: string
+  ) => {
+    console.log("🔧 Creating NEAR HTLC with params:", {
       ethAddress,
       hashlock,
       nearAmountStr,
-      nearAccountId
+      nearAccountId,
     });
 
     const args = {
       receiver: nearAccountId,
-      hashlock: Buffer.from(hashlock.slice(2), 'hex').toString('base64'),
+      hashlock: Buffer.from(hashlock.slice(2), "hex").toString("base64"),
       timelock: Date.now() + 24 * 60 * 60 * 1000, // 24h from now
-      eth_address: ethAddress
+      eth_address: ethAddress,
     };
 
     // For NEAR → ETH bridge, the amount is the NEAR amount entered by user
     // Convert the NEAR amount directly to yoctoNEAR
     const nearAmount = parseFloat(nearAmountStr); // This is the NEAR amount entered by user
     const nearYocto = BigInt(Math.floor(nearAmount * 1e24)); // Convert to yoctoNEAR
-    
-    console.log(`💰 Bridging ${nearAmount} NEAR (${nearYocto.toString()} yoctoNEAR)`);
 
-    console.log('🔧 NEAR HTLC call params:', {
-      contractId: 'mat-event.testnet',
-      method: 'create_cross_chain_htlc',
+    console.log(
+      `💰 Bridging ${nearAmount} NEAR (${nearYocto.toString()} yoctoNEAR)`
+    );
+
+    console.log("🔧 NEAR HTLC call params:", {
+      contractId: "mat-event.testnet",
+      method: "create_cross_chain_htlc",
       args,
       deposit: nearYocto.toString(),
-      gas: '100000000000000',
+      gas: "100000000000000",
       nearYoctoAmount: nearYocto.toString(),
-      originalNearAmount: nearAmountStr
+      originalNearAmount: nearAmountStr,
     });
 
-    updateBridgeLog(`📋 Calling NEAR contract with ${nearYocto.toString()} yoctoNEAR...`);
+    updateBridgeLog(
+      `📋 Calling NEAR contract with ${nearYocto.toString()} yoctoNEAR...`
+    );
 
     try {
       const result = await callFunction({
-        contractId: 'mat-event.testnet',
-        method: 'create_cross_chain_htlc',
+        contractId: "mat-event.testnet",
+        method: "create_cross_chain_htlc",
         args,
         deposit: nearYocto.toString(),
-        gas: '100000000000000'
+        gas: "100000000000000",
       });
 
-      console.log('✅ NEAR HTLC creation result:', result);
+      console.log("✅ NEAR HTLC creation result:", result);
       updateBridgeLog(`✅ NEAR HTLC created with your wallet!`);
       return result;
     } catch (error) {
-      console.error('❌ NEAR HTLC creation failed:', error);
+      console.error("❌ NEAR HTLC creation failed:", error);
       updateBridgeLog(`❌ NEAR HTLC creation failed: ${error}`);
       throw error;
     }
   };
 
-  const completeNearHTLC = async (contractId: string, secret: string, expectedHashlock: string) => {
-    console.log('🔓 Completing NEAR HTLC with:', {
+  const completeNearHTLC = async (
+    contractId: string,
+    secret: string,
+    expectedHashlock: string
+  ) => {
+    console.log("🔓 Completing NEAR HTLC with:", {
       contractId,
-      secret: secret.substring(0, 14) + '...',
+      secret: secret.substring(0, 14) + "...",
       secretLength: secret.length,
-      expectedHashlock
+      expectedHashlock,
     });
 
     // Verify secret format and convert to preimage
-    const secretHex = secret.startsWith('0x') ? secret.slice(2) : secret;
-    console.log('🔧 Secret hex (without 0x):', secretHex);
-    
+    const secretHex = secret.startsWith("0x") ? secret.slice(2) : secret;
+    console.log("🔧 Secret hex (without 0x):", secretHex);
+
     // Verify the secret generates the correct hashlock using SHA256 (NEAR uses SHA256)
-    const secretBytes = ethers.utils.arrayify('0x' + secretHex);
+    const secretBytes = ethers.utils.arrayify("0x" + secretHex);
     const computedHashlock = ethers.utils.sha256(secretBytes);
-    console.log('🔧 Computed hashlock from secret (SHA256):', computedHashlock);
-    console.log('🔧 Expected hashlock:', expectedHashlock);
-    
+    console.log("🔧 Computed hashlock from secret (SHA256):", computedHashlock);
+    console.log("🔧 Expected hashlock:", expectedHashlock);
+
     if (computedHashlock !== expectedHashlock) {
-      console.error('❌ HASHLOCK MISMATCH!');
-      console.error('Secret bytes:', Buffer.from(secretHex, 'hex'));
-      console.error('Computed hash bytes:', Buffer.from(computedHashlock.slice(2), 'hex'));
-      console.error('Expected hash bytes:', Buffer.from(expectedHashlock.slice(2), 'hex'));
-      
+      console.error("❌ HASHLOCK MISMATCH!");
+      console.error("Secret bytes:", Buffer.from(secretHex, "hex"));
+      console.error(
+        "Computed hash bytes:",
+        Buffer.from(computedHashlock.slice(2), "hex")
+      );
+      console.error(
+        "Expected hash bytes:",
+        Buffer.from(expectedHashlock.slice(2), "hex")
+      );
+
       updateBridgeLog(`❌ Secret/hashlock mismatch - this will fail!`);
       updateBridgeLog(`🔧 Computed: ${computedHashlock}`);
       updateBridgeLog(`🔧 Expected: ${expectedHashlock}`);
-      
+
       // Don't throw - let's see what the NEAR contract says
       updateBridgeLog(`⚠️ Proceeding anyway to see NEAR contract error...`);
     } else {
       updateBridgeLog(`✅ Secret/hashlock verification passed!`);
     }
 
-    const preimageBase64 = Buffer.from(secretHex, 'hex').toString('base64');
-    console.log('🔧 Preimage base64:', preimageBase64);
-    
+    const preimageBase64 = Buffer.from(secretHex, "hex").toString("base64");
+    console.log("🔧 Preimage base64:", preimageBase64);
+
     const args = {
       contract_id: contractId,
       preimage: preimageBase64,
-      eth_tx_hash: 'completed_by_user_frontend'
+      eth_tx_hash: "completed_by_user_frontend",
     };
 
-    console.log('🔧 NEAR completion args:', args);
+    console.log("🔧 NEAR completion args:", args);
 
     const result = await callFunction({
-      contractId: 'mat-event.testnet',
-      method: 'complete_cross_chain_swap',
+      contractId: "mat-event.testnet",
+      method: "complete_cross_chain_swap",
       args,
-      deposit: '0',
-      gas: '100000000000000'
+      deposit: "0",
+      gas: "100000000000000",
     });
 
     return result;
+  };
+
+  const handleEthToTronBridge = async (bridgeData: any) => {
+    updateBridgeLog("🔑 Generating secret and hashlock...");
+
+    // Generate secret and hashlock
+    const secret = ethers.utils.hexlify(ethers.utils.randomBytes(32));
+    const hashlock = ethers.utils.keccak256(secret);
+
+    bridgeData.secret = secret;
+    bridgeData.hashlock = hashlock;
+
+    updateBridgeLog(`🔒 Generated hashlock: ${hashlock.substring(0, 14)}...`);
+    updateBridgeLog(`🚀 Initiating ETHEREUM → TRON bridge...`);
+    updateBridgeLog(`💰 Amount: ${fromAmount} ETHEREUM`);
+    updateBridgeLog(`📋 TRON destination: ${tronAddress}`);
+    updateBridgeLog(`📝 You need to sign with MetaMask...`);
+
+    // Create ETH HTLC using the new multi-chain contract
+    const provider = new ethers.providers.Web3Provider(window.ethereum as any);
+    const signer = provider.getSigner();
+
+    const bridgeContract = new ethers.Contract(
+      BRIDGE_CONFIG.contractAddress,
+      [
+        "function createETHToTRONBridge(bytes32 hashlock, string calldata tronAddress) external payable returns (bytes32 swapId)",
+        "event EscrowCreated(address indexed escrow, bytes32 indexed hashlock, uint8 indexed destinationChain, string destinationAccount, uint256 amount)",
+      ],
+      signer
+    );
+
+    const tx = await bridgeContract.createETHToTRONBridge(
+      hashlock,
+      tronAddress,
+      {
+        value: ethers.utils.parseEther(fromAmount),
+        gasLimit: 500000,
+      }
+    );
+
+    bridgeData.txHash = tx.hash;
+    updateBridgeLog(`📝 Transaction sent: ${tx.hash.substring(0, 14)}...`);
+    updateBridgeLog(`⏳ Waiting for confirmation...`);
+
+    const receipt = await tx.wait();
+    updateBridgeLog(`✅ Transaction confirmed!`);
+
+    // Parse events for escrow address
+    const escrowCreatedEvent = receipt.events?.find(
+      (event: any) => event.event === "EscrowCreated"
+    );
+
+    if (escrowCreatedEvent) {
+      const { escrow, amount: eventAmount } = escrowCreatedEvent.args;
+      updateBridgeLog(`📦 ETH HTLC created: ${escrow.substring(0, 14)}...`);
+      updateBridgeLog(`🔄 Creating TRON HTLC with your wallet...`);
+
+      // Create TRON HTLC
+      await createTronHTLC(escrow, hashlock, eventAmount.toString());
+
+      updateBridgeLog(`✅ Bridge ready! Both ETH and TRON HTLCs created.`);
+      updateBridgeLog(`⏳ Bridge-listener will monitor and auto-complete...`);
+
+      setBridgeData((prev: any) => ({ ...prev, status: "success" }));
+      setIsLoading(false);
+
+      onBridgeSuccess?.(bridgeData);
+      loadBridgeStats();
+    }
+  };
+
+  const handleTronToEthBridge = async (bridgeData: any) => {
+    updateBridgeLog("🔑 Generating secret and hashlock...");
+
+    // Generate secret and hashlock
+    const secret = ethers.utils.hexlify(ethers.utils.randomBytes(32));
+    const hashlock = ethers.utils.keccak256(secret);
+
+    bridgeData.secret = secret;
+    bridgeData.hashlock = hashlock;
+
+    updateBridgeLog(`🔒 Generated hashlock: ${hashlock.substring(0, 14)}...`);
+    updateBridgeLog(`🚀 Initiating TRON → ETHEREUM bridge...`);
+    updateBridgeLog(`💰 Amount: ${fromAmount} TRON`);
+    updateBridgeLog(`📋 ETH destination: ${address}`);
+    updateBridgeLog(`📝 You need to sign with TronLink...`);
+
+    // Create TRON HTLC
+    const tronAmount = tronWeb.toSun(fromAmount);
+    await createTronHTLC(address!, hashlock, tronAmount.toString());
+
+    updateBridgeLog(`✅ TRON HTLC created successfully!`);
+    updateBridgeLog(
+      `⏳ Bridge-listener will create ETH escrow automatically...`
+    );
+
+    setBridgeData((prev) => (prev ? { ...prev, status: "success" } : null));
+    setIsLoading(false);
+
+    onBridgeSuccess?.(bridgeData);
+    loadBridgeStats();
+  };
+
+  const createTronHTLC = async (
+    ethAddress: string,
+    hashlock: string,
+    amount: string
+  ) => {
+    const contractAddress = BRIDGE_CONFIG.tron.contractAddress;
+
+    try {
+      // Call TRON contract using TronWeb
+      const result = await callTronContract(
+        contractAddress,
+        "createTronBridge",
+        [
+          tronAddress, // receiver
+          hashlock.startsWith("0x") ? hashlock.slice(2) : hashlock, // hashlock sans 0x
+          Date.now() + 24 * 60 * 60 * 1000, // timelock (24h)
+          ethAddress, // ethAddress
+        ],
+        {
+          callValue: amount, // Amount in SUN
+          feeLimit: 1000000000, // 1000 TRX fee limit
+        }
+      );
+
+      updateBridgeLog(`✅ TRON HTLC created with your wallet!`);
+      return result;
+    } catch (error) {
+      updateBridgeLog(`❌ Failed to create TRON HTLC: ${error}`);
+      throw error;
+    }
   };
 
   const getChainColor = (chain: string) => {
@@ -691,14 +926,25 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
                       )}
                     </div>
                   )} */}
+                  {fromChain === "tron" && tronConnected && (
+                    <div className="text-xs text-gray-500">
+                      <div>
+                        <p>
+                          Balance: {parseFloat(tronBalance || "0").toFixed(4)}{" "}
+                          TRX
+                        </p>
+                        <p className="text-xs text-gray-400">TRON Shasta ✅</p>
+                      </div>
+                    </div>
+                  )}
                   {fromChain === "ethereum" && !isConnected && (
                     <p className="text-xs text-red-500">
                       Connect Ethereum wallet
                     </p>
                   )}
-                  {/* {fromChain === "near" && !nearConnected && (
-                    <p className="text-xs text-red-500">Connect NEAR wallet</p>
-                  )} */}
+                  {fromChain === "tron" && !tronConnected && (
+                    <p className="text-xs text-red-500">Connect TRON wallet</p>
+                  )}
                 </div>
 
                 <div className="relative">
@@ -721,12 +967,15 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
                       <select
                         value={fromChain}
                         onChange={(e) =>
-                          setFromChain(e.target.value as "ethereum" | "near")
+                          setFromChain(
+                            e.target.value as "ethereum" | "near" | "tron"
+                          )
                         }
                         className="bg-transparent border-none outline-none font-semibold cursor-pointer"
                       >
                         <option value="ethereum">ETH</option>
                         <option value="near">NEAR</option>
+                        <option value="tron">TRX</option>
                       </select>
                       <ChevronDown className="w-4 h-4 text-gray-400" />
                     </div>
@@ -762,8 +1011,12 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
                   <div className="relative flex gap-2 p-2.5 bg-white/80 backdrop-blur-sm rounded-lg border border-gray-200/80">
                     <input
                       type="number"
-                      placeholder={conversion.isLoading ? "Converting..." : "0.0"}
-                      value={conversion.isLoading ? "" : conversion.convertedAmount}
+                      placeholder={
+                        conversion.isLoading ? "Converting..." : "0.0"
+                      }
+                      value={
+                        conversion.isLoading ? "" : conversion.convertedAmount
+                      }
                       readOnly
                       className="flex-1 text-lg font-bold bg-transparent border-none outline-none placeholder-gray-400 text-gray-600"
                     />
@@ -772,12 +1025,15 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
                       <select
                         value={toChain}
                         onChange={(e) =>
-                          setToChain(e.target.value as "ethereum" | "near")
+                          setToChain(
+                            e.target.value as "ethereum" | "near" | "tron"
+                          )
                         }
                         className="bg-transparent border-none outline-none font-semibold cursor-pointer"
                       >
                         <option value="near">NEAR</option>
                         <option value="ethereum">ETH</option>
+                        <option value="tron">TRX</option>
                       </select>
                       <ChevronDown className="w-4 h-4 text-gray-400" />
                     </div>
@@ -790,12 +1046,20 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
                 <div className="bg-gradient-to-r from-blue-50 to-purple-50 p-2 rounded-lg border border-blue-200/50">
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-gray-600">
-                      {conversion.isLoading ? "🔄 Converting..." : 
-                       conversion.error ? "❌ Error" : 
-                       `💱 1 ${conversion.fromSymbol} = ${conversion.exchangeRate.toFixed(4)} ${conversion.toSymbol}`}
+                      {conversion.isLoading
+                        ? "🔄 Converting..."
+                        : conversion.error
+                        ? "❌ Error"
+                        : `💱 1 ${
+                            conversion.fromSymbol
+                          } = ${conversion.exchangeRate.toFixed(4)} ${
+                            conversion.toSymbol
+                          }`}
                     </span>
                     {conversion.error && (
-                      <span className="text-red-500 text-xs">{conversion.error}</span>
+                      <span className="text-red-500 text-xs">
+                        {conversion.error}
+                      </span>
                     )}
                   </div>
                 </div>
@@ -807,7 +1071,7 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
                   <label className="text-xs font-semibold text-gray-700">
                     NEAR Account
                   </label>
-                  {/* {nearConnected && nearAccountId ? (
+                  {nearConnected && nearAccountId ? (
                     <div className="w-full px-2.5 py-1.5 bg-purple-50 border border-purple-200 rounded-lg text-sm">
                       <div className="flex items-center gap-2">
                         <div className="w-2 h-2 bg-purple-400 rounded-full animate-pulse"></div>
@@ -820,7 +1084,31 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
                     <div className="w-full px-2.5 py-2.5 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600">
                       Please connect your NEAR wallet
                     </div>
-                  )} */}
+                  )}
+                </div>
+              )}
+
+              {/* TRON Account Display */}
+              {toChain === "tron" && (
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-gray-700">
+                    TRON Account
+                  </label>
+                  {tronConnected && tronAddress ? (
+                    <div className="w-full px-2.5 py-1.5 bg-red-50 border border-red-200 rounded-lg text-sm">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 bg-red-400 rounded-full animate-pulse"></div>
+                        <span className="text-red-700 font-mono">
+                          {tronAddress.substring(0, 6)}...
+                          {tronAddress.substring(tronAddress.length - 4)}
+                        </span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="w-full px-2.5 py-2.5 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600">
+                      Please connect your TRON wallet
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -877,9 +1165,11 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
                   !fromAmount ||
                   isLoading ||
                   (fromChain === "ethereum" && !isConnected) ||
-                  // (fromChain === "near" && !nearConnected) ||
-                  // (toChain === "near" && !nearConnected) ||
-                  (toChain === "ethereum" && !isConnected)
+                  (fromChain === "near" && !nearConnected) ||
+                  (fromChain === "tron" && !tronConnected) ||
+                  (toChain === "near" && !nearConnected) ||
+                  (toChain === "ethereum" && !isConnected) ||
+                  (toChain === "tron" && !tronConnected)
                 }
                 className="w-full h-12 bg-gradient-to-r from-emerald-600 to-blue-600 hover:from-emerald-700 hover:to-blue-700 text-white font-bold text-sm rounded-lg shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 transform hover:scale-[1.02]"
               >
@@ -889,16 +1179,16 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
                     Processing...
                   </div>
                 ) : (fromChain === "ethereum" && !isConnected) ||
-                  (fromChain === "near" && !nearConnected) ? (
+                  (fromChain === "near" && !nearConnected) ||
+                  (fromChain === "tron" && !tronConnected) ? (
                   "Connect Wallet"
                 ) : (toChain === "ethereum" && !isConnected) ||
-                  (toChain === "near" && !nearConnected) ? (
+                  (toChain === "near" && !nearConnected) ||
+                  (toChain === "tron" && !tronConnected) ? (
                   "Connect Destination Wallet"
                 ) : (
-                  `Bridge ${
-                    fromAmount || "0"
-                  } ${fromChain.toUpperCase()} → ${
-                    conversion.convertedAmount && !conversion.isLoading 
+                  `Bridge ${fromAmount || "0"} ${fromChain.toUpperCase()} → ${
+                    conversion.convertedAmount && !conversion.isLoading
                       ? parseFloat(conversion.convertedAmount).toFixed(4)
                       : "..."
                   } ${toChain.toUpperCase()}`

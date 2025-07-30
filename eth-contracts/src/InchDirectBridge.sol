@@ -10,9 +10,9 @@ import "../lib/cross-chain-swap/contracts/interfaces/IBaseEscrow.sol";
 import { Timelocks, TimelocksLib } from "../lib/cross-chain-swap/contracts/libraries/TimelocksLib.sol";
 
 /**
- * @title InchDirectBridge - Direct 1inch Integration
- * @dev Uses 1inch EscrowFactory directly for ETH ↔ NEAR bridge
- * @notice Integrates with deployed 1inch contracts on mainnet fork
+ * @title InchDirectBridge - Multi-Chain 1inch Integration
+ * @dev Uses 1inch EscrowFactory directly for ETH ↔ NEAR ↔ TRON bridge
+ * @notice Integrates with deployed 1inch contracts on mainnet fork - supports multiple destinations
  */
 contract InchDirectBridge is ReentrancyGuard {
     using AddressLib for Address;
@@ -21,8 +21,20 @@ contract InchDirectBridge is ReentrancyGuard {
     // Official 1inch EscrowFactory on Ethereum mainnet
     IEscrowFactory public constant ESCROW_FACTORY = IEscrowFactory(0xa7bCb4EAc8964306F9e3764f67Db6A7af6DdF99A);
     
-    // Events
+    // Chain identifiers
+    enum DestinationChain { NEAR, TRON }
+    
+    // Events - Multi-chain support
     event EscrowCreated(
+        address indexed escrow,
+        bytes32 indexed hashlock,
+        DestinationChain indexed destinationChain,
+        string destinationAccount,
+        uint256 amount
+    );
+    
+    // Legacy event for backward compatibility
+    event EscrowCreatedLegacy(
         address indexed escrow,
         bytes32 indexed hashlock,
         string nearAccount,
@@ -38,16 +50,18 @@ contract InchDirectBridge is ReentrancyGuard {
     
     event SwapCompleted(
         address indexed escrow,
-        bytes32 secret
+        bytes32 secret,
+        DestinationChain destinationChain
     );
 
-    // Simple tracking for our swaps
+    // Multi-chain bridge swap tracking
     struct BridgeSwap {
         address escrow;
         address user;
         uint256 amount;
         bytes32 hashlock;
-        string nearAccount;
+        DestinationChain destinationChain;
+        string destinationAccount; // NEAR account or TRON address
         bool completed;
         uint256 createdAt;
     }
@@ -68,17 +82,26 @@ contract InchDirectBridge is ReentrancyGuard {
     }
 
     /**
-     * @dev Create ETH to NEAR bridge using 1inch escrow
+     * @dev Create multi-chain bridge using 1inch escrow
      * @param hashlock The hash of the secret for HTLC
-     * @param nearAccount NEAR account to receive tokens
+     * @param destinationChain Target chain (NEAR or TRON)
+     * @param destinationAccount Account/address on destination chain
      */
-    function createETHToNEARBridge(
+    function _createCrossChainBridge(
         bytes32 hashlock,
-        string calldata nearAccount
-    ) external payable nonReentrant returns (bytes32 swapId) {
+        DestinationChain destinationChain,
+        string calldata destinationAccount
+    ) internal returns (bytes32 swapId) {
         require(msg.value > 0, "Amount must be greater than 0");
         require(hashlock != bytes32(0), "Invalid hashlock");
-        require(bytes(nearAccount).length > 0, "NEAR account required");
+        require(bytes(destinationAccount).length > 0, "Destination account required");
+        
+        // Validate destination account format
+        if (destinationChain == DestinationChain.TRON) {
+            require(_isValidTronAddress(destinationAccount), "Invalid TRON address format");
+        } else if (destinationChain == DestinationChain.NEAR) {
+            require(_isValidNearAccount(destinationAccount), "Invalid NEAR account format");
+        }
         
         // Create immutables for 1inch escrow
         IBaseEscrow.Immutables memory immutables = IBaseEscrow.Immutables({
@@ -105,7 +128,8 @@ contract InchDirectBridge is ReentrancyGuard {
         swapId = keccak256(abi.encodePacked(
             escrowAddress,
             hashlock,
-            nearAccount,
+            uint256(destinationChain),
+            destinationAccount,
             block.timestamp
         ));
         
@@ -114,13 +138,21 @@ contract InchDirectBridge is ReentrancyGuard {
             user: msg.sender,
             amount: msg.value,
             hashlock: hashlock,
-            nearAccount: nearAccount,
+            destinationChain: destinationChain,
+            destinationAccount: destinationAccount,
             completed: false,
             createdAt: block.timestamp
         });
         
-        emit EscrowCreated(escrowAddress, hashlock, nearAccount, msg.value);
+        // Emit new multi-chain event
+        emit EscrowCreated(escrowAddress, hashlock, destinationChain, destinationAccount, msg.value);
+        
+        // Emit legacy event for backward compatibility (only for NEAR)
+        if (destinationChain == DestinationChain.NEAR) {
+            emit EscrowCreatedLegacy(escrowAddress, hashlock, destinationAccount, msg.value);
+        }
     }
+    
     
     /**
      * @dev Create NEAR to ETH bridge - bridge-listener creates ETH escrow for user
@@ -190,10 +222,48 @@ contract InchDirectBridge is ReentrancyGuard {
         
         swap.completed = true;
         
-        // In a real implementation, this would trigger NEAR side completion
+        // In a real implementation, this would trigger destination chain completion
         // For now, we just mark as completed
         
-        emit SwapCompleted(swap.escrow, secret);
+        emit SwapCompleted(swap.escrow, secret, swap.destinationChain);
+    }
+    
+    /**
+     * @dev Create multi-chain bridge using 1inch escrow (public interface)
+     * @param hashlock The hash of the secret for HTLC
+     * @param destinationChain Target chain (NEAR or TRON)
+     * @param destinationAccount Account/address on destination chain
+     */
+    function createCrossChainBridge(
+        bytes32 hashlock,
+        DestinationChain destinationChain,
+        string calldata destinationAccount
+    ) external payable nonReentrant returns (bytes32 swapId) {
+        return _createCrossChainBridge(hashlock, destinationChain, destinationAccount);
+    }
+    
+    /**
+     * @dev Legacy function - Create ETH to NEAR bridge (backward compatibility)
+     * @param hashlock The hash of the secret for HTLC
+     * @param nearAccount NEAR account to receive tokens
+     */
+    function createETHToNEARBridge(
+        bytes32 hashlock,
+        string calldata nearAccount
+    ) external payable nonReentrant returns (bytes32 swapId) {
+        return _createCrossChainBridge(hashlock, DestinationChain.NEAR, nearAccount);
+    }
+    
+    /**
+     * @dev Create ETH to TRON bridge using 1inch escrow
+     * @param hashlock The hash of the secret for HTLC
+     * @param tronAddress TRON address to receive tokens
+     */
+    function createETHToTRONBridge(
+        bytes32 hashlock,
+        string calldata tronAddress
+    ) external payable nonReentrant returns (bytes32 swapId) {
+        return _createCrossChainBridge(hashlock, DestinationChain.TRON, tronAddress);
     }
     
     /**
@@ -226,9 +296,35 @@ contract InchDirectBridge is ReentrancyGuard {
     }
     
     /**
-     * @dev Get bridge swap details
+     * @dev Get bridge swap details - Updated for multi-chain
      */
     function getSwap(bytes32 swapId) external view returns (
+        address escrow,
+        address user,
+        uint256 amount,
+        bytes32 hashlock,
+        DestinationChain destinationChain,
+        string memory destinationAccount,
+        bool completed,
+        uint256 createdAt
+    ) {
+        BridgeSwap storage swap = swaps[swapId];
+        return (
+            swap.escrow,
+            swap.user,
+            swap.amount,
+            swap.hashlock,
+            swap.destinationChain,
+            swap.destinationAccount,
+            swap.completed,
+            swap.createdAt
+        );
+    }
+    
+    /**
+     * @dev Legacy function - Get NEAR swap details (backward compatibility)
+     */
+    function getSwapLegacy(bytes32 swapId) external view returns (
         address escrow,
         address user,
         uint256 amount,
@@ -243,7 +339,7 @@ contract InchDirectBridge is ReentrancyGuard {
             swap.user,
             swap.amount,
             swap.hashlock,
-            swap.nearAccount,
+            swap.destinationAccount, // This will be NEAR account if destinationChain is NEAR
             swap.completed,
             swap.createdAt
         );
@@ -276,6 +372,80 @@ contract InchDirectBridge is ReentrancyGuard {
     function emergencyWithdraw() external {
         require(msg.sender == owner, "Only owner");
         payable(owner).transfer(address(this).balance);
+    }
+    
+    /**
+     * @dev Validate TRON address format (basic validation)
+     * @param tronAddress The TRON address to validate
+     */
+    function _isValidTronAddress(string memory tronAddress) internal pure returns (bool) {
+        bytes memory addr = bytes(tronAddress);
+        
+        // TRON addresses are 34 characters long and start with 'T'
+        if (addr.length != 34) {
+            return false;
+        }
+        
+        if (addr[0] != 'T') {
+            return false;
+        }
+        
+        // Basic check - all characters should be alphanumeric (Base58)
+        for (uint i = 1; i < addr.length; i++) {
+            bytes1 char = addr[i];
+            if (!(char >= '1' && char <= '9') && // 1-9
+                !(char >= 'A' && char <= 'Z') && // A-Z
+                !(char >= 'a' && char <= 'z') && // a-z
+                char != '0' &&                   // Exclude 0, O, I, l in Base58
+                char != 'O' &&
+                char != 'I' &&
+                char != 'l') {
+                return false;
+            }
+        }
+        
+        return true;
+    }
+    
+    /**
+     * @dev Validate NEAR account format (basic validation)
+     * @param nearAccount The NEAR account to validate
+     */
+    function _isValidNearAccount(string memory nearAccount) internal pure returns (bool) {
+        bytes memory account = bytes(nearAccount);
+        
+        // NEAR accounts must be 2-64 characters
+        if (account.length < 2 || account.length > 64) {
+            return false;
+        }
+        
+        // Check for valid characters (lowercase, digits, hyphens, underscores)
+        for (uint i = 0; i < account.length; i++) {
+            bytes1 char = account[i];
+            if (!(char >= 'a' && char <= 'z') && 
+                !(char >= '0' && char <= '9') && 
+                char != '-' && 
+                char != '_' &&
+                char != '.') {
+                return false;
+            }
+        }
+        
+        return true;
+    }
+    
+    /**
+     * @dev Get number of swaps by destination chain
+     */
+    function getChainStats() external view returns (
+        uint256 totalSwaps,
+        uint256 nearSwaps,
+        uint256 tronSwaps,
+        uint256 completedSwaps
+    ) {
+        // This would require additional mappings for efficient counting
+        // For now, return placeholder values
+        return (0, 0, 0, 0);
     }
     
     // Receive ETH

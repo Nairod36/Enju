@@ -18,6 +18,12 @@ export const BRIDGE_CONFIG = {
   listenerApi: 'http://localhost:3002',
   nearContract: 'matthias-dev.testnet',
   inchEscrowFactory: '0xa7bCb4EAc8964306F9e3764f67Db6A7af6DdF99A',
+  tron: {
+    contractAddress: 'TA879tNjuFCd8w57V3BHNhsshehKn1Ks86', // À remplacer par votre vraie adresse
+    network: 'shasta', // Testnet TRON
+    rpcUrl: 'https://api.shasta.trongrid.io',
+    apiKey: '5e8b38e2-9828-4737-af16-11b935808aca'
+  }
 };
 
 export const switchToForkNetwork = async () => {
