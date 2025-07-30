@@ -32,23 +32,20 @@ export function AppHeader() {
               Game
             </Link>
             <Link
-              to="/app/rewards"
+              to="/app/swap"
               className="text-slate-700 hover:text-slate-900 transition-colors px-3 py-2 rounded-lg hover:bg-emerald-50"
             >
-              Rewards
+              Swap
             </Link>
-            <Link
-              to="/app"
-              className="text-slate-700 hover:text-slate-900 transition-colors px-3 py-2 rounded-lg hover:bg-emerald-50"
-            >
-              Marketplace
-            </Link>
-            <Link
-              to="/bridge"
-              className="text-slate-700 hover:text-slate-900 transition-colors px-3 py-2 rounded-lg hover:bg-emerald-50"
-            >
-              Bridge
-            </Link>
+            <span className="text-slate-400 px-3 py-2 rounded-lg">
+              Rewards (Coming Soon)
+            </span>
+            <span className="text-slate-400 px-3 py-2 rounded-lg">
+              Marketplace (Coming Soon)
+            </span>
+            <span className="text-slate-400 px-3 py-2 rounded-lg">
+              Bridge (Coming Soon)
+            </span>
           </nav>
 
           {/* Actions */}
