@@ -1,7 +1,7 @@
 import { ethers } from 'ethers';
 import { TronClient } from './tron-client';
 import { PriceOracle } from './price-oracle';
-import { InchFusionTypes } from './types';
+import { InchFusionTypes } from '../types/cross-chain-types';
 
 export class EthTronResolver {
   private ethProvider: ethers.JsonRpcProvider;
@@ -111,7 +111,7 @@ export class EthTronResolver {
   private async processEthToTronSwap(
     swapId: string,
     user: string,
-    ethAmount: ethers.BigNumber,
+    ethAmount: bigint,
     hashlock: string,
     targetChain: string
   ): Promise<void> {
@@ -301,7 +301,7 @@ export class EthTronResolver {
 
       // Trouver l'événement correspondant au hashlock
       for (const event of events) {
-        if (event.args) {
+        if ('args' in event && event.args) {
           const swapId = event.args.swapId;
           const secret = event.args.secret;
           

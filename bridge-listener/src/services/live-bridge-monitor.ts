@@ -3,7 +3,7 @@
 import { ethers } from 'ethers';
 import { TronClient } from './tron-client';
 import { PriceOracle } from './price-oracle';
-import { InchFusionTypes } from './types';
+import { InchFusionTypes } from '../types/cross-chain-types';
 import dotenv from 'dotenv';
 
 // Charger les variables d'environnement

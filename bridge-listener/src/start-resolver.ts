@@ -1,7 +1,7 @@
 #!/usr/bin/env tsx
 
-import { EthTronResolver } from './eth-tron-resolver';
-import { InchFusionTypes } from './types';
+import { EthTronResolver } from './services/eth-tron-resolver';
+import { InchFusionTypes } from './types/cross-chain-types';
 import dotenv from 'dotenv';
 
 // Charger les variables d'environnement

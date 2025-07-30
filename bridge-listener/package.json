@@ -7,28 +7,43 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "dev": "ts-node src/index.ts",
-    "watch": "nodemon --exec ts-node src/index.ts"
+    "watch": "nodemon --exec ts-node src/index.ts",
+    "test:conversion": "ts-node test-conversion.ts",
+    "test:real": "ts-node src/real-transaction-test.ts",
+    "resolver": "ts-node src/start-resolver.ts start",
+    "resolver:test": "ts-node src/start-resolver.ts test",
+    "monitor:live": "ts-node src/services/live-bridge-monitor.ts monitor",
+    "test:create": "ts-node src/services/live-bridge-monitor.ts test"
   },
   "dependencies": {
-    "ethers": "^5.7.2",
-    "near-api-js": "^4.0.3",
-    "express": "^4.18.2",
+    "axios": "^1.11.0",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
-    "ws": "^8.14.2",
-    "node-cron": "^3.0.3"
+    "ethers": "^6.13.5",
+    "express": "^4.18.2",
+    "near-api-js": "^4.0.3",
+    "node-cron": "^3.0.3",
+    "tronweb": "^6.0.3",
+    "ws": "^8.14.2"
   },
   "devDependencies": {
-    "@types/node": "^20.8.0",
-    "@types/express": "^4.17.17",
     "@types/cors": "^2.8.14",
-    "@types/ws": "^8.5.6",
+    "@types/express": "^4.17.17",
+    "@types/node": "^20.8.0",
     "@types/node-cron": "^3.0.8",
-    "typescript": "^5.2.2",
+    "@types/ws": "^8.5.6",
+    "nodemon": "^3.0.1",
     "ts-node": "^10.9.1",
-    "nodemon": "^3.0.1"
+    "typescript": "^5.2.2"
   },
-  "keywords": ["bridge", "cross-chain", "ethereum", "near", "1inch", "htlc"],
+  "keywords": [
+    "bridge",
+    "cross-chain",
+    "ethereum",
+    "near",
+    "1inch",
+    "htlc"
+  ],
   "author": "Matthias",
   "license": "MIT"
 }

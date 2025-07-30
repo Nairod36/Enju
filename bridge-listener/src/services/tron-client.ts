@@ -1,5 +1,5 @@
-import TronWeb from 'tronweb';
-import { InchFusionTypes } from './types';
+import { TronWeb } from 'tronweb';
+import { InchFusionTypes } from '../types/cross-chain-types';
 
 export class TronClient {
   private tronWeb: any;
