@@ -1,9 +1,9 @@
 #!/usr/bin/env tsx
 
 import { ethers } from 'ethers';
-import { TronClient } from './tron-client';
-import { PriceOracle } from './price-oracle';
-import { InchFusionTypes } from './types';
+import { TronClient } from './services/tron-client';
+import { PriceOracle } from './services/price-oracle';
+import { InchFusionTypes } from './types/cross-chain-types';
 import dotenv from 'dotenv';
 
 // Charger les variables d'environnement
@@ -98,7 +98,7 @@ class RealTransactionTest {
       console.log(`✅ Transaction confirmed in block: ${receipt.blockNumber}`);
       
       // 6. Extraire le swapId des logs
-      const swapCreatedEvent = receipt.logs.find(log => {
+      const swapCreatedEvent = receipt.logs.find((log: any) => {
         try {
           const parsed = this.ethBridgeContract.interface.parseLog({
             topics: log.topics,
