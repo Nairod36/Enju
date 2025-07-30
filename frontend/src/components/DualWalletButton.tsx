@@ -5,6 +5,7 @@ import { useAccount, useDisconnect } from "wagmi";
 import { useAppKit } from "@reown/appkit/react";
 import { Wallet, ChevronDown, X } from "lucide-react";
 import { useWalletSelector } from "@near-wallet-selector/react-hook";
+import { useTronWallet } from "@/hooks/useTronWallet";
 
 export function DualWalletButton() {
   const { address: ethAddress, isConnected: ethConnected } = useAccount();
@@ -18,10 +19,24 @@ export function DualWalletButton() {
     signIn: signInNear
   } = useWalletSelector();
 
-  // Debug NEAR wallet state
+  // TRON wallet hook
+  const {
+    address: tronAddress,
+    isConnected: tronConnected,
+    connectTronWallet,
+    disconnectTronWallet,
+    isInstalled: tronInstalled
+  } = useTronWallet();
+
+  // Debug wallet states
   React.useEffect(() => {
-    console.log('🔍 NEAR Wallet Debug:', { nearAccountId });
-  }, [nearAccountId]);
+    console.log('🔍 Multi-Wallet Debug:', { 
+      nearAccountId, 
+      tronAddress, 
+      tronConnected, 
+      tronInstalled 
+    });
+  }, [nearAccountId, tronAddress, tronConnected, tronInstalled]);
 
   const [showWalletModal, setShowWalletModal] = useState(false);
 
@@ -52,9 +67,22 @@ export function DualWalletButton() {
     }
   };
 
+  const handleConnectTron = async () => {
+    try {
+      if (!tronInstalled) {
+        window.open('https://www.tronlink.org/', '_blank');
+        return;
+      }
+      await connectTronWallet();
+      setShowWalletModal(false);
+    } catch (error) {
+      console.error("TRON connection failed:", error);
+    }
+  };
+
   const nearConnected = !!nearAccountId;
-  const bothConnected = ethConnected && nearConnected;
-  const noneConnected = !ethConnected && !nearConnected;
+  const allConnected = ethConnected && nearConnected && tronConnected;
+  const noneConnected = !ethConnected && !nearConnected && !tronConnected;
 
   // Modal component avec portal
   const WalletModal = ({
@@ -144,10 +172,27 @@ export function DualWalletButton() {
               </div>
               <ChevronDown className="w-5 h-5 text-gray-400 rotate-[-90deg] group-hover:text-gray-600" />
             </button>
+
+            {/* TRON Wallet */}
+            <button
+              onClick={handleConnectTron}
+              className="w-full flex items-center gap-4 p-4 rounded-xl border border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition-all group"
+            >
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-r from-red-500 to-red-600 flex items-center justify-center text-white text-xl">
+                🔴
+              </div>
+              <div className="flex-1 text-left">
+                <div className="font-medium text-gray-900">TRON</div>
+                <div className="text-sm text-gray-500">
+                  {tronInstalled ? 'Connect with TronLink' : 'Install TronLink'}
+                </div>
+              </div>
+              <ChevronDown className="w-5 h-5 text-gray-400 rotate-[-90deg] group-hover:text-gray-600" />
+            </button>
           </div>
 
           <div className="mt-6 text-center text-sm text-gray-500">
-            Bridge requires both wallets to be connected
+            Bridge supports ETH ↔ NEAR ↔ TRON cross-chain transfers
           </div>
         </WalletModal>
       </>
@@ -199,8 +244,29 @@ export function DualWalletButton() {
         </div>
       )}
 
+      {/* TRON Wallet - Connected */}
+      {tronConnected && tronAddress && (
+        <div className="flex items-center gap-1 bg-gray-50 rounded-lg px-3 py-2 border border-gray-200">
+          <div className="w-6 h-6 rounded-full bg-gradient-to-r from-red-500 to-red-600 flex items-center justify-center text-white text-xs">
+            🔴
+          </div>
+          <span className="text-sm font-mono text-gray-700">
+            {formatEthAddress(tronAddress)}
+          </span>
+          <Button
+            onClick={() => disconnectTronWallet()}
+            variant="ghost"
+            size="sm"
+            className="h-6 w-6 p-0 hover:bg-red-50 hover:text-red-600 ml-1"
+            title="Disconnect TRON"
+          >
+            <X size={12} />
+          </Button>
+        </div>
+      )}
+
       {/* Connect missing wallet button */}
-      {!bothConnected && (
+      {!allConnected && (
         <Button
           onClick={() => setShowWalletModal(true)}
           variant="outline"
@@ -245,6 +311,24 @@ export function DualWalletButton() {
                   <div className="font-medium text-gray-900">NEAR Protocol</div>
                   <div className="text-sm text-gray-500">
                     Connect with NEAR Wallet
+                  </div>
+                </div>
+                <ChevronDown className="w-5 h-5 text-gray-400 rotate-[-90deg] group-hover:text-gray-600" />
+              </button>
+            )}
+
+            {!tronConnected && (
+              <button
+                onClick={handleConnectTron}
+                className="w-full flex items-center gap-4 p-4 rounded-xl border border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition-all group"
+              >
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-r from-red-500 to-red-600 flex items-center justify-center text-white text-xl">
+                  🔴
+                </div>
+                <div className="flex-1 text-left">
+                  <div className="font-medium text-gray-900">TRON</div>
+                  <div className="text-sm text-gray-500">
+                    {tronInstalled ? 'Connect with TronLink' : 'Install TronLink'}
                   </div>
                 </div>
                 <ChevronDown className="w-5 h-5 text-gray-400 rotate-[-90deg] group-hover:text-gray-600" />

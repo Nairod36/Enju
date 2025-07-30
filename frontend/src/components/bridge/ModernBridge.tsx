@@ -16,6 +16,7 @@ import { useWalletSelector } from "@near-wallet-selector/react-hook";
 import { ethers } from "ethers";
 import { BRIDGE_CONFIG } from "@/config/networks";
 import { useConversion } from "@/hooks/usePriceOracle";
+import { useTronWallet } from "@/hooks/useTronWallet";
 
 interface ModernBridgeProps {
   onBridgeSuccess?: (bridgeData: any) => void;
@@ -31,11 +32,13 @@ interface BridgeStats {
 const chainLogos = {
   ethereum: "🔷",
   near: "🔺",
+  tron: "🔴",
 };
 
 const chainNames = {
   ethereum: "Ethereum",
-  near: "NEAR Protocol",
+  near: "NEAR Protocol", 
+  tron: "TRON",
 };
 
 export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
@@ -43,6 +46,15 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
   const { balance, isLoading: balanceLoading } = useCustomBalance();
   const { signedAccountId: nearAccountId, callFunction } = useWalletSelector();
   const nearConnected = !!nearAccountId;
+  
+  // TRON wallet connection
+  const { 
+    address: tronAddress, 
+    isConnected: tronConnected, 
+    balance: tronBalance,
+    callContract: callTronContract,
+    tronWeb
+  } = useTronWallet();
 
   // Debug logging
   useEffect(() => {
@@ -102,8 +114,8 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
   }, [address, chainId]);
 
   const [fromAmount, setFromAmount] = useState("");
-  const [fromChain, setFromChain] = useState<"ethereum" | "near">("ethereum");
-  const [toChain, setToChain] = useState<"ethereum" | "near">("near");
+  const [fromChain, setFromChain] = useState<"ethereum" | "near" | "tron">("ethereum");
+  const [toChain, setToChain] = useState<"ethereum" | "near" | "tron">("tron");
   
   // Use price oracle for real-time conversion
   const conversion = useConversion(fromAmount, fromChain, toChain);
@@ -165,9 +177,11 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
     // Check required connections based on bridge direction
     const needsEthWallet = fromChain === "ethereum" || toChain === "ethereum";
     const needsNearWallet = fromChain === "near" || toChain === "near";
+    const needsTronWallet = fromChain === "tron" || toChain === "tron";
 
     if (needsEthWallet && !isConnected) return;
     if (needsNearWallet && !nearConnected) return;
+    if (needsTronWallet && !tronConnected) return;
     if (!fromAmount) return;
 
     const newBridgeData = {
@@ -190,17 +204,21 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
         await handleEthToNearBridge(newBridgeData);
       } else if (fromChain === "near" && toChain === "ethereum") {
         await handleNearToEthBridge(newBridgeData);
+      } else if (fromChain === "ethereum" && toChain === "tron") {
+        await handleEthToTronBridge(newBridgeData);
+      } else if (fromChain === "tron" && toChain === "ethereum") {
+        await handleTronToEthBridge(newBridgeData);
       }
     } catch (error) {
       console.error('Bridge failed:', error);
       updateBridgeLog(`❌ Bridge failed: ${error}`);
-      setBridgeData(prev => ({ ...prev, status: 'error' }));
+      setBridgeData(prev => prev ? ({ ...prev, status: 'error' }) : null);
       setIsLoading(false);
     }
   };
 
   const updateBridgeLog = (message: string) => {
-    setBridgeData(prev => ({
+    setBridgeData((prev: any) => ({
       ...prev,
       logs: [...(prev?.logs || []), `[${new Date().toLocaleTimeString()}] ${message}`]
     }));
@@ -223,7 +241,7 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
     updateBridgeLog(`📝 You need to sign with MetaMask...`);
 
     // Create ETH HTLC
-    const provider = new ethers.providers.Web3Provider(window.ethereum);
+    const provider = new ethers.providers.Web3Provider(window.ethereum as any);
     const signer = provider.getSigner();
     
     const bridgeContract = new ethers.Contract(
@@ -261,7 +279,7 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
       updateBridgeLog(`✅ Bridge ready! Both ETH and NEAR HTLCs created.`);
       updateBridgeLog(`⏳ Bridge-listener will monitor and auto-complete...`);
       
-      setBridgeData(prev => ({ ...prev, status: 'success' }));
+      setBridgeData((prev: any) => ({ ...prev, status: 'success' }));
       setIsLoading(false);
       
       onBridgeSuccess?.(bridgeData);
@@ -292,7 +310,7 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
     updateBridgeLog(`✅ NEAR HTLC created successfully!`);
     updateBridgeLog(`⏳ Bridge-listener will create ETH escrow automatically...`);
     
-    setBridgeData(prev => ({ ...prev, status: 'success' }));
+    setBridgeData(prev => prev ? ({ ...prev, status: 'success' }) : null);
     setIsLoading(false);
     
     onBridgeSuccess?.(bridgeData);
@@ -321,6 +339,127 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
 
     updateBridgeLog(`✅ NEAR HTLC created with your wallet!`);
     return result;
+  };
+
+  const handleEthToTronBridge = async (bridgeData: any) => {
+    updateBridgeLog('🔑 Generating secret and hashlock...');
+    
+    // Generate secret and hashlock
+    const secret = ethers.utils.hexlify(ethers.utils.randomBytes(32));
+    const hashlock = ethers.utils.keccak256(secret);
+    
+    bridgeData.secret = secret;
+    bridgeData.hashlock = hashlock;
+    
+    updateBridgeLog(`🔒 Generated hashlock: ${hashlock.substring(0, 14)}...`);
+    updateBridgeLog(`🚀 Initiating ETHEREUM → TRON bridge...`);
+    updateBridgeLog(`💰 Amount: ${fromAmount} ETHEREUM`);
+    updateBridgeLog(`📋 TRON destination: ${tronAddress}`);
+    updateBridgeLog(`📝 You need to sign with MetaMask...`);
+
+    // Create ETH HTLC using the new multi-chain contract
+    const provider = new ethers.providers.Web3Provider(window.ethereum as any);
+    const signer = provider.getSigner();
+    
+    const bridgeContract = new ethers.Contract(
+      BRIDGE_CONFIG.contractAddress,
+      [
+        'function createETHToTRONBridge(bytes32 hashlock, string calldata tronAddress) external payable returns (bytes32 swapId)',
+        'event EscrowCreated(address indexed escrow, bytes32 indexed hashlock, uint8 indexed destinationChain, string destinationAccount, uint256 amount)'
+      ],
+      signer
+    );
+
+    const tx = await bridgeContract.createETHToTRONBridge(hashlock, tronAddress, {
+      value: ethers.utils.parseEther(fromAmount),
+      gasLimit: 500000,
+    });
+
+    bridgeData.txHash = tx.hash;
+    updateBridgeLog(`📝 Transaction sent: ${tx.hash.substring(0, 14)}...`);
+    updateBridgeLog(`⏳ Waiting for confirmation...`);
+
+    const receipt = await tx.wait();
+    updateBridgeLog(`✅ Transaction confirmed!`);
+
+    // Parse events for escrow address
+    const escrowCreatedEvent = receipt.events?.find((event: any) => event.event === "EscrowCreated");
+    
+    if (escrowCreatedEvent) {
+      const { escrow, amount: eventAmount } = escrowCreatedEvent.args;
+      updateBridgeLog(`📦 ETH HTLC created: ${escrow.substring(0, 14)}...`);
+      updateBridgeLog(`🔄 Creating TRON HTLC with your wallet...`);
+
+      // Create TRON HTLC
+      await createTronHTLC(escrow, hashlock, eventAmount.toString());
+      
+      updateBridgeLog(`✅ Bridge ready! Both ETH and TRON HTLCs created.`);
+      updateBridgeLog(`⏳ Bridge-listener will monitor and auto-complete...`);
+      
+      setBridgeData((prev: any) => ({ ...prev, status: 'success' }));
+      setIsLoading(false);
+      
+      onBridgeSuccess?.(bridgeData);
+      loadBridgeStats();
+    }
+  };
+
+  const handleTronToEthBridge = async (bridgeData: any) => {
+    updateBridgeLog('🔑 Generating secret and hashlock...');
+    
+    // Generate secret and hashlock
+    const secret = ethers.utils.hexlify(ethers.utils.randomBytes(32));
+    const hashlock = ethers.utils.keccak256(secret);
+    
+    bridgeData.secret = secret;
+    bridgeData.hashlock = hashlock;
+    
+    updateBridgeLog(`🔒 Generated hashlock: ${hashlock.substring(0, 14)}...`);
+    updateBridgeLog(`🚀 Initiating TRON → ETHEREUM bridge...`);
+    updateBridgeLog(`💰 Amount: ${fromAmount} TRON`);
+    updateBridgeLog(`📋 ETH destination: ${address}`);
+    updateBridgeLog(`📝 You need to sign with TronLink...`);
+
+    // Create TRON HTLC
+    const tronAmount = tronWeb.toSun(fromAmount);
+    await createTronHTLC(address!, hashlock, tronAmount.toString());
+    
+    updateBridgeLog(`✅ TRON HTLC created successfully!`);
+    updateBridgeLog(`⏳ Bridge-listener will create ETH escrow automatically...`);
+    
+    setBridgeData(prev => prev ? ({ ...prev, status: 'success' }) : null);
+    setIsLoading(false);
+    
+    onBridgeSuccess?.(bridgeData);
+    loadBridgeStats();
+  };
+
+  const createTronHTLC = async (ethAddress: string, hashlock: string, amount: string) => {
+    const contractAddress = BRIDGE_CONFIG.tron.contractAddress;
+    
+    try {
+      // Call TRON contract using TronWeb
+      const result = await callTronContract(
+        contractAddress,
+        'createTronBridge',
+        [
+          tronAddress, // receiver
+          hashlock.startsWith('0x') ? hashlock.slice(2) : hashlock, // hashlock sans 0x
+          Date.now() + 24 * 60 * 60 * 1000, // timelock (24h)
+          ethAddress // ethAddress
+        ],
+        {
+          callValue: amount, // Amount in SUN
+          feeLimit: 1000000000 // 1000 TRX fee limit
+        }
+      );
+
+      updateBridgeLog(`✅ TRON HTLC created with your wallet!`);
+      return result;
+    } catch (error) {
+      updateBridgeLog(`❌ Failed to create TRON HTLC: ${error}`);
+      throw error;
+    }
   };
 
   const getChainColor = (chain: string) => {
@@ -417,14 +556,24 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
                       )}
                     </div>
                   )} */}
+                  {fromChain === "tron" && tronConnected && (
+                    <div className="text-xs text-gray-500">
+                      <div>
+                        <p>Balance: {parseFloat(tronBalance || '0').toFixed(4)} TRX</p>
+                        <p className="text-xs text-gray-400">
+                          TRON Shasta ✅
+                        </p>
+                      </div>
+                    </div>
+                  )}
                   {fromChain === "ethereum" && !isConnected && (
                     <p className="text-xs text-red-500">
                       Connect Ethereum wallet
                     </p>
                   )}
-                  {/* {fromChain === "near" && !nearConnected && (
-                    <p className="text-xs text-red-500">Connect NEAR wallet</p>
-                  )} */}
+                  {fromChain === "tron" && !tronConnected && (
+                    <p className="text-xs text-red-500">Connect TRON wallet</p>
+                  )}
                 </div>
 
                 <div className="relative">
@@ -447,12 +596,13 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
                       <select
                         value={fromChain}
                         onChange={(e) =>
-                          setFromChain(e.target.value as "ethereum" | "near")
+                          setFromChain(e.target.value as "ethereum" | "near" | "tron")
                         }
                         className="bg-transparent border-none outline-none font-semibold cursor-pointer"
                       >
                         <option value="ethereum">ETH</option>
                         <option value="near">NEAR</option>
+                        <option value="tron">TRX</option>
                       </select>
                       <ChevronDown className="w-4 h-4 text-gray-400" />
                     </div>
@@ -498,12 +648,13 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
                       <select
                         value={toChain}
                         onChange={(e) =>
-                          setToChain(e.target.value as "ethereum" | "near")
+                          setToChain(e.target.value as "ethereum" | "near" | "tron")
                         }
                         className="bg-transparent border-none outline-none font-semibold cursor-pointer"
                       >
                         <option value="near">NEAR</option>
                         <option value="ethereum">ETH</option>
+                        <option value="tron">TRX</option>
                       </select>
                       <ChevronDown className="w-4 h-4 text-gray-400" />
                     </div>
@@ -533,7 +684,7 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
                   <label className="text-xs font-semibold text-gray-700">
                     NEAR Account
                   </label>
-                  {/* {nearConnected && nearAccountId ? (
+                  {nearConnected && nearAccountId ? (
                     <div className="w-full px-2.5 py-1.5 bg-purple-50 border border-purple-200 rounded-lg text-sm">
                       <div className="flex items-center gap-2">
                         <div className="w-2 h-2 bg-purple-400 rounded-full animate-pulse"></div>
@@ -546,7 +697,30 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
                     <div className="w-full px-2.5 py-2.5 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600">
                       Please connect your NEAR wallet
                     </div>
-                  )} */}
+                  )}
+                </div>
+              )}
+
+              {/* TRON Account Display */}
+              {toChain === "tron" && (
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-gray-700">
+                    TRON Account
+                  </label>
+                  {tronConnected && tronAddress ? (
+                    <div className="w-full px-2.5 py-1.5 bg-red-50 border border-red-200 rounded-lg text-sm">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 bg-red-400 rounded-full animate-pulse"></div>
+                        <span className="text-red-700 font-mono">
+                          {tronAddress.substring(0, 6)}...{tronAddress.substring(tronAddress.length - 4)}
+                        </span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="w-full px-2.5 py-2.5 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600">
+                      Please connect your TRON wallet
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -603,9 +777,11 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
                   !fromAmount ||
                   isLoading ||
                   (fromChain === "ethereum" && !isConnected) ||
-                  // (fromChain === "near" && !nearConnected) ||
-                  // (toChain === "near" && !nearConnected) ||
-                  (toChain === "ethereum" && !isConnected)
+                  (fromChain === "near" && !nearConnected) ||
+                  (fromChain === "tron" && !tronConnected) ||
+                  (toChain === "near" && !nearConnected) ||
+                  (toChain === "ethereum" && !isConnected) ||
+                  (toChain === "tron" && !tronConnected)
                 }
                 className="w-full h-12 bg-gradient-to-r from-emerald-600 to-blue-600 hover:from-emerald-700 hover:to-blue-700 text-white font-bold text-sm rounded-lg shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 transform hover:scale-[1.02]"
               >
@@ -615,10 +791,12 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
                     Processing...
                   </div>
                 ) : (fromChain === "ethereum" && !isConnected) ||
-                  (fromChain === "near" && !nearConnected) ? (
+                  (fromChain === "near" && !nearConnected) ||
+                  (fromChain === "tron" && !tronConnected) ? (
                   "Connect Wallet"
                 ) : (toChain === "ethereum" && !isConnected) ||
-                  (toChain === "near" && !nearConnected) ? (
+                  (toChain === "near" && !nearConnected) ||
+                  (toChain === "tron" && !tronConnected) ? (
                   "Connect Destination Wallet"
                 ) : (
                   `Bridge ${

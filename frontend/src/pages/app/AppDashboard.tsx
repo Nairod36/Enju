@@ -24,6 +24,7 @@ import { Canvas } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import { FloatingIsland, FloatingIslandRef } from "./island/island";
 import { ModernBridge } from "../../components/bridge/ModernBridge";
+import { TronBridgeTest } from "../../components/TronBridgeTest";
 
 import { useIslands } from "../../hooks/useIslands";
 import { generateIslandSeed } from "./island/island.generators";
@@ -481,7 +482,7 @@ export function AppDashboard() {
                 {/* Right */}
                 <div className="h-154 w-2/5 p-2">
                   {/* Bridge Section */}
-                  <div className="sticky top-20 z-19 w-full">
+                  <div className="sticky top-20 z-19 w-full space-y-4">
                     <ModernBridge
                       onBridgeSuccess={(bridgeData) => {
                         // Increment tree count on successful bridge
@@ -497,6 +498,9 @@ export function AppDashboard() {
                         }, 5000); // Wait 5 seconds then refresh
                       }}
                     />
+                    
+                    {/* TRON Bridge Test Component */}
+                    <TronBridgeTest />
                   </div>
                 </div>
               </div>
