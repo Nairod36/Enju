@@ -2,13 +2,14 @@
 
 export interface SwapRequest {
   id: string;
-  fromChain: 'ethereum' | 'near';
-  toChain: 'ethereum' | 'near';
+  fromChain: 'ethereum' | 'near' | 'tron';
+  toChain: 'ethereum' | 'near' | 'tron';
   fromToken: string;
   toToken: string;
   amount: string;
   userEthAddress: string;
   userNearAccount: string;
+  userTronAddress?: string;
   deadline: number;
 }
 
@@ -24,6 +25,7 @@ export interface SwapStatus {
   status: 'pending' | 'locked' | 'completed' | 'failed' | 'refunded';
   ethTxHash?: string;
   nearTxHash?: string;
+  tronTxHash?: string;
   htlcParams?: HTLCParams;
   error?: string;
 }
@@ -42,6 +44,12 @@ export interface Config {
     privateKey: string;
     htlcContract: string;
   };
+  tron: {
+    fullHost: string;
+    privateKey: string;
+    bridgeContract: string;
+    chainId: string;
+  };
 }
 
 // 1inch Fusion+ specific types
@@ -59,6 +67,12 @@ export namespace InchFusionTypes {
       accountId: string;
       privateKey: string;
       contractId: string;
+    };
+    tron: {
+      fullHost: string;
+      privateKey: string;
+      bridgeContract: string;
+      chainId: string;
     };
   }
 

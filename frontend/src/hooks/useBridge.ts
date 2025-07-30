@@ -10,9 +10,10 @@ interface BridgeResult {
 
 interface BridgeParams {
   fromAmount: string;
-  fromChain: 'ethereum' | 'near';
-  toChain: 'ethereum' | 'near';
+  fromChain: 'ethereum' | 'near' | 'tron';
+  toChain: 'ethereum' | 'near' | 'tron';
   nearAccount?: string;
+  tronAddress?: string;
 }
 
 export function useBridge() {
@@ -24,22 +25,35 @@ export function useBridge() {
   const { data: walletClient } = useWalletClient();
 
   const executeBridge = useCallback(async (params: BridgeParams): Promise<BridgeResult> => {
-    if (!isConnected || !address || !walletClient) {
+    if (!isConnected || !address) {
       throw new Error('Wallet not connected');
+    }
+    
+    if (!walletClient) {
+      throw new Error('Wallet client not available');
     }
 
     setIsLoading(true);
     setError(null);
 
     try {
-      const { fromAmount, fromChain, toChain, nearAccount } = params;
+      const { fromAmount, fromChain, toChain, nearAccount, tronAddress } = params;
 
+      // ETH bridges
       if (fromChain === 'ethereum' && toChain === 'near') {
         return await bridgeEthToNear(fromAmount, nearAccount || 'user.testnet');
-      } else if (fromChain === 'near' && toChain === 'ethereum') {
+      } else if (fromChain === 'ethereum' && toChain === 'tron') {
+        return await bridgeEthToTron(fromAmount, tronAddress || '');
+      }
+      // NEAR bridges  
+      else if (fromChain === 'near' && toChain === 'ethereum') {
         return await bridgeNearToEth(fromAmount);
+      }
+      // TRON bridges (only to ETH)
+      else if (fromChain === 'tron' && toChain === 'ethereum') {
+        return await bridgeTronToEth(fromAmount);
       } else {
-        throw new Error('Invalid bridge direction');
+        throw new Error('Invalid bridge direction. Supported: ETH↔NEAR, ETH↔TRON');
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Bridge failed';
@@ -131,6 +145,61 @@ export function useBridge() {
       throw error;
     }
   };
+
+  const bridgeEthToTron = async (amount: string, tronAddress: string): Promise<BridgeResult> => {
+    try {
+      console.log('Bridging ETH to TRON:', { amount, tronAddress });
+      
+      // Call backend API for ETH to TRON bridge
+      const response = await fetch('/api/bridge/eth-to-tron', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount,
+          tronAddress,
+          ethAddress: address
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('ETH to TRON bridge failed');
+      }
+
+      const result = await response.json();
+      return { success: true, txHash: result.txHash };
+    } catch (error) {
+      console.error('ETH to TRON bridge failed:', error);
+      throw error;
+    }
+  };
+
+
+  const bridgeTronToEth = async (amount: string): Promise<BridgeResult> => {
+    try {
+      console.log('Bridging TRON to ETH:', { amount, ethAddress: address });
+      
+      const response = await fetch('/api/bridge/tron-to-eth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount,
+          ethAddress: address,
+          tronAddress: 'TR...' // Get from TRON wallet
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('TRON to ETH bridge failed');
+      }
+
+      const result = await response.json();
+      return { success: true, txHash: result.txHash };
+    } catch (error) {
+      console.error('TRON to ETH bridge failed:', error);
+      throw error;
+    }
+  };
+
 
   return {
     executeBridge,
