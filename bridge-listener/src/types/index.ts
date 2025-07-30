@@ -14,6 +14,7 @@ export interface BridgeEvent {
   timelock: number;
   createdAt: number;
   completedAt?: number;
+  ethCompletionTxHash?: string;
 }
 
 export interface EthEscrowCreatedEvent {

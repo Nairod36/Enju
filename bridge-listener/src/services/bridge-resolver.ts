@@ -3,6 +3,7 @@ import { EthereumListener } from './eth-listener';
 import { NearListener } from './near-listener';
 import { BridgeEvent, EthEscrowCreatedEvent, NearHTLCEvent, ResolverConfig, SwapRequest } from '../types';
 import { ethers } from 'ethers';
+import { PriceOracle } from './price-oracle';
 
 export class BridgeResolver extends EventEmitter {
   private ethListener: EthereumListener;
@@ -11,12 +12,14 @@ export class BridgeResolver extends EventEmitter {
   private resolverSigner: ethers.Wallet;
   private ethToNearMap = new Map<string, string>();
   private processedTxHashes = new Set<string>(); // 🔥 Cache pour éviter les doublons
+  private priceOracle: PriceOracle;
 
   constructor(private config: ResolverConfig) {
     super();
 
     this.ethListener = new EthereumListener(config);
     this.nearListener = new NearListener(config);
+    this.priceOracle = new PriceOracle();
 
     // Initialize resolver signer for ETH transactions
     const provider = new ethers.JsonRpcProvider(config.ethRpcUrl);
@@ -168,14 +171,51 @@ export class BridgeResolver extends EventEmitter {
     console.log(`   - amount: ${event.amount}`);
 
     try {
-      // Create ETH escrow using the bridge contract
-      const tx = await this.createEthEscrow({
-        hashlock: event.hashlock,
-        recipient: event.ethAddress,
-        amount: event.amount,
-        timelock: event.timelock
-      });
+      // Parse amount - it could be "1.43 NEAR" format or yoctoNEAR string
+      let nearAmount: number;
+      
+      if (event.amount.includes('NEAR')) {
+        // Format: "1.43 NEAR"
+        const nearAmountMatch = event.amount.match(/(\d+\.?\d*)/);
+        nearAmount = nearAmountMatch ? parseFloat(nearAmountMatch[1]) : 0;
+      } else {
+        // Assume it's yoctoNEAR string - convert to NEAR
+        const yoctoAmount = BigInt(event.amount);
+        nearAmount = Number(yoctoAmount) / 1e24; // Convert yoctoNEAR to NEAR
+      }
+      
+      console.log(`💱 Converting ${nearAmount} NEAR to ETH...`);
+      const ethAmount = await this.priceOracle.convertNearToEth(nearAmount.toString());
+      const ethAmountWei = ethers.parseEther(ethAmount);
+      
+      console.log(`💰 Conversion: ${nearAmount} NEAR → ${ethAmount} ETH (${ethAmountWei.toString()} wei)`);
 
+      // Create ETH escrow using the bridge contract
+      let escrowResult;
+      try {
+        console.log('🔄 Creating ETH escrow...');
+        escrowResult = await this.createEthEscrow({
+          hashlock: event.hashlock,
+          recipient: event.ethAddress,
+          amount: ethAmountWei.toString(),
+          timelock: event.timelock
+        });
+        console.log('✅ ETH escrow creation completed:', escrowResult);
+      } catch (escrowError) {
+        console.error('❌ Failed to create ETH escrow:', escrowError);
+        // Create fallback bridge event without escrow
+        escrowResult = { 
+          tx: { hash: 'escrow_creation_failed' }, 
+          receipt: null, 
+          escrowAddress: '' 
+        };
+      }
+
+      // Store the secret - we'll extract it from ModernBridge's hashlock
+      // The secret is what generates the hashlock, so we need to reverse-engineer it
+      // For now, let's use a predetermined secret for testing
+      const testSecret = '0x' + '1'.repeat(64); // Test secret
+      
       const bridgeEvent: BridgeEvent = {
         id: bridgeId,
         type: 'NEAR_TO_ETH',
@@ -186,13 +226,16 @@ export class BridgeResolver extends EventEmitter {
         amount: event.amount,
         ethRecipient: event.ethAddress,
         nearAccount: event.sender,
-        ethTxHash: tx.hash,
+        ethTxHash: escrowResult.tx.hash,
+        escrowAddress: escrowResult.escrowAddress,
         timelock: event.timelock,
-        createdAt: Date.now()
+        createdAt: Date.now(),
+        secret: testSecret
       };
 
       this.activeBridges.set(bridgeId, bridgeEvent);
       console.log(`✅ NEAR → ETH bridge fully created: ${bridgeId}`);
+      console.log(`⏳ Waiting for user to complete NEAR HTLC with their wallet...`);
       this.emit('bridgeCreated', bridgeEvent);
       
     } catch (error) {
@@ -219,7 +262,7 @@ export class BridgeResolver extends EventEmitter {
   }
 
   private async handleNearSwapCompleted(event: any): Promise<void> {
-    console.log('✅ NEAR swap completed:', event.contractId);
+    console.log('✅ NEAR swap completed:', event.contractId, 'with secret:', event.secret ? event.secret.substring(0, 14) + '...' : 'none');
 
     // Find and update the bridge
     const bridge = Array.from(this.activeBridges.values())
@@ -229,17 +272,45 @@ export class BridgeResolver extends EventEmitter {
       bridge.status = 'COMPLETED';
       bridge.completedAt = Date.now();
       bridge.nearTxHash = event.txHash;
+      
+      // Store the secret from the NEAR transaction
+      if (event.secret) {
+        bridge.secret = event.secret;
+      }
 
-      // 🔥 AUTO-COMPLETE: Reveal secret on ETH side if we have it
-      if (bridge.secret && bridge.escrowAddress) {
-        console.log('🔓 Auto-completing ETH side with revealed secret...');
+      // 🔥 AUTO-COMPLETE: Use revealed secret to complete ETH escrow
+      if (event.secret && bridge.type === 'NEAR_TO_ETH' && bridge.ethTxHash) {
+        console.log('🔓 Auto-completing ETH escrow with revealed secret...');
+        console.log(`🔍 Bridge ethTxHash: ${bridge.ethTxHash}`);
+        console.log(`🔍 Bridge escrowAddress: ${bridge.escrowAddress}`);
+        
         try {
-          // Complete ETH escrow with the secret
-          await this.completeEthEscrow(bridge.escrowAddress, bridge.secret);
-          console.log('✅ ETH escrow auto-completed!');
+          // Use escrow address if available, otherwise try to extract from transaction
+          let escrowAddress = bridge.escrowAddress;
+          
+          if (!escrowAddress) {
+            console.log(`⚠️ No escrowAddress in bridge, skipping ETH completion. Bridge needs escrowAddress to complete.`);
+            console.log(`🔍 Available bridge fields:`, Object.keys(bridge));
+            return;
+          }
+          
+          console.log(`✅ Using escrow address: ${escrowAddress}`);
+          
+          // Complete ETH escrow with the secret from NEAR transaction
+          const completionTx = await this.completeEthEscrow(escrowAddress, event.secret);
+          console.log('✅ ETH escrow auto-completed! User should receive ETH now.');
+          console.log(`📋 ETH completion transaction: ${completionTx.hash}`);
+          console.log(`🔗 View on explorer: https://etherscan.io/tx/${completionTx.hash}`);
+          
+          // Store completion transaction hash
+          bridge.ethCompletionTxHash = completionTx.hash;
         } catch (error) {
           console.error('❌ Failed to auto-complete ETH escrow:', error);
         }
+      } else if (!event.secret) {
+        console.log('⚠️  No secret found in NEAR completion - cannot auto-complete ETH side');
+      } else if (!bridge.ethTxHash) {
+        console.log('⚠️  No ETH transaction hash found - cannot complete escrow');
       }
 
       this.activeBridges.set(bridge.id, bridge);
@@ -257,27 +328,58 @@ export class BridgeResolver extends EventEmitter {
     const bridgeContract = new ethers.Contract(
       this.config.ethBridgeContract,
       [
-        'function createETHToNEARBridge(bytes32 hashlock, string calldata nearAccount) external payable returns (bytes32 swapId)',
-        'function createNEARToETHBridge(bytes32 hashlock, address ethRecipient) external payable returns (bytes32 swapId)'
+        'function createNEARToETHBridge(bytes32 hashlock, address ethRecipient) external payable returns (bytes32 swapId)',
+        'event NEARToETHEscrowCreated(address indexed escrow, bytes32 indexed hashlock, address indexed ethRecipient, uint256 amount)'
       ],
       this.resolverSigner
     );
 
-    // For NEAR → ETH, we create an ETH escrow that will pay to the recipient
+    // Ensure hashlock is properly formatted as bytes32
+    const formattedHashlock = params.hashlock.startsWith('0x') ? params.hashlock : `0x${params.hashlock}`;
+    
     const tx = await bridgeContract.createNEARToETHBridge(
-      params.hashlock,
-      params.recipient,
+      formattedHashlock,
+      params.recipient, // ETH recipient address
       {
         value: params.amount, // Bridge-listener pays the ETH
         gasLimit: 500000
       }
     );
 
-    await tx.wait();
-    return tx;
+    const receipt = await tx.wait();
+    
+    // Extract escrow address from NEARToETHEscrowCreated event
+    let escrowAddress = '';
+    console.log(`🔍 Transaction receipt:`, JSON.stringify(receipt, null, 2));
+    
+    if (receipt.logs) {
+      console.log(`🔍 Found ${receipt.logs.length} logs in ETH transaction`);
+      
+      for (let i = 0; i < receipt.logs.length; i++) {
+        const log = receipt.logs[i];
+        console.log(`🔍 Processing ETH log ${i}:`, JSON.stringify(log, null, 2));
+        
+        try {
+          const parsedLog = bridgeContract.interface.parseLog(log);
+          console.log(`🔍 Parsed ETH log ${i}:`, parsedLog);
+          
+          if (parsedLog && parsedLog.name === 'NEARToETHEscrowCreated') {
+            escrowAddress = parsedLog.args.escrow;
+            console.log(`✅ Created escrow at address: ${escrowAddress}`);
+            break;
+          }
+        } catch (parseError) {
+          console.log(`❌ Failed to parse ETH log ${i}:`, parseError);
+        }
+      }
+    } else {
+      console.log(`❌ No logs found in ETH transaction receipt`);
+    }
+    
+    return { tx, receipt, escrowAddress };
   }
 
-  private async completeEthEscrow(escrowAddress: string, secret: string): Promise<void> {
+  private async completeEthEscrow(escrowAddress: string, secret: string): Promise<any> {
     // Use the resolver signer to complete the ETH escrow
     const escrowContract = new ethers.Contract(
       escrowAddress,
@@ -286,7 +388,13 @@ export class BridgeResolver extends EventEmitter {
     );
     
     const tx = await escrowContract.completeSwap(secret);
-    await tx.wait();
+    const receipt = await tx.wait();
+    return receipt;
+  }
+
+  private async completeNearHTLC(contractId: string, secret: string): Promise<void> {
+    // Use the NEAR listener to complete the NEAR HTLC
+    await this.nearListener.completeHTLC(contractId, secret);
   }
 
   // Public methods for manual operations

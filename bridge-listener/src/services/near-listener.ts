@@ -191,22 +191,73 @@ export class NearListener extends EventEmitter {
 
   private async parseCompletionLog(log: string, txHash: string, blockHeight: number): Promise<void> {
     try {
-      // Parse completion logs
-      const matches = log.match(/HTLC (?:completed|withdrawn): ([^,]+)/);
+      // Parse completion logs with secret
+      const matches = log.match(/HTLC (?:completed|withdrawn): ([^,]+)(?:, secret: ([^,]+))?/);
 
       if (matches) {
-        const [, contractId] = matches;
+        const [, contractId, secret] = matches;
 
         console.log(`✅ NEAR HTLC completed:`, {
           contractId,
           txHash,
-          blockHeight
+          blockHeight,
+          secret: secret ? secret.substring(0, 14) + '...' : 'not found in log'
         });
+
+        // Try to extract secret from transaction if not in log
+        let extractedSecret = secret;
+        if (!extractedSecret) {
+          try {
+            console.log(`🔍 Fetching transaction details for: ${txHash}`);
+            const transaction = await this.near.connection.provider.txStatus(txHash, 'irrelevant', 'FINAL');
+            
+            console.log(`🔍 Full transaction result:`, JSON.stringify(transaction, null, 2));
+            
+            // Look in receipts outcomes for function call actions
+            if (transaction.receipts_outcome) {
+              for (const receipt of transaction.receipts_outcome) {
+                if (receipt.outcome && receipt.outcome.status) {
+                  console.log(`🔍 Receipt outcome:`, JSON.stringify(receipt, null, 2));
+                }
+              }
+            }
+            
+            // Look in transaction actions for function call with preimage
+            if (transaction.transaction && transaction.transaction.actions) {
+              for (const action of transaction.transaction.actions) {
+                if (action.FunctionCall && action.FunctionCall.method_name === 'complete_cross_chain_swap') {
+                  console.log(`🔍 Found complete_cross_chain_swap action:`, JSON.stringify(action, null, 2));
+                  
+                  try {
+                    const argsBuffer = Buffer.from(action.FunctionCall.args, 'base64');
+                    const argsString = argsBuffer.toString('utf8');
+                    console.log(`🔍 Decoded function args:`, argsString);
+                    
+                    const argsObj = JSON.parse(argsString);
+                    if (argsObj.preimage) {
+                      console.log(`🔍 Found preimage in args:`, argsObj.preimage);
+                      const preimageBuffer = Buffer.from(argsObj.preimage, 'base64');
+                      extractedSecret = '0x' + preimageBuffer.toString('hex');
+                      console.log(`✅ Secret extracted from function call: ${extractedSecret.substring(0, 14)}...`);
+                      break;
+                    }
+                  } catch (decodeError) {
+                    console.log('❌ Failed to decode function call args:', decodeError);
+                  }
+                }
+              }
+            }
+            
+          } catch (error) {
+            console.log('⚠️  Could not extract secret from transaction:', (error as Error).message);
+          }
+        }
 
         this.emit('htlcCompleted', {
           contractId,
           txHash,
-          blockHeight
+          blockHeight,
+          secret: extractedSecret
         });
       }
     } catch (error) {
@@ -332,6 +383,37 @@ export class NearListener extends EventEmitter {
       console.log('✅ NEAR swap completed, txHash=', result.transaction.hash);
     } catch (err) {
       console.error('❌ Error completing NEAR swap:', err);
+      throw err;
+    }
+  }
+
+  async completeHTLC(contractId: string, secret: string): Promise<any> {
+    console.log(`🔓 Auto-completing NEAR HTLC: ${contractId} with secret: ${secret.substring(0, 14)}...`);
+
+    try {
+      const cleanId = contractId.replace(/[<>]/g, '');
+      
+      // Convert HEX secret to base64
+      const preimageBase64 = Buffer
+        .from(secret.slice(2), 'hex')
+        .toString('base64');
+
+      const result = await this.account.functionCall({
+        contractId: this.config.nearContractId,
+        methodName: 'complete_cross_chain_swap',
+        args: {
+          contract_id: cleanId,
+          preimage: preimageBase64,
+          eth_tx_hash: 'auto_completed_by_bridge_listener'
+        },
+        gas: BigInt('100000000000000'),
+        attachedDeposit: BigInt(0)
+      });
+
+      console.log('✅ NEAR HTLC auto-completed successfully:', result.transaction.hash);
+      return result;
+    } catch (err) {
+      console.error('❌ Error auto-completing NEAR HTLC:', err);
       throw err;
     }
   }
