@@ -262,12 +262,21 @@ export class NearListener extends EventEmitter {
       eth_address: params.ethAddress
     };
 
+    // Convert ETH wei to NEAR yoctoNEAR (1 ETH = 1 NEAR, but different decimal places)
+    // ETH: 1 ETH = 10^18 wei
+    // NEAR: 1 NEAR = 10^24 yoctoNEAR
+    // So: 1 ETH (10^18 wei) = 1 NEAR (10^24 yoctoNEAR)
+    const ethWei = BigInt(params.amount);
+    const nearYocto = ethWei * BigInt('1000000'); // Convert 10^18 to 10^24
+
+    console.log(`💰 Converting: ${params.amount} wei ETH → ${nearYocto.toString()} yoctoNEAR`);
+
     const result = await this.account.functionCall({
       contractId: this.config.nearContractId,
       methodName: 'create_cross_chain_htlc',
       args,
       gas: BigInt('100000000000000'),
-      attachedDeposit: BigInt(params.amount),
+      attachedDeposit: nearYocto,
     });
 
     // 2️⃣ Parcourez tous les logs pour trouver la ligne “Cross-chain HTLC created: <ID>”

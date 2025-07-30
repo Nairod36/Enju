@@ -24,10 +24,10 @@ export const metadata = {
 
 // Custom forked mainnet network using defineChain
 export const forkedMainnet: AppKitNetwork = defineChain({
-  id: 1,
-  caipNetworkId: "eip155:1337",
+  id: 1, // Keep mainnet ID for fork compatibility
+  caipNetworkId: "eip155:1",
   chainNamespace: "eip155",
-  name: "Forked Mainnet VPS",
+  name: "Forked Mainnet",
   nativeCurrency: {
     name: "Ether",
     symbol: "ETH",
@@ -36,7 +36,7 @@ export const forkedMainnet: AppKitNetwork = defineChain({
   rpcUrls: {
     default: {
       http: ["http://vps-b11044fd.vps.ovh.net:8545"],
-      webSocket: [], // Ajoute ici si tu as un WS endpoint
+      webSocket: [],
     },
     public: {
       http: ["http://vps-b11044fd.vps.ovh.net:8545"],
@@ -46,10 +46,8 @@ export const forkedMainnet: AppKitNetwork = defineChain({
   blockExplorers: {
     default: { name: "Etherscan", url: "https://etherscan.io" },
   },
-  contracts: {
-    // Ajoute tes contrats ici si besoin
-  },
-  testnet: false,
+  contracts: {},
+  testnet: false, // Fork of mainnet
 });
 
 // for custom networks visit -> https://docs.reown.com/appkit/react/core/custom-networks

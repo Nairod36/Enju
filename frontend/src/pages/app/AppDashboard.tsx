@@ -7,9 +7,11 @@ import {
   Activity,
   CheckCircle,
   AlertCircle,
+  ExternalLink,
 } from "lucide-react";
 import { useAccount, useBalance } from "wagmi";
 import { useBridge } from "../../hooks/useBridge";
+import { useBridgeHistory } from "../../hooks/useBridgeHistory";
 import {
   Table,
   TableBody,
@@ -21,10 +23,12 @@ import {
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import { FloatingIsland, FloatingIslandRef } from "./island/island";
+import { ModernBridge } from "../../components/bridge/ModernBridge";
 
 import { useIslands } from "../../hooks/useIslands";
 import { generateIslandSeed } from "./island/island.generators";
 import { useAuthContext } from "@/contexts/AuthContext";
+import { ethers } from "ethers";
 // import { useEscrowEventListener } from "../../hooks/useEscrowEventListener";
 
 export function AppDashboard() {
@@ -36,6 +40,11 @@ export function AppDashboard() {
     error: bridgeError,
     clearError,
   } = useBridge();
+  const {
+    bridges: bridgeHistory,
+    isLoading: isLoadingHistory,
+    refreshHistory,
+  } = useBridgeHistory();
 
   const islandRef = useRef<FloatingIslandRef>(null);
 
@@ -72,7 +81,10 @@ export function AppDashboard() {
             console.log("User island data:", userIsland);
             console.log("Total trees from DB:", userIsland.totalTrees);
             console.log("User trees array:", userIsland.userTrees);
-            console.log("User trees length:", userIsland.userTrees?.length || 0);
+            console.log(
+              "User trees length:",
+              userIsland.userTrees?.length || 0
+            );
             setIslandSeed(parseInt(userIsland.seed));
             setTreeCount(userIsland.totalTrees || 0);
             setUserIslandData(userIsland);
@@ -258,9 +270,19 @@ export function AppDashboard() {
                       </div>
                     </div>
                     <div className="h-full w-full">
-                      <h3 className="text-2xl font-medium text-neutral mt-7 mb-7">
-                        Historical
-                      </h3>
+                      <div className="flex items-center justify-between mt-7 mb-7 pr-24">
+                        <h3 className="text-2xl font-medium text-neutral">
+                          Bridge History
+                        </h3>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={refreshHistory}
+                          disabled={isLoadingHistory}
+                        >
+                          {isLoadingHistory ? "Loading..." : "Refresh"}
+                        </Button>
+                      </div>
                       <div
                         className="overflow-x-auto overflow-y-auto w-5/6"
                         style={{ maxHeight: "300px" }}
@@ -268,113 +290,145 @@ export function AppDashboard() {
                         <Table>
                           <TableHeader>
                             <TableRow>
-                              <TableHead>From</TableHead>
+                              <TableHead>Status</TableHead>
                               <TableHead>Date/Time</TableHead>
-                              <TableHead>To</TableHead>
+                              <TableHead>From → To</TableHead>
                               <TableHead>Amount</TableHead>
-                              <TableHead>Bridge</TableHead>
+                              <TableHead>Actions</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                            {[
-                              {
-                                transactionHash: "0xeth2near1",
-                                from: "0xA1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q7r8S9t0",
-                                to: "alice.near",
-                                fromChain: "ethereum",
-                                toChain: "near",
-                                timestamp: Date.now() - 1000 * 60 * 60 * 2,
-                                value: "0.5",
-                              },
-                              {
-                                transactionHash: "0xnear2eth1",
-                                from: "bob.near",
-                                to: "0xB2c3D4e5F6g7H8i9J0k1L2m3N4o5P6q7R8s9T0u1",
-                                fromChain: "near",
-                                toChain: "ethereum",
-                                timestamp: Date.now() - 1000 * 60 * 60 * 24,
-                                value: "1.2",
-                              },
-                              {
-                                transactionHash: "0xeth2near2",
-                                from: "0xE5f6G7h8I9j0K1l2M3n4O5p6Q7r8S9t0U1v2W3x4",
-                                to: "carol.near",
-                                fromChain: "ethereum",
-                                toChain: "near",
-                                timestamp: Date.now() - 1000 * 60 * 60 * 48,
-                                value: "0.8",
-                              },
-                              {
-                                transactionHash: "0xnear2eth2",
-                                from: "dave.near",
-                                to: "0xF6g7H8i9J0k1L2m3N4o5P6q7R8s9T0u1V2w3X4y5",
-                                fromChain: "near",
-                                toChain: "ethereum",
-                                timestamp: Date.now() - 1000 * 60 * 60 * 72,
-                                value: "2.0",
-                              },
-                            ].map((transaction, i) => (
-                              <TableRow key={i}>
-                                <TableCell>
-                                  {transaction.fromChain === "ethereum" ? (
-                                    <a
-                                      href={`https://sepolia.etherscan.io/tx/${transaction.transactionHash}`}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="text-blue-600 underline"
-                                    >
-                                      <span className="font-medium">
-                                        {transaction.from.slice(0, 6)}...
-                                        {transaction.from.slice(-4)}
-                                      </span>
-                                    </a>
-                                  ) : (
-                                    <span className="font-medium">
-                                      {transaction.from}
-                                    </span>
-                                  )}
-                                </TableCell>
-                                <TableCell>
-                                  {new Date(
-                                    transaction.timestamp
-                                  ).toLocaleString()}
-                                </TableCell>
-                                <TableCell>
-                                  {transaction.toChain === "ethereum" ? (
-                                    <span className="font-medium">
-                                      {transaction.to.slice(0, 6)}...
-                                      {transaction.to.slice(-4)}
-                                    </span>
-                                  ) : (
-                                    <span className="font-medium">
-                                      {transaction.to}
-                                    </span>
-                                  )}
-                                </TableCell>
-                                <TableCell>
-                                  <p>
-                                    {transaction.value}{" "}
-                                    {transaction.fromChain === "ethereum"
-                                      ? "ETH"
-                                      : "NEAR"}{" "}
-                                    ={" "}
-                                    {(
-                                      parseFloat(transaction.value) *
-                                      (transaction.fromChain === "ethereum"
-                                        ? 2000
-                                        : 5)
-                                    ).toFixed(2)}{" "}
-                                    $
-                                  </p>
-                                </TableCell>
-                                <TableCell>
-                                  <span className="px-2 py-1 rounded bg-emerald-100 text-emerald-700 text-xs font-semibold">
-                                    {transaction.fromChain.toUpperCase()} →{" "}
-                                    {transaction.toChain.toUpperCase()}
-                                  </span>
+                            {isLoadingHistory ? (
+                              <TableRow>
+                                <TableCell
+                                  colSpan={5}
+                                  className="text-center py-8"
+                                >
+                                  <div className="flex items-center justify-center">
+                                    <div className="w-6 h-6 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin mr-2"></div>
+                                    Loading bridge history...
+                                  </div>
                                 </TableCell>
                               </TableRow>
-                            ))}
+                            ) : bridgeHistory.length === 0 ? (
+                              <TableRow>
+                                <TableCell
+                                  colSpan={5}
+                                  className="text-center py-8 text-gray-500"
+                                >
+                                  {!isConnected
+                                    ? "Connect your wallet to view bridge history"
+                                    : "No bridge transactions found"}
+                                </TableCell>
+                              </TableRow>
+                            ) : (
+                              bridgeHistory.map((bridge) => (
+                                <TableRow key={bridge.id}>
+                                  <TableCell>
+                                    <div className="flex items-center gap-2">
+                                      {bridge.status === "COMPLETED" && (
+                                        <CheckCircle className="w-4 h-4 text-green-500" />
+                                      )}
+                                      {bridge.status === "PENDING" && (
+                                        <Activity className="w-4 h-4 text-yellow-500 animate-pulse" />
+                                      )}
+                                      {bridge.status === "FAILED" && (
+                                        <AlertCircle className="w-4 h-4 text-red-500" />
+                                      )}
+                                      <span
+                                        className={`text-xs font-semibold px-2 py-1 rounded ${
+                                          bridge.status === "COMPLETED"
+                                            ? "bg-green-100 text-green-700"
+                                            : bridge.status === "PENDING"
+                                            ? "bg-yellow-100 text-yellow-700"
+                                            : "bg-red-100 text-red-700"
+                                        }`}
+                                      >
+                                        {bridge.status}
+                                      </span>
+                                    </div>
+                                  </TableCell>
+                                  <TableCell>
+                                    <div className="text-sm">
+                                      {new Date(
+                                        bridge.createdAt
+                                      ).toLocaleString()}
+                                    </div>
+                                  </TableCell>
+                                  <TableCell>
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-xs bg-gray-100 px-2 py-1 rounded">
+                                        {bridge.fromChain === "ethereum"
+                                          ? "🔷 ETH"
+                                          : "🔺 NEAR"}
+                                      </span>
+                                      <ArrowRightLeft className="w-3 h-3 text-gray-400" />
+                                      <span className="text-xs bg-gray-100 px-2 py-1 rounded">
+                                        {bridge.toChain === "ethereum"
+                                          ? "🔷 ETH"
+                                          : "🔺 NEAR"}
+                                      </span>
+                                    </div>
+                                  </TableCell>
+                                  <TableCell>
+                                    <div>
+                                      <span className="font-medium">
+                                        {ethers.utils.formatEther(
+                                          bridge.amount
+                                        )}{" "}
+                                        {bridge.fromChain === "ethereum"
+                                          ? "ETH"
+                                          : "NEAR"}
+                                      </span>
+                                      <div className="text-xs text-gray-500">
+                                        ≈ $
+                                        {(
+                                          parseFloat(
+                                            ethers.utils.formatEther(
+                                              bridge.amount
+                                            )
+                                          ) * 2500
+                                        ).toFixed(2)}
+                                      </div>
+                                    </div>
+                                  </TableCell>
+                                  <TableCell>
+                                    <div className="flex gap-1">
+                                      {bridge.ethTxHash && (
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          className="h-6 w-6 p-0"
+                                          onClick={() =>
+                                            window.open(
+                                              `https://etherscan.io/tx/${bridge.ethTxHash}`,
+                                              "_blank"
+                                            )
+                                          }
+                                        >
+                                          <ExternalLink className="w-3 h-3" />
+                                        </Button>
+                                      )}
+                                      {bridge.nearTxHash && (
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          className="h-6 w-6 p-0"
+                                          onClick={() =>
+                                            window.open(
+                                              `https://testnet.nearblocks.io/txns/${bridge.nearTxHash}`,
+                                              "_blank"
+                                            )
+                                          }
+                                        >
+                                          <ExternalLink className="w-3 h-3" />
+                                        </Button>
+                                      )}
+                                    </div>
+                                  </TableCell>
+                                </TableRow>
+                              ))
+                            )}
                           </TableBody>
                         </Table>
                       </div>
@@ -427,202 +481,21 @@ export function AppDashboard() {
                 {/* Right */}
                 <div className="h-154 w-2/5 p-2">
                   {/* Bridge Section */}
-                  <div className="sticky top-20 z-19 w-full ">
-                    <div className="max-w-md mx-auto mb-8">
-                      <Card className="bg-white/90 backdrop-blur-sm shadow-lg border-0">
-                        <CardContent className="p-6">
-                          <div className="space-y-4">
-                            {/* Swap Status Indicator */}
-                            {swapStatus !== "idle" && (
-                              <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg">
-                                {swapStatus === "creating" && (
-                                  <>
-                                    <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-                                    <span className="text-sm text-slate-600">
-                                      Creating swap transaction...
-                                    </span>
-                                  </>
-                                )}
-                                {swapStatus === "monitoring" && (
-                                  <>
-                                    <Activity className="w-4 h-4 text-yellow-500 animate-pulse" />
-                                    <span className="text-sm text-slate-600">
-                                      Monitoring for escrow events...
-                                    </span>
-                                  </>
-                                )}
-                                {swapStatus === "completed" && (
-                                  <>
-                                    <CheckCircle className="w-4 h-4 text-green-500" />
-                                    <span className="text-sm text-green-600">
-                                      Swap completed successfully!
-                                    </span>
-                                  </>
-                                )}
-                                {swapStatus === "failed" && (
-                                  <>
-                                    <AlertCircle className="w-4 h-4 text-red-500" />
-                                    <span className="text-sm text-red-600">
-                                      Swap failed
-                                    </span>
-                                  </>
-                                )}
-                              </div>
-                            )}
-                            {/* From Section */}
-                            <div className="space-y-2">
-                              <label className="text-sm font-medium text-slate-700">
-                                From
-                              </label>
-                              <div className="flex gap-2">
-                                <div className="relative flex-1">
-                                  <input
-                                    type="number"
-                                    placeholder="0.0"
-                                    value={fromAmount}
-                                    onChange={(e) =>
-                                      setFromAmount(e.target.value)
-                                    }
-                                    className="w-full px-3 py-3 text-lg bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                                  />
-                                </div>
-                                <div className="relative">
-                                  <select
-                                    value={fromChain}
-                                    onChange={(e) =>
-                                      setFromChain(
-                                        e.target.value as "ethereum" | "near"
-                                      )
-                                    }
-                                    className="appearance-none bg-slate-50 border border-slate-200 rounded-lg px-4 py-3 pr-8 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                                  >
-                                    <option value="ethereum">ETH</option>
-                                    <option value="near">NEAR</option>
-                                  </select>
-                                  <ChevronDown className="absolute right-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-                                </div>
-                              </div>
-                              {isConnected &&
-                                fromChain === "ethereum" &&
-                                balance && (
-                                  <p className="text-xs text-slate-500">
-                                    Balance:{" "}
-                                    {parseFloat(balance.formatted).toFixed(4)}{" "}
-                                    {balance.symbol}
-                                  </p>
-                                )}
-                            </div>
-
-                            {/* Swap Button */}
-                            <div className="flex justify-center">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={handleSwapChains}
-                                className="rounded-full w-10 h-10 p-0 hover:bg-emerald-50"
-                              >
-                                <ArrowRightLeft className="w-4 h-4 text-emerald-600" />
-                              </Button>
-                            </div>
-
-                            {/* To Section */}
-                            <div className="space-y-2">
-                              <label className="text-sm font-medium text-slate-700">
-                                To
-                              </label>
-                              <div className="flex gap-2">
-                                <div className="relative flex-1">
-                                  <input
-                                    type="number"
-                                    placeholder="0.0"
-                                    value={toAmount}
-                                    onChange={(e) =>
-                                      setToAmount(e.target.value)
-                                    }
-                                    className="w-full px-3 py-3 text-lg bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                                    disabled
-                                  />
-                                </div>
-                                <div className="relative">
-                                  <select
-                                    value={toChain}
-                                    onChange={(e) =>
-                                      setToChain(
-                                        e.target.value as "ethereum" | "near"
-                                      )
-                                    }
-                                    className="appearance-none bg-slate-50 border border-slate-200 rounded-lg px-4 py-3 pr-8 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                                  >
-                                    <option value="near">NEAR</option>
-                                    <option value="ethereum">ETH</option>
-                                  </select>
-                                  <ChevronDown className="absolute right-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* NEAR Account Input (when bridging to NEAR) */}
-                            {toChain === "near" && (
-                              <div className="space-y-2">
-                                <label className="text-sm font-medium text-slate-700">
-                                  NEAR Account
-                                </label>
-                                <input
-                                  type="text"
-                                  placeholder="your-account.testnet"
-                                  value={nearAccount}
-                                  onChange={(e) =>
-                                    setNearAccount(e.target.value)
-                                  }
-                                  className="w-full px-3 py-3 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                                />
-                              </div>
-                            )}
-
-                            {/* Bridge Button */}
-                            <Button
-                              onClick={handleBridge}
-                              disabled={
-                                !isConnected ||
-                                !fromAmount ||
-                                isBridging ||
-                                (toChain === "near" && !nearAccount)
-                              }
-                              className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                              {isBridging
-                                ? "Bridging..."
-                                : `Bridge to ${toChain.toUpperCase()}`}
-                            </Button>
-
-                            {/* Error Display */}
-                            {bridgeError && (
-                              <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-                                <p className="text-sm text-red-700">
-                                  {bridgeError}
-                                </p>
-                              </div>
-                            )}
-
-                            {/* Connection Status */}
-                            {!isConnected && (
-                              <p className="text-center text-sm text-slate-500">
-                                Connect your wallet to start bridging
-                              </p>
-                            )}
-
-                            {isConnected && (
-                              <div className="text-center text-xs text-slate-400">
-                                <p>✅ Wallet connected</p>
-                                <p>
-                                  Using 1inch Fusion+ Cross-Chain Technology
-                                </p>
-                              </div>
-                            )}
-                          </div>
-                        </CardContent>
-                      </Card>
-                    </div>
+                  <div className="sticky top-20 z-19 w-full">
+                    <ModernBridge
+                      onBridgeSuccess={(bridgeData) => {
+                        // Increment tree count on successful bridge
+                        setTreeCount((prev) => prev + 1);
+                        // Trigger island update if needed
+                        if (islandRef.current) {
+                          islandRef.current.addTree();
+                        }
+                        // Refresh bridge history to show the new transaction
+                        setTimeout(() => {
+                          refreshHistory();
+                        }, 5000); // Wait 5 seconds then refresh
+                      }}
+                    />
                   </div>
                 </div>
               </div>

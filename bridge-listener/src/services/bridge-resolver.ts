@@ -10,6 +10,7 @@ export class BridgeResolver extends EventEmitter {
   private activeBridges: Map<string, BridgeEvent> = new Map();
   private resolverSigner: ethers.Wallet;
   private ethToNearMap = new Map<string, string>();
+  private processedTxHashes = new Set<string>(); // 🔥 Cache pour éviter les doublons
 
   constructor(private config: ResolverConfig) {
     super();
@@ -65,6 +66,13 @@ export class BridgeResolver extends EventEmitter {
   private async handleEthToNearBridge(event: EthEscrowCreatedEvent): Promise<void> {
     console.log('🔄 Processing ETH → NEAR bridge...');
 
+    // 🔥 Éviter les doublons par txHash
+    if (this.processedTxHashes.has(event.txHash)) {
+      console.log(`⚠️ Transaction ${event.txHash} already processed, skipping...`);
+      return;
+    }
+    this.processedTxHashes.add(event.txHash);
+
     try {
       const bridgeId = this.generateBridgeId(event.hashlock, 'ETH_TO_NEAR');
 
@@ -80,7 +88,8 @@ export class BridgeResolver extends EventEmitter {
         ethRecipient: event.nearAccount, // This should be parsed correctly
         nearAccount: event.nearAccount,
         timelock: Date.now() + (24 * 60 * 60 * 1000), // 24h from now
-        createdAt: Date.now()
+        createdAt: Date.now(),
+        // secret will be provided later when completing
       };
 
       this.activeBridges.set(bridgeId, bridgeEvent);
@@ -139,9 +148,19 @@ export class BridgeResolver extends EventEmitter {
   private async handleNearHTLCCreated(event: NearHTLCEvent): Promise<void> {
     console.log('📦 NEAR HTLC created:', event.contractId);
 
-    // For NEAR → ETH bridges, we'd create the ETH escrow here
-    // This is for reverse direction bridges
+    // Check if this HTLC is part of an existing ETH→NEAR bridge
+    const existingBridge = Array.from(this.activeBridges.values())
+      .find(b => b.type === 'ETH_TO_NEAR' && b.hashlock === event.hashlock && !b.contractId);
 
+    if (existingBridge) {
+      // Update existing bridge with NEAR contract ID
+      existingBridge.contractId = event.contractId;
+      this.activeBridges.set(existingBridge.id, existingBridge);
+      console.log(`✅ Updated existing bridge ${existingBridge.id} with NEAR contract`);
+      return;
+    }
+
+    // For standalone NEAR → ETH bridges
     const bridgeId = this.generateBridgeId(event.hashlock, 'NEAR_TO_ETH');
 
     const bridgeEvent: BridgeEvent = {
@@ -174,9 +193,33 @@ export class BridgeResolver extends EventEmitter {
       bridge.completedAt = Date.now();
       bridge.nearTxHash = event.txHash;
 
+      // 🔥 AUTO-COMPLETE: Reveal secret on ETH side if we have it
+      if (bridge.secret && bridge.escrowAddress) {
+        console.log('🔓 Auto-completing ETH side with revealed secret...');
+        try {
+          // Complete ETH escrow with the secret
+          await this.completeEthEscrow(bridge.escrowAddress, bridge.secret);
+          console.log('✅ ETH escrow auto-completed!');
+        } catch (error) {
+          console.error('❌ Failed to auto-complete ETH escrow:', error);
+        }
+      }
+
       this.activeBridges.set(bridge.id, bridge);
       this.emit('bridgeCompleted', bridge);
     }
+  }
+
+  private async completeEthEscrow(escrowAddress: string, secret: string): Promise<void> {
+    // Use the resolver signer to complete the ETH escrow
+    const escrowContract = new ethers.Contract(
+      escrowAddress,
+      ['function completeSwap(bytes32 secret) external'],
+      this.resolverSigner
+    );
+    
+    const tx = await escrowContract.completeSwap(secret);
+    await tx.wait();
   }
 
   // Public methods for manual operations

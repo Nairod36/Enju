@@ -1,7 +1,9 @@
 export const FORK_MAINNET_CONFIG = {
-  chainId: 1, // Keep mainnet chain ID for fork
-  name: 'Fork Mainnet',
-  rpcUrl: 'http://vps-b11044fd.vps.ovh.net:8545/',
+  chainId: 1, // Fork of mainnet keeps same chain ID
+  name: 'Forked Mainnet',
+  rpcUrl: process.env.NODE_ENV === 'development' 
+    ? 'http://vps-b11044fd.vps.ovh.net:8545/' 
+    : 'https://vps-b11044fd.vps.ovh.net:8545/', // Use HTTPS if available
   nativeCurrency: {
     name: 'Ethereum',
     symbol: 'ETH',
@@ -24,14 +26,34 @@ export const switchToForkNetwork = async () => {
     return false;
   }
 
-  // MetaMask doesn't allow HTTP RPC URLs anymore
-  // We'll skip automatic network addition and use manual connection
-  console.log('⚠️ Automatic network addition not supported for HTTP RPC');
-  console.log('Please add network manually in MetaMask:');
-  console.log(`Network Name: Fork Mainnet`);
-  console.log(`RPC URL: ${FORK_MAINNET_CONFIG.rpcUrl}`);
-  console.log(`Chain ID: 1337 (or 31337)`);
-  console.log(`Currency: ETH`);
-  
-  return false; // Always return false to trigger fallback mode
+  // MetaMask doesn't support HTTP RPC URLs for wallet_addEthereumChain
+  // Show manual instructions instead
+  console.log('⚠️ MetaMask requires manual network configuration for HTTP RPC');
+  console.log('');
+  console.log('📋 Please add this network manually in MetaMask:');
+  console.log('1. Open MetaMask → Settings → Networks → Add Network');
+  console.log('2. Click "Add a network manually"');
+  console.log('3. Fill in these details:');
+  console.log(`   Network Name: ${FORK_MAINNET_CONFIG.name}`);
+  console.log(`   New RPC URL: ${FORK_MAINNET_CONFIG.rpcUrl}`);
+  console.log(`   Chain ID: ${FORK_MAINNET_CONFIG.chainId} (or 0x1)`);
+  console.log(`   Currency Symbol: ETH`);
+  console.log('4. Click "Save" and switch to this network');
+  console.log('');
+  console.log('💡 Then click "Connect MetaMask" again');
+
+  // Try to switch to the network in case user already added it
+  try {
+    await window.ethereum.request({
+      method: 'wallet_switchEthereumChain',
+      params: [{ chainId: `0x${FORK_MAINNET_CONFIG.chainId.toString(16)}` }],
+    });
+    
+    console.log('✅ Successfully switched to Fork Mainnet');
+    return true;
+    
+  } catch (switchError: any) {
+    console.log('ℹ️ Network not found - please add it manually using instructions above');
+    return false;
+  }
 };

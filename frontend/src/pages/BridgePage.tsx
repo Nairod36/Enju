@@ -212,6 +212,33 @@ export function BridgePage() {
         // Wait a bit for ETH tx to be confirmed, then create NEAR HTLC
         setTimeout(async () => {
           await createNearHTLCAutomatically();
+          
+          // 🔥 AUTO-COMPLETE: Wait for bridge-listener to create the bridge, then complete it
+          addLog(`⏳ Waiting for bridge creation (10s) then auto-completing...`);
+          setTimeout(async () => {
+            try {
+              // Get bridges and find ours
+              const response = await fetch(`${BRIDGE_CONFIG.listenerApi}/bridges`);
+              const result = await response.json();
+              
+              if (result.success) {
+                const ourBridge = result.data.find((bridge: any) => 
+                  bridge.type === 'ETH_TO_NEAR' && 
+                  bridge.status === 'PENDING' && 
+                  bridge.hashlock === hashlock
+                );
+                
+                if (ourBridge) {
+                  addLog(`🎯 Found bridge: ${ourBridge.id} - Auto-completing now!`);
+                  await completeBridge(ourBridge.id);
+                } else {
+                  addLog(`❌ Bridge not found for auto-completion`);
+                }
+              }
+            } catch (error) {
+              addLog(`❌ Auto-completion failed: ${error}`);
+            }
+          }, 10000); // Wait 10s for bridge-listener to process
         }, 2000);
       }
     } catch (error) {
@@ -265,8 +292,33 @@ export function BridgePage() {
       const result = await response.json();
 
       if (result.success) {
+        const previousCount = bridgeEvents.length;
         setBridgeEvents(result.data);
         addLog(`📊 Bridge status updated: ${result.data.length} bridges found`);
+        
+        // 🔥 AUTO-COMPLETE: Chercher les bridges ETH→NEAR avec notre hashlock qui ont un contractId
+        if (secret && hashlock) {
+          const ourBridge = result.data.find((bridge: any) => 
+            bridge.type === 'ETH_TO_NEAR' && 
+            bridge.status === 'PENDING' && 
+            bridge.contractId && 
+            bridge.hashlock === hashlock // Notre bridge
+          );
+          
+          if (ourBridge) {
+            addLog(`🎯 Found our bridge: ${ourBridge.id} with contractId: ${ourBridge.contractId}`);
+            addLog(`🚀 Auto-completing bridge in 1 second...`);
+            setTimeout(() => {
+              completeBridge(ourBridge.id);
+            }, 1000);
+          } else if (hashlock) {
+            // Debug: montrer tous les bridges pour diagnostic
+            const debugBridge = result.data.find((bridge: any) => bridge.hashlock === hashlock);
+            if (debugBridge) {
+              addLog(`🔍 Debug our bridge: status=${debugBridge.status}, contractId=${debugBridge.contractId}, type=${debugBridge.type}`);
+            }
+          }
+        }
       }
     } catch (error) {
       // Silently fail if bridge listener not available
@@ -543,21 +595,40 @@ export function BridgePage() {
 
   // Connect to bridge events stream
   useEffect(() => {
+    addLog(`🔍 Checking bridge listener at: ${BRIDGE_CONFIG.listenerApi}/health`);
+    
     // Check if bridge listener is available
     fetch(`${BRIDGE_CONFIG.listenerApi}/health`)
       .then(() => {
+        addLog(`✅ Bridge listener available, connecting to SSE...`);
+        
         // Bridge listener available, connect to events
         const eventSource = new EventSource(
           `${BRIDGE_CONFIG.listenerApi}/events`
         );
+        
+        addLog(`🔌 SSE URL: ${BRIDGE_CONFIG.listenerApi}/events`);
 
         eventSource.onmessage = (event) => {
           try {
+            addLog(`📡 SSE Event received: ${event.data}`); // 🔥 Debug SSE
             const data = JSON.parse(event.data);
 
             if (data.type === "bridgeCreated") {
               addLog(`🌉 Bridge created: ${data.data.id} (${data.data.type})`);
+              addLog(`📋 Bridge details: contractId=${data.data.contractId}, secret=${secret ? 'available' : 'missing'}`);
               pollBridgeStatus();
+              
+              // 🔥 AUTO-COMPLETE: Si c'est un bridge ETH→NEAR avec contractId et qu'on a le secret
+              if (data.data.type === "ETH_TO_NEAR" && data.data.contractId && secret) {
+                addLog(`🚀 Auto-completing bridge with secret in 2 seconds...`);
+                setTimeout(() => {
+                  addLog(`🔓 Completing bridge: ${data.data.id}`);
+                  completeBridge(data.data.id);
+                }, 2000);
+              } else if (data.data.type === "ETH_TO_NEAR") {
+                addLog(`⏳ Bridge ETH→NEAR detected but waiting for contractId or secret...`);
+              }
             } else if (data.type === "bridgeCompleted") {
               addLog(`✅ Bridge completed: ${data.data.id}`);
               pollBridgeStatus();
@@ -569,14 +640,20 @@ export function BridgePage() {
 
         eventSource.onerror = (error) => {
           console.error("SSE connection error:", error);
+          addLog(`❌ SSE Error: ${JSON.stringify(error)}`); // 🔥 Debug SSE Error
+        };
+
+        eventSource.onopen = () => {
+          addLog(`✅ SSE Connected to ${BRIDGE_CONFIG.listenerApi}/events`); // 🔥 Debug SSE Open
         };
 
         return () => {
           eventSource.close();
         };
       })
-      .catch(() => {
-        addLog("⚠️ Bridge listener not available - manual mode only");
+      .catch((error) => {
+        addLog(`❌ Bridge listener not available: ${error.message}`);
+        addLog("⚠️ Manual mode only");
       });
   }, []);
 
