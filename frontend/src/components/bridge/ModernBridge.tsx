@@ -15,6 +15,7 @@ import { useCustomBalance } from "@/hooks/useCustomBalance";
 // import { useNearWallet } from "@/hooks/useNearWallet";
 import { ethers } from "ethers";
 import { BRIDGE_CONFIG } from "@/config/networks";
+import { useConversion } from "@/hooks/usePriceOracle";
 
 interface ModernBridgeProps {
   onBridgeSuccess?: (bridgeData: any) => void;
@@ -104,9 +105,11 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
   }, [address, chainId]);
 
   const [fromAmount, setFromAmount] = useState("");
-  const [toAmount, setToAmount] = useState("");
   const [fromChain, setFromChain] = useState<"ethereum" | "near">("ethereum");
   const [toChain, setToChain] = useState<"ethereum" | "near">("near");
+  
+  // Use price oracle for real-time conversion
+  const conversion = useConversion(fromAmount, fromChain, toChain);
   // Remove nearAccount state as it will come from wallet
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [bridgeData, setBridgeData] = useState(null);
@@ -123,14 +126,7 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
     loadBridgeStats();
   }, []);
 
-  // Auto-calculate to amount (1:1 ratio for demo)
-  useEffect(() => {
-    if (fromAmount && !isNaN(Number(fromAmount))) {
-      setToAmount(fromAmount);
-    } else {
-      setToAmount("");
-    }
-  }, [fromAmount]);
+  // Real-time conversion is handled by the useConversion hook
 
   const loadBridgeStats = async () => {
     try {
@@ -164,9 +160,8 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
   const handleSwapChains = () => {
     setFromChain(toChain);
     setToChain(fromChain);
-    const tempAmount = fromAmount;
-    setFromAmount(toAmount);
-    setToAmount(tempAmount);
+    // Set the converted amount as the new from amount
+    setFromAmount(conversion.convertedAmount || "");
   };
 
   const handleBridge = async () => {
@@ -363,7 +358,7 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
                     <input
                       type="number"
                       placeholder="0.0"
-                      value={toAmount}
+                      value={conversion.isLoading ? "Converting..." : conversion.convertedAmount}
                       readOnly
                       className="flex-1 text-lg font-bold bg-transparent border-none outline-none placeholder-gray-400 text-gray-600"
                     />
@@ -384,6 +379,22 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
                   </div>
                 </div>
               </div>
+
+              {/* Real-time Conversion Info */}
+              {fromAmount && fromChain !== toChain && (
+                <div className="bg-gradient-to-r from-blue-50 to-purple-50 p-2 rounded-lg border border-blue-200/50">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-gray-600">
+                      {conversion.isLoading ? "🔄 Converting..." : 
+                       conversion.error ? "❌ Error" : 
+                       `💱 1 ${conversion.fromSymbol} = ${conversion.exchangeRate.toFixed(4)} ${conversion.toSymbol}`}
+                    </span>
+                    {conversion.error && (
+                      <span className="text-red-500 text-xs">{conversion.error}</span>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* NEAR Account Display */}
               {toChain === "near" && (
@@ -481,7 +492,11 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
                 ) : (
                   `Bridge ${
                     fromAmount || "0"
-                  } ${fromChain.toUpperCase()} → ${toChain.toUpperCase()}`
+                  } ${fromChain.toUpperCase()} → ${
+                    conversion.convertedAmount && !conversion.isLoading 
+                      ? parseFloat(conversion.convertedAmount).toFixed(4)
+                      : "..."
+                  } ${toChain.toUpperCase()}`
                 )}
               </Button>
 

@@ -1,16 +1,19 @@
 import express from 'express';
 import cors from 'cors';
 import { BridgeResolver } from '../services/bridge-resolver';
+import { PriceOracle } from '../services/price-oracle';
 import { ResolverConfig, SwapRequest } from '../types';
 
 export class BridgeAPI {
   private app: express.Application;
   private resolver: BridgeResolver;
+  private priceOracle: PriceOracle;
   private server: any;
 
   constructor(private config: ResolverConfig, private port: number) {
     this.app = express();
     this.resolver = new BridgeResolver(config);
+    this.priceOracle = new PriceOracle();
     this.setupMiddleware();
     this.setupRoutes();
     this.setupEventHandlers();
@@ -196,6 +199,84 @@ export class BridgeAPI {
         success: true,
         data: this.resolver.getStatus()
       });
+    });
+
+    // ===== PRICE ORACLE ENDPOINTS =====
+    
+    // Get current prices
+    this.app.get('/api/prices', async (req, res) => {
+      try {
+        const prices = await this.priceOracle.getCurrentPrices();
+        res.json(prices);
+      } catch (error) {
+        console.error('Price fetch error:', error);
+        res.status(500).json({
+          success: false,
+          error: error instanceof Error ? error.message : 'Failed to fetch prices'
+        });
+      }
+    });
+
+    // Convert amount between chains
+    this.app.post('/api/convert', async (req, res) => {
+      try {
+        const { amount, fromChain, toChain } = req.body;
+
+        if (!amount || !fromChain || !toChain) {
+          return res.status(400).json({
+            success: false,
+            error: 'Missing required fields: amount, fromChain, toChain'
+          });
+        }
+
+        let convertedAmount: string;
+        let exchangeRate: number;
+
+        // Same chain conversion
+        if (fromChain === toChain) {
+          convertedAmount = amount;
+          exchangeRate = 1;
+        } else {
+          // Cross-chain conversions
+          if (fromChain === 'ethereum' && toChain === 'near') {
+            convertedAmount = await this.priceOracle.convertEthToNear(amount);
+            const prices = await this.priceOracle.getCurrentPrices();
+            exchangeRate = prices.ethToNear;
+          } else if (fromChain === 'near' && toChain === 'ethereum') {
+            convertedAmount = await this.priceOracle.convertNearToEth(amount);
+            const prices = await this.priceOracle.getCurrentPrices();
+            exchangeRate = prices.nearToEth;
+          } else if (fromChain === 'ethereum' && toChain === 'tron') {
+            convertedAmount = await this.priceOracle.convertEthToTrx(amount);
+            const prices = await this.priceOracle.getCurrentPrices();
+            exchangeRate = prices.ethToTrx;
+          } else if (fromChain === 'tron' && toChain === 'ethereum') {
+            convertedAmount = await this.priceOracle.convertTrxToEth(amount);
+            const prices = await this.priceOracle.getCurrentPrices();
+            exchangeRate = prices.trxToEth;
+          } else {
+            return res.status(400).json({
+              success: false,
+              error: `Conversion not supported: ${fromChain} → ${toChain}`
+            });
+          }
+        }
+
+        res.json({
+          success: true,
+          convertedAmount,
+          exchangeRate,
+          fromChain,
+          toChain,
+          originalAmount: amount
+        });
+      } catch (error) {
+        console.error('Conversion error:', error);
+        res.status(500).json({
+          success: false,
+          error: error instanceof Error ? error.message : 'Conversion failed'
+        });
+      }
     });
 
     // WebSocket-like endpoint for real-time updates

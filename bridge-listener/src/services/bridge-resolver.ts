@@ -19,7 +19,7 @@ export class BridgeResolver extends EventEmitter {
     this.nearListener = new NearListener(config);
 
     // Initialize resolver signer for ETH transactions
-    const provider = new ethers.providers.JsonRpcProvider(config.ethRpcUrl);
+    const provider = new ethers.JsonRpcProvider(config.ethRpcUrl);
     this.resolverSigner = new ethers.Wallet(config.ethPrivateKey, provider);
 
     this.setupEventHandlers();

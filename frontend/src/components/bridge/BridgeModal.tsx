@@ -15,6 +15,7 @@ import {
   Copy,
 } from "lucide-react";
 import { BRIDGE_CONFIG } from "@/config/networks";
+import { ConversionDisplay } from "./ConversionDisplay";
 
 interface BridgeLog {
   timestamp: string;
@@ -268,6 +269,16 @@ export function BridgeModal({ isOpen, onClose, bridgeData }: BridgeModalProps) {
             </div>
           </div>
 
+          {/* Real-time Conversion Display */}
+          {bridgeData && (
+            <ConversionDisplay
+              fromAmount={bridgeData.fromAmount}
+              fromChain={bridgeData.fromChain as 'ethereum' | 'near' | 'tron'}
+              toChain={bridgeData.toChain as 'ethereum' | 'near' | 'tron'}
+              className="mb-4"
+            />
+          )}
+
           {/* Transaction Details */}
           {bridgeData && (
             <div className="bg-gray-50 rounded-lg p-4 space-y-1">
@@ -276,15 +287,15 @@ export function BridgeModal({ isOpen, onClose, bridgeData }: BridgeModalProps) {
               </h4>
               <div className="grid grid-cols-2 gap-4 text-[11px]">
                 <div>
-                  <span className="text-gray-500">From:</span>
+                  <span className="text-gray-500">Chain:</span>
                   <span className="ml-2 font-medium">
-                    {bridgeData.fromAmount} {bridgeData.fromChain.toUpperCase()}
+                    {bridgeData.fromChain.toUpperCase()} → {bridgeData.toChain.toUpperCase()}
                   </span>
                 </div>
                 <div>
-                  <span className="text-gray-500">To:</span>
+                  <span className="text-gray-500">Input Amount:</span>
                   <span className="ml-2 font-medium">
-                    {bridgeData.fromAmount} {bridgeData.toChain.toUpperCase()}
+                    {bridgeData.fromAmount} {bridgeData.fromChain.toUpperCase()}
                   </span>
                 </div>
                 {bridgeData.nearAccount && (
@@ -293,6 +304,24 @@ export function BridgeModal({ isOpen, onClose, bridgeData }: BridgeModalProps) {
                     <span className="ml-2 font-medium">
                       {bridgeData.nearAccount}
                     </span>
+                  </div>
+                )}
+                {hashlock && (
+                  <div className="col-span-2">
+                    <span className="text-gray-500">Hashlock:</span>
+                    <div className="flex items-center gap-2 mt-1">
+                      <code className="text-xs bg-white px-2 py-1 rounded border font-mono">
+                        {hashlock.substring(0, 20)}...
+                      </code>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => copyToClipboard(hashlock)}
+                        className="h-6 w-6 p-0"
+                      >
+                        <Copy className="w-3 h-3" />
+                      </Button>
+                    </div>
                   </div>
                 )}
                 {secret && (

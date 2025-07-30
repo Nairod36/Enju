@@ -3,7 +3,7 @@ import { EventEmitter } from 'events';
 import { EthEscrowCreatedEvent, ResolverConfig } from '../types';
 
 export class EthereumListener extends EventEmitter {
-  private provider: ethers.providers.JsonRpcProvider;
+  private provider: ethers.JsonRpcProvider;
   private contract: ethers.Contract;
   private lastProcessedBlock: number = 0;
   private isListening: boolean = false;
@@ -18,7 +18,7 @@ export class EthereumListener extends EventEmitter {
 
   constructor(private config: ResolverConfig) {
     super();
-    this.provider = new ethers.providers.JsonRpcProvider(config.ethRpcUrl);
+    this.provider = new ethers.JsonRpcProvider(config.ethRpcUrl);
     this.contract = new ethers.Contract(
       config.ethBridgeContract,
       this.BRIDGE_ABI,
@@ -68,10 +68,10 @@ export class EthereumListener extends EventEmitter {
     escrow: string,
     hashlock: string,
     nearAccount: string,
-    amount: ethers.BigNumber,
-    event: ethers.Event
+    amount: bigint,
+    event: ethers.EventLog
   ): Promise<void> {
-    const eventId = `${event.transactionHash}-${event.logIndex}`;
+    const eventId = `${event.transactionHash}-${event.index}`;
     
     // 🔥 Éviter les doublons
     if (this.processedEvents.has(eventId)) {
@@ -84,7 +84,7 @@ export class EthereumListener extends EventEmitter {
       escrow,
       hashlock,
       nearAccount,
-      amount: ethers.utils.formatEther(amount),
+      amount: ethers.formatEther(amount),
       txHash: event.transactionHash,
       block: event.blockNumber
     });
@@ -104,7 +104,7 @@ export class EthereumListener extends EventEmitter {
   private async handleSwapCompleted(
     escrow: string,
     secret: string,
-    event: ethers.Event
+    event: ethers.EventLog
   ): Promise<void> {
     console.log(`✅ ETH swap completed:`, {
       escrow,
@@ -134,13 +134,16 @@ export class EthereumListener extends EventEmitter {
         );
 
         for (const event of events) {
-          await this.handleEscrowCreated(
-            event.args!.escrow,
-            event.args!.hashlock,
-            event.args!.nearAccount,
-            event.args!.amount,
-            event
-          );
+          const eventLog = event as ethers.EventLog;
+          if (eventLog.fragment && eventLog.fragment.name === 'EscrowCreated') {
+            await this.handleEscrowCreated(
+              eventLog.args[0], // escrow
+              eventLog.args[1], // hashlock
+              eventLog.args[2], // nearAccount
+              eventLog.args[3], // amount
+              eventLog
+            );
+          }
         }
 
         this.lastProcessedBlock = currentBlock;
