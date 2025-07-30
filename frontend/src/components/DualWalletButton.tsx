@@ -18,6 +18,11 @@ export function DualWalletButton() {
     signIn: signInNear
   } = useWalletSelector();
 
+  // Debug NEAR wallet state
+  React.useEffect(() => {
+    console.log('🔍 NEAR Wallet Debug:', { nearAccountId });
+  }, [nearAccountId]);
+
   const [showWalletModal, setShowWalletModal] = useState(false);
 
   const handleConnectEth = async () => {

@@ -15,7 +15,12 @@ import { WalletSelectorProvider } from "@near-wallet-selector/react-hook";
 
 const walletSelectorConfig = {
   network: "testnet",
+  debug: true,
   modules: [setupMyNearWallet(), setupMeteorWallet()],
+  walletUrls: {
+    "my-near-wallet": "https://testnet.mynearwallet.com/",
+    "meteor-wallet": "https://meteormallet.app/",
+  },
 };
 
 const queryClient = new QueryClient();

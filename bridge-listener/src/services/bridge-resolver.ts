@@ -94,19 +94,16 @@ export class BridgeResolver extends EventEmitter {
 
       this.activeBridges.set(bridgeId, bridgeEvent);
 
-      // Create corresponding NEAR HTLC
-      const nearContractId = await this.nearListener.createCrossChainHTLC({
-        receiver: event.nearAccount,
-        hashlock: event.hashlock,
-        timelock: bridgeEvent.timelock,
-        ethAddress: event.escrow,
-        amount: event.amount
-      });
+      // 📡 MONITORING MODE: Wait for user to create NEAR HTLC with their wallet
+      console.log(`📡 Monitoring ETH → NEAR bridge: ${bridgeId}`);
+      console.log(`⏳ Waiting for user to create NEAR HTLC with their connected wallet...`);
+      console.log(`📋 Expected NEAR HTLC params:`);
+      console.log(`   - receiver: ${event.nearAccount} (user's NEAR account)`);
+      console.log(`   - hashlock: ${event.hashlock}`);
+      console.log(`   - ethAddress: ${event.escrow}`);
+      console.log(`   - amount: ${event.amount}`);
 
-      bridgeEvent.contractId = nearContractId;
-      this.activeBridges.set(bridgeId, bridgeEvent);
-
-      console.log(`✅ ETH → NEAR bridge created: ${bridgeId}`);
+      console.log(`✅ ETH side ready, waiting for NEAR side: ${bridgeId}`);
       this.emit('bridgeCreated', bridgeEvent);
 
     } catch (error) {
@@ -156,29 +153,69 @@ export class BridgeResolver extends EventEmitter {
       // Update existing bridge with NEAR contract ID
       existingBridge.contractId = event.contractId;
       this.activeBridges.set(existingBridge.id, existingBridge);
-      console.log(`✅ Updated existing bridge ${existingBridge.id} with NEAR contract`);
+      console.log(`🎯 BRIDGE LINKED! ETH bridge ${existingBridge.id} now connected to NEAR HTLC ${event.contractId}`);
+      console.log(`✅ Bridge ready for completion! Both ETH and NEAR HTLCs are active.`);
       return;
     }
 
-    // For standalone NEAR → ETH bridges
+    // For standalone NEAR → ETH bridges - Auto-create ETH escrow
     const bridgeId = this.generateBridgeId(event.hashlock, 'NEAR_TO_ETH');
 
-    const bridgeEvent: BridgeEvent = {
-      id: bridgeId,
-      type: 'NEAR_TO_ETH',
-      status: 'PENDING',
-      nearTxHash: '', // Would be filled from transaction hash
-      contractId: event.contractId,
-      hashlock: event.hashlock,
-      amount: event.amount,
-      ethRecipient: event.ethAddress,
-      nearAccount: event.sender,
-      timelock: event.timelock,
-      createdAt: Date.now()
-    };
+    console.log(`🔄 Auto-creating ETH escrow for NEAR → ETH bridge: ${bridgeId}`);
+    console.log(`📋 ETH escrow params:`);
+    console.log(`   - recipient: ${event.ethAddress} (user's ETH address)`);
+    console.log(`   - hashlock: ${event.hashlock}`);
+    console.log(`   - amount: ${event.amount}`);
 
-    this.activeBridges.set(bridgeId, bridgeEvent);
-    this.emit('bridgeCreated', bridgeEvent);
+    try {
+      // Create ETH escrow using the bridge contract
+      const tx = await this.createEthEscrow({
+        hashlock: event.hashlock,
+        recipient: event.ethAddress,
+        amount: event.amount,
+        timelock: event.timelock
+      });
+
+      const bridgeEvent: BridgeEvent = {
+        id: bridgeId,
+        type: 'NEAR_TO_ETH',
+        status: 'PENDING',
+        nearTxHash: '', // Would be filled from transaction hash
+        contractId: event.contractId,
+        hashlock: event.hashlock,
+        amount: event.amount,
+        ethRecipient: event.ethAddress,
+        nearAccount: event.sender,
+        ethTxHash: tx.hash,
+        timelock: event.timelock,
+        createdAt: Date.now()
+      };
+
+      this.activeBridges.set(bridgeId, bridgeEvent);
+      console.log(`✅ NEAR → ETH bridge fully created: ${bridgeId}`);
+      this.emit('bridgeCreated', bridgeEvent);
+      
+    } catch (error) {
+      console.error(`❌ Failed to create ETH escrow for NEAR → ETH bridge:`, error);
+      
+      // Create tracking entry even if ETH escrow creation failed
+      const bridgeEvent: BridgeEvent = {
+        id: bridgeId,
+        type: 'NEAR_TO_ETH',
+        status: 'PENDING',
+        nearTxHash: '',
+        contractId: event.contractId,
+        hashlock: event.hashlock,
+        amount: event.amount,
+        ethRecipient: event.ethAddress,
+        nearAccount: event.sender,
+        timelock: event.timelock,
+        createdAt: Date.now()
+      };
+
+      this.activeBridges.set(bridgeId, bridgeEvent);
+      this.emit('bridgeCreated', bridgeEvent);
+    }
   }
 
   private async handleNearSwapCompleted(event: any): Promise<void> {
@@ -208,6 +245,36 @@ export class BridgeResolver extends EventEmitter {
       this.activeBridges.set(bridge.id, bridge);
       this.emit('bridgeCompleted', bridge);
     }
+  }
+
+  private async createEthEscrow(params: {
+    hashlock: string;
+    recipient: string;
+    amount: string;
+    timelock: number;
+  }): Promise<any> {
+    // Use the bridge contract to create ETH escrow for NEAR → ETH direction
+    const bridgeContract = new ethers.Contract(
+      this.config.ethBridgeContract,
+      [
+        'function createETHToNEARBridge(bytes32 hashlock, string calldata nearAccount) external payable returns (bytes32 swapId)',
+        'function createNEARToETHBridge(bytes32 hashlock, address ethRecipient) external payable returns (bytes32 swapId)'
+      ],
+      this.resolverSigner
+    );
+
+    // For NEAR → ETH, we create an ETH escrow that will pay to the recipient
+    const tx = await bridgeContract.createNEARToETHBridge(
+      params.hashlock,
+      params.recipient,
+      {
+        value: params.amount, // Bridge-listener pays the ETH
+        gasLimit: 500000
+      }
+    );
+
+    await tx.wait();
+    return tx;
   }
 
   private async completeEthEscrow(escrowAddress: string, secret: string): Promise<void> {

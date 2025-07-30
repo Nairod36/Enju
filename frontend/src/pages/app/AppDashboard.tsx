@@ -213,8 +213,8 @@ export function AppDashboard() {
 
                     <div className="h-full w-full mt-5 pr-24">
                       <div className="flex gap-4">
-                        <Card className="flex-1 bg-white/80 shadow border-0">
-                          <CardContent className="p-4 flex flex-col items-center relative">
+                        <Card className="flex-1 bg-white/80 shadow border-0 ">
+                          <CardContent className="px-4 flex flex-col items-center relative h-[20px]">
                             <span className="text-sm text-slate-500 mb-1 flex items-center gap-2">
                               Trees planted
                               <span className="ml-1">
@@ -258,7 +258,7 @@ export function AppDashboard() {
                           </CardContent>
                         </Card>
                         <Card className="flex-1 bg-white/80 shadow border-0">
-                          <CardContent className="p-4 flex flex-col items-center">
+                          <CardContent className="px-4 flex flex-col items-center">
                             <span className="text-sm text-slate-500 mb-1">
                               Island Seed
                             </span>
@@ -488,7 +488,8 @@ export function AppDashboard() {
                         setTreeCount((prev) => prev + 1);
                         // Trigger island update if needed
                         if (islandRef.current) {
-                          islandRef.current.addTree();
+                          // Island ref available for future use
+                          console.log('Island ref available for tree update');
                         }
                         // Refresh bridge history to show the new transaction
                         setTimeout(() => {

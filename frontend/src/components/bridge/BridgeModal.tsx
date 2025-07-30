@@ -213,7 +213,7 @@ export function BridgeModal({ isOpen, onClose, bridgeData }: BridgeModalProps) {
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl max-h-[100vh] overflow-hidden">
+      <DialogContent className="max-w-2xl max-h-[100vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-3">
             <div className="p-2 bg-emerald-100 rounded-lg text-sm">
@@ -273,77 +273,10 @@ export function BridgeModal({ isOpen, onClose, bridgeData }: BridgeModalProps) {
           {bridgeData && (
             <ConversionDisplay
               fromAmount={bridgeData.fromAmount}
-              fromChain={bridgeData.fromChain as 'ethereum' | 'near' | 'tron'}
-              toChain={bridgeData.toChain as 'ethereum' | 'near' | 'tron'}
+              fromChain={bridgeData.fromChain as "ethereum" | "near" | "tron"}
+              toChain={bridgeData.toChain as "ethereum" | "near" | "tron"}
               className="mb-4"
             />
-          )}
-
-          {/* Transaction Details */}
-          {bridgeData && (
-            <div className="bg-gray-50 rounded-lg p-4 space-y-1">
-              <h4 className="font-medium text-gray-900 text-sm">
-                Transaction Details
-              </h4>
-              <div className="grid grid-cols-2 gap-4 text-[11px]">
-                <div>
-                  <span className="text-gray-500">Chain:</span>
-                  <span className="ml-2 font-medium">
-                    {bridgeData.fromChain.toUpperCase()} → {bridgeData.toChain.toUpperCase()}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-gray-500">Input Amount:</span>
-                  <span className="ml-2 font-medium">
-                    {bridgeData.fromAmount} {bridgeData.fromChain.toUpperCase()}
-                  </span>
-                </div>
-                {bridgeData.nearAccount && (
-                  <div className="col-span-2">
-                    <span className="text-gray-500">NEAR Account:</span>
-                    <span className="ml-2 font-medium">
-                      {bridgeData.nearAccount}
-                    </span>
-                  </div>
-                )}
-                {hashlock && (
-                  <div className="col-span-2">
-                    <span className="text-gray-500">Hashlock:</span>
-                    <div className="flex items-center gap-2 mt-1">
-                      <code className="text-xs bg-white px-2 py-1 rounded border font-mono">
-                        {hashlock.substring(0, 20)}...
-                      </code>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => copyToClipboard(hashlock)}
-                        className="h-6 w-6 p-0"
-                      >
-                        <Copy className="w-3 h-3" />
-                      </Button>
-                    </div>
-                  </div>
-                )}
-                {secret && (
-                  <div className="col-span-2">
-                    <span className="text-gray-500">Secret:</span>
-                    <div className="flex items-center gap-2 mt-1">
-                      <code className="text-xs bg-white px-2 py-1 rounded border font-mono">
-                        {secret.substring(0, 20)}...
-                      </code>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => copyToClipboard(secret)}
-                        className="h-6 w-6 p-0"
-                      >
-                        <Copy className="w-3 h-3" />
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
           )}
 
           {/* Logs Section */}
@@ -370,6 +303,53 @@ export function BridgeModal({ isOpen, onClose, bridgeData }: BridgeModalProps) {
               <div ref={logsEndRef} />
             </div>
           </div>
+
+          {/* Transaction Details */}
+          {bridgeData && (
+            <div className="bg-gray-50 rounded-lg p-4 space-y-1">
+              <h4 className="font-medium text-gray-900 text-sm">
+                Transaction Details
+              </h4>
+              <div className="grid grid-cols-2 gap-4 text-[11px]">
+                {hashlock && (
+                  <div className="col-span-2 flex items-center">
+                    <span className="text-gray-500 w-16">Hashlock:</span>
+                    <div className="flex items-center gap-2 mt-1">
+                      <code className="text-xs bg-white px-2 py-1 rounded border font-mono">
+                        {hashlock.substring(0, 20)}...
+                      </code>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => copyToClipboard(hashlock)}
+                        className="h-6 w-6 p-0"
+                      >
+                        <Copy className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
+                {secret && (
+                  <div className="col-span-2 flex items-center">
+                    <span className="text-gray-500 w-16">Secret:</span>
+                    <div className="flex items-center gap-2 mt-1">
+                      <code className="text-xs bg-white px-2 py-1 rounded border font-mono">
+                        {secret.substring(0, 20)}...
+                      </code>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => copyToClipboard(secret)}
+                        className="h-6 w-6 p-0"
+                      >
+                        <Copy className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Actions */}
           <div className="flex justify-between items-center pt-4 border-t">

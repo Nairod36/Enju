@@ -12,7 +12,7 @@ import {
 import { BridgeModal } from "./BridgeModal";
 import { useAccount } from "wagmi";
 import { useCustomBalance } from "@/hooks/useCustomBalance";
-// import { useNearWallet } from "@/hooks/useNearWallet";
+import { useWalletSelector } from "@near-wallet-selector/react-hook";
 import { ethers } from "ethers";
 import { BRIDGE_CONFIG } from "@/config/networks";
 import { useConversion } from "@/hooks/usePriceOracle";
@@ -41,11 +41,8 @@ const chainNames = {
 export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
   const { address, isConnected, chainId } = useAccount();
   const { balance, isLoading: balanceLoading } = useCustomBalance();
-  // const {
-  //   accountId: nearAccountId,
-  //   isConnected: nearConnected,
-  //   balance: nearBalance,
-  // } = useNearWallet();
+  const { signedAccountId: nearAccountId, callFunction } = useWalletSelector();
+  const nearConnected = !!nearAccountId;
 
   // Debug logging
   useEffect(() => {
@@ -170,26 +167,160 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
     const needsNearWallet = fromChain === "near" || toChain === "near";
 
     if (needsEthWallet && !isConnected) return;
-    // if (needsNearWallet && !nearConnected) return;
+    if (needsNearWallet && !nearConnected) return;
     if (!fromAmount) return;
-
-    setIsLoading(true);
 
     const newBridgeData = {
       fromAmount,
       fromChain,
       toChain,
+      logs: [] as string[],
+      status: 'pending' as 'pending' | 'success' | 'error',
+      txHash: '',
+      secret: '',
+      hashlock: ''
     };
 
     setBridgeData(newBridgeData as any);
     setIsModalOpen(true);
-    setIsLoading(false);
+    setIsLoading(true);
 
-    // Mock success callback
-    setTimeout(() => {
-      onBridgeSuccess?.(newBridgeData);
-      loadBridgeStats(); // Refresh stats
-    }, 10000);
+    try {
+      if (fromChain === "ethereum" && toChain === "near") {
+        await handleEthToNearBridge(newBridgeData);
+      } else if (fromChain === "near" && toChain === "ethereum") {
+        await handleNearToEthBridge(newBridgeData);
+      }
+    } catch (error) {
+      console.error('Bridge failed:', error);
+      updateBridgeLog(`❌ Bridge failed: ${error}`);
+      setBridgeData(prev => ({ ...prev, status: 'error' }));
+      setIsLoading(false);
+    }
+  };
+
+  const updateBridgeLog = (message: string) => {
+    setBridgeData(prev => ({
+      ...prev,
+      logs: [...(prev?.logs || []), `[${new Date().toLocaleTimeString()}] ${message}`]
+    }));
+  };
+
+  const handleEthToNearBridge = async (bridgeData: any) => {
+    updateBridgeLog('🔑 Generating secret and hashlock...');
+    
+    // Generate secret and hashlock
+    const secret = ethers.utils.hexlify(ethers.utils.randomBytes(32));
+    const hashlock = ethers.utils.keccak256(secret);
+    
+    bridgeData.secret = secret;
+    bridgeData.hashlock = hashlock;
+    
+    updateBridgeLog(`🔒 Generated hashlock: ${hashlock.substring(0, 14)}...`);
+    updateBridgeLog(`🚀 Initiating ETHEREUM → NEAR bridge...`);
+    updateBridgeLog(`💰 Amount: ${fromAmount} ETHEREUM`);
+    updateBridgeLog(`📋 NEAR destination: ${nearAccountId}`);
+    updateBridgeLog(`📝 You need to sign with MetaMask...`);
+
+    // Create ETH HTLC
+    const provider = new ethers.providers.Web3Provider(window.ethereum);
+    const signer = provider.getSigner();
+    
+    const bridgeContract = new ethers.Contract(
+      BRIDGE_CONFIG.contractAddress,
+      [
+        'function createETHToNEARBridge(bytes32 hashlock, string calldata nearAccount) external payable returns (bytes32 swapId)',
+        'event EscrowCreated(address indexed escrow, bytes32 indexed hashlock, string nearAccount, uint256 amount)'
+      ],
+      signer
+    );
+
+    const tx = await bridgeContract.createETHToNEARBridge(hashlock, nearAccountId, {
+      value: ethers.utils.parseEther(fromAmount),
+      gasLimit: 500000,
+    });
+
+    bridgeData.txHash = tx.hash;
+    updateBridgeLog(`📝 Transaction sent: ${tx.hash.substring(0, 14)}...`);
+    updateBridgeLog(`⏳ Waiting for confirmation...`);
+
+    const receipt = await tx.wait();
+    updateBridgeLog(`✅ Transaction confirmed!`);
+
+    // Parse events for escrow address
+    const escrowCreatedEvent = receipt.events?.find((event: any) => event.event === "EscrowCreated");
+    
+    if (escrowCreatedEvent) {
+      const { escrow, amount: eventAmount } = escrowCreatedEvent.args;
+      updateBridgeLog(`📦 ETH HTLC created: ${escrow.substring(0, 14)}...`);
+      updateBridgeLog(`🔄 Creating NEAR HTLC with your wallet...`);
+
+      // Create NEAR HTLC
+      await createNearHTLC(escrow, hashlock, eventAmount.toString());
+      
+      updateBridgeLog(`✅ Bridge ready! Both ETH and NEAR HTLCs created.`);
+      updateBridgeLog(`⏳ Bridge-listener will monitor and auto-complete...`);
+      
+      setBridgeData(prev => ({ ...prev, status: 'success' }));
+      setIsLoading(false);
+      
+      onBridgeSuccess?.(bridgeData);
+      loadBridgeStats();
+    }
+  };
+
+  const handleNearToEthBridge = async (bridgeData: any) => {
+    updateBridgeLog('🔑 Generating secret and hashlock...');
+    
+    // Generate secret and hashlock
+    const secret = ethers.utils.hexlify(ethers.utils.randomBytes(32));
+    const hashlock = ethers.utils.keccak256(secret);
+    
+    bridgeData.secret = secret;
+    bridgeData.hashlock = hashlock;
+    
+    updateBridgeLog(`🔒 Generated hashlock: ${hashlock.substring(0, 14)}...`);
+    updateBridgeLog(`🚀 Initiating NEAR → ETHEREUM bridge...`);
+    updateBridgeLog(`💰 Amount: ${fromAmount} NEAR`);
+    updateBridgeLog(`📋 ETH destination: ${address}`);
+    updateBridgeLog(`📝 You need to sign with NEAR wallet...`);
+
+    // Create NEAR HTLC
+    const nearAmount = ethers.utils.parseEther(fromAmount).toString();
+    await createNearHTLC(address!, hashlock, nearAmount);
+    
+    updateBridgeLog(`✅ NEAR HTLC created successfully!`);
+    updateBridgeLog(`⏳ Bridge-listener will create ETH escrow automatically...`);
+    
+    setBridgeData(prev => ({ ...prev, status: 'success' }));
+    setIsLoading(false);
+    
+    onBridgeSuccess?.(bridgeData);
+    loadBridgeStats();
+  };
+
+  const createNearHTLC = async (ethAddress: string, hashlock: string, amount: string) => {
+    const args = {
+      receiver: nearAccountId,
+      hashlock: Buffer.from(hashlock.slice(2), 'hex').toString('base64'),
+      timelock: Date.now() + 24 * 60 * 60 * 1000, // 24h from now
+      eth_address: ethAddress
+    };
+
+    // Convert ETH wei to NEAR yocto (1:1 ratio)
+    const ethWei = BigInt(amount);
+    const nearYocto = ethWei * BigInt('1000000'); // Convert 10^18 to 10^24
+
+    const result = await callFunction({
+      contractId: 'mat-event.testnet',
+      method: 'create_cross_chain_htlc',
+      args,
+      deposit: nearYocto.toString(),
+      gas: '100000000000000'
+    });
+
+    updateBridgeLog(`✅ NEAR HTLC created with your wallet!`);
+    return result;
   };
 
   const getChainColor = (chain: string) => {
@@ -357,8 +488,8 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
                   <div className="relative flex gap-2 p-2.5 bg-white/80 backdrop-blur-sm rounded-lg border border-gray-200/80">
                     <input
                       type="number"
-                      placeholder="0.0"
-                      value={conversion.isLoading ? "Converting..." : conversion.convertedAmount}
+                      placeholder={conversion.isLoading ? "Converting..." : "0.0"}
+                      value={conversion.isLoading ? "" : conversion.convertedAmount}
                       readOnly
                       className="flex-1 text-lg font-bold bg-transparent border-none outline-none placeholder-gray-400 text-gray-600"
                     />
@@ -484,10 +615,10 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
                     Processing...
                   </div>
                 ) : (fromChain === "ethereum" && !isConnected) ||
-                  fromChain === "near" ? (
+                  (fromChain === "near" && !nearConnected) ? (
                   "Connect Wallet"
                 ) : (toChain === "ethereum" && !isConnected) ||
-                  toChain === "near" ? (
+                  (toChain === "near" && !nearConnected) ? (
                   "Connect Destination Wallet"
                 ) : (
                   `Bridge ${

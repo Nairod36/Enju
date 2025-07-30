@@ -321,7 +321,8 @@ export const Chest: React.FC<{
   useFrame(({ clock }) => {
     if (groupRef.current) {
       // Animation de flottement subtile
-      groupRef.current.position.y = chest.position[1] + Math.sin(clock.elapsedTime * 2) * 0.01;
+      const baseY = chest.position?.[1] || 0;
+      groupRef.current.position.y = baseY + Math.sin(clock.elapsedTime * 2) * 0.01;
       
       // Animation d'ouverture
       if (chest.isOpen && groupRef.current.children[1]) {
