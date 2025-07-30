@@ -59,7 +59,7 @@ const INCH_API_BASE_URL = import.meta.env.DEV
   : 'https://api.1inch.dev/swap/v6.1'; // Direct API in production
 const ETHEREUM_CHAIN_ID = 1;
 
-// Popular tokens on Ethereum
+// Popular tokens on Ethereum Mainnet
 export const POPULAR_TOKENS: Token[] = [
   {
     address: '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE',
@@ -69,11 +69,18 @@ export const POPULAR_TOKENS: Token[] = [
     logoURI: 'https://tokens.1inch.io/0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee.png',
   },
   {
-    address: '0xA0b86a33E6441e68B7f98b88e9D7b04eF4703Ee',
+    address: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
+    symbol: 'WETH',
+    name: 'Wrapped Ethereum',
+    decimals: 18,
+    logoURI: 'https://tokens.1inch.io/0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2.png',
+  },
+  {
+    address: '0xA0b86a33E6441e68B7f98b88e9D7b04eF4703Ee3',
     symbol: 'USDC',
     name: 'USD Coin',
     decimals: 6,
-    logoURI: 'https://tokens.1inch.io/0xa0b86a33e6441e68b7f98b88e9d7b04ef4703ee.png',
+    logoURI: 'https://tokens.1inch.io/0xa0b86a33e6441e68b7f98b88e9d7b04ef4703ee3.png',
   },
   {
     address: '0xdAC17F958D2ee523a2206206994597C13D831ec7',
@@ -97,11 +104,32 @@ export const POPULAR_TOKENS: Token[] = [
     logoURI: 'https://tokens.1inch.io/0x2260fac5e5542a773aa44fbcfedf7c193bc2c599.png',
   },
   {
-    address: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
-    symbol: 'WETH',
-    name: 'Wrapped Ethereum',
+    address: '0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984',
+    symbol: 'UNI',
+    name: 'Uniswap',
     decimals: 18,
-    logoURI: 'https://tokens.1inch.io/0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2.png',
+    logoURI: 'https://tokens.1inch.io/0x1f9840a85d5af5bf1d1762f925bdaddc4201f984.png',
+  },
+  {
+    address: '0x514910771AF9Ca656af840dff83E8264EcF986CA',
+    symbol: 'LINK',
+    name: 'Chainlink',
+    decimals: 18,
+    logoURI: 'https://tokens.1inch.io/0x514910771af9ca656af840dff83e8264ecf986ca.png',
+  },
+  {
+    address: '0x7Fc66500c84A76Ad7e9c93437bFc5Ac33E2DDaE9',
+    symbol: 'AAVE',
+    name: 'Aave',
+    decimals: 18,
+    logoURI: 'https://tokens.1inch.io/0x7fc66500c84a76ad7e9c93437bfc5ac33e2ddae9.png',
+  },
+  {
+    address: '0xC18360217D8F7Ab5e7c516566761Ea12Ce7F9D72',
+    symbol: 'ENS',
+    name: 'Ethereum Name Service',
+    decimals: 18,
+    logoURI: 'https://tokens.1inch.io/0xc18360217d8f7ab5e7c516566761ea12ce7f9d72.png',
   },
 ];
 
@@ -283,7 +311,14 @@ class OneInchService {
 
   async getSwapTransaction(params: SwapParams): Promise<SwapTransaction> {
     // Validate input parameters first
-    console.log('🔍 Validating swap parameters:', params);
+    console.log('🔍 Validating swap parameters:', {
+      fromTokenAddress: params.fromTokenAddress,
+      toTokenAddress: params.toTokenAddress,
+      amount: params.amount,
+      fromAddress: params.fromAddress,
+      slippage: params.slippage,
+      params: params
+    });
     
     if (!params.fromTokenAddress || params.fromTokenAddress === '') {
       throw new Error('Invalid fromTokenAddress: cannot be empty');
@@ -307,21 +342,26 @@ class OneInchService {
       if (amountBigInt <= 0) {
         throw new Error('Invalid amount: must be positive');
       }
+      console.log('✅ Amount validation passed:', params.amount, '(', amountBigInt.toString(), ')');
     } catch (e) {
+      console.error('❌ Amount validation failed:', params.amount, e);
       throw new Error(`Invalid amount format: ${params.amount} is not a valid number`);
     }
     
     // Validate token addresses are valid Ethereum addresses
     const addressRegex = /^0x[a-fA-F0-9]{40}$/;
     if (!addressRegex.test(params.fromTokenAddress)) {
+      console.error('❌ Invalid fromTokenAddress format:', params.fromTokenAddress);
       throw new Error(`Invalid fromTokenAddress format: ${params.fromTokenAddress}`);
     }
     
     if (!addressRegex.test(params.toTokenAddress)) {
+      console.error('❌ Invalid toTokenAddress format:', params.toTokenAddress);
       throw new Error(`Invalid toTokenAddress format: ${params.toTokenAddress}`);
     }
     
     if (!addressRegex.test(params.fromAddress)) {
+      console.error('❌ Invalid fromAddress format:', params.fromAddress);
       throw new Error(`Invalid fromAddress format: ${params.fromAddress}`);
     }
     
@@ -330,7 +370,7 @@ class OneInchService {
       throw new Error('Cannot swap token to itself');
     }
     
-    console.log('✅ Parameter validation passed');
+    console.log('✅ All parameter validation passed');
 
     const queryParams = {
       src: params.fromTokenAddress,

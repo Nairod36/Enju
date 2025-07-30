@@ -58,9 +58,9 @@ interface SwapState {
   error: string | null;       // Error message display
 }
 
-// Default tokens - ETH and USDC are the most common trading pair
+// Default tokens - ETH and WETH are the most common trading pair for testing
 const ETH_TOKEN = POPULAR_TOKENS[0]; // ETH (native token)
-const USDC_TOKEN = POPULAR_TOKENS[1]; // USDC (popular stablecoin)
+const WETH_TOKEN = POPULAR_TOKENS[1]; // WETH (wrapped ETH - simple swap)
 
 export function IntentSwap({ onSwapSuccess }: IntentSwapProps) {
   // Wagmi hook - provides wallet connection status, user address, and chain info
@@ -76,7 +76,7 @@ export function IntentSwap({ onSwapSuccess }: IntentSwapProps) {
    */
   const [state, setState] = useState<SwapState>({
     fromToken: ETH_TOKEN,        // Start with ETH as default
-    toToken: USDC_TOKEN,         // USDC is a popular target for swaps
+    toToken: WETH_TOKEN,         // WETH is a simple swap from ETH
     fromAmount: "",              // Empty until user inputs
     toAmount: "",                // Calculated from 1inch API
     quote: null,                 // Will contain full quote data
@@ -101,30 +101,21 @@ export function IntentSwap({ onSwapSuccess }: IntentSwapProps) {
   /**
    * Token Loading Effect
    * 
-   * Runs once on component mount to fetch the full token list from 1inch API.
-   * Falls back to popular tokens if the API is unavailable.
+   * Initialize with popular tokens only for a cleaner user experience.
+   * This avoids showing hundreds of obscure tokens and focuses on well-known ones.
    */
   useEffect(() => {
-    loadTokens();
+    // Use only popular tokens - no API call needed
+    // This provides a curated list of well-known tokens that users actually want to trade
+    setAvailableTokens(POPULAR_TOKENS);
   }, []);
 
   /**
-   * Load Available Tokens
+   * Load Available Tokens (Removed)
    * 
-   * Fetches the complete token list from 1inch API for the token selector.
-   * This provides access to hundreds of tokens while maintaining fast initial load
-   * with the popular tokens fallback.
+   * Previously fetched all tokens from 1inch API, but this created a poor UX
+   * with hundreds of obscure tokens. Now we use only curated popular tokens.
    */
-  const loadTokens = async () => {
-    try {
-      const tokens = await oneInchService.getTokens();
-      setAvailableTokens(tokens);
-    } catch (error) {
-      console.error("Failed to load tokens:", error);
-      // Keep using popular tokens as fallback - ensures UI always works
-      // even if 1inch API is temporarily unavailable
-    }
-  };
 
   /**
    * Quote Fetching Effect
@@ -172,6 +163,45 @@ export function IntentSwap({ onSwapSuccess }: IntentSwapProps) {
         state.fromToken.decimals
       ).toString();
 
+      console.log('🔍 QUOTE REQUEST - Detailed Parameters:', {
+        'Raw Input': {
+          fromAmount: state.fromAmount,
+          fromToken: state.fromToken.symbol,
+          toToken: state.toToken.symbol,
+          slippage: state.slippage,
+          userAddress: address
+        },
+        'API Parameters': {
+          fromTokenAddress: state.fromToken.address,
+          toTokenAddress: state.toToken.address,
+          amount: amount,
+          fromAddress: address || "",
+          slippage: state.slippage
+        },
+        'Token Details': {
+          fromToken: {
+            symbol: state.fromToken.symbol,
+            address: state.fromToken.address,
+            decimals: state.fromToken.decimals,
+            name: state.fromToken.name
+          },
+          toToken: {
+            symbol: state.toToken.symbol,
+            address: state.toToken.address,
+            decimals: state.toToken.decimals,
+            name: state.toToken.name
+          }
+        },
+        'Validation Checks': {
+          hasFromAmount: !!state.fromAmount,
+          isAmountPositive: parseFloat(state.fromAmount) > 0,
+          hasFromToken: !!state.fromToken,
+          hasToToken: !!state.toToken,
+          hasAddress: !!address,
+          tokensAreDifferent: state.fromToken.address !== state.toToken.address
+        }
+      });
+
       // Call 1inch API for the best swap route and price quote
       const quote = await oneInchService.getQuote({
         fromTokenAddress: state.fromToken.address,
@@ -181,8 +211,16 @@ export function IntentSwap({ onSwapSuccess }: IntentSwapProps) {
         slippage: state.slippage,   // User's slippage tolerance
       });
 
+      console.log('✅ QUOTE SUCCESS - Response:', quote);
+
       // Validate quote response
       if (!quote || !quote.toTokenAmount) {
+        console.error('❌ QUOTE VALIDATION FAILED:', {
+          hasQuote: !!quote,
+          quoteKeys: quote ? Object.keys(quote) : 'null',
+          hasToTokenAmount: quote ? !!quote.toTokenAmount : false,
+          toTokenAmount: quote ? quote.toTokenAmount : 'undefined'
+        });
         throw new Error("Invalid quote response from 1inch API");
       }
 
@@ -191,6 +229,12 @@ export function IntentSwap({ onSwapSuccess }: IntentSwapProps) {
         quote.toTokenAmount,
         state.toToken.decimals
       );
+
+      console.log('📊 QUOTE CONVERSION:', {
+        rawToTokenAmount: quote.toTokenAmount,
+        toTokenDecimals: state.toToken.decimals,
+        formattedToAmount: toAmount
+      });
 
       // Update state with successful quote data
       setState(prev => ({
@@ -206,7 +250,18 @@ export function IntentSwap({ onSwapSuccess }: IntentSwapProps) {
         checkApproval(amount);
       }
     } catch (error) {
-      console.error("Quote error:", error);
+      console.error("❌ QUOTE ERROR - Detailed error information:", {
+        error: error,
+        errorMessage: error instanceof Error ? error.message : String(error),
+        errorStack: error instanceof Error ? error.stack : 'No stack trace',
+        errorType: typeof error,
+        state: {
+          fromAmount: state.fromAmount,
+          fromToken: state.fromToken?.symbol,
+          toToken: state.toToken?.symbol,
+          hasAddress: !!address
+        }
+      });
       // Handle errors gracefully with user-friendly messages
       setState(prev => ({
         ...prev,
@@ -326,6 +381,39 @@ export function IntentSwap({ onSwapSuccess }: IntentSwapProps) {
         state.fromToken.decimals
       ).toString();
 
+      console.log('🚀 SWAP REQUEST - Initiating swap with detailed parameters:', {
+        'Component State': {
+          fromToken: state.fromToken.symbol,
+          fromTokenAddress: state.fromToken.address,
+          toToken: state.toToken.symbol,
+          toTokenAddress: state.toToken.address,
+          fromAmount: state.fromAmount,
+          slippage: state.slippage,
+          hasQuote: !!state.quote,
+          isApprovalNeeded: state.isApprovalNeeded
+        },
+        'Calculated Values': {
+          amount: amount,
+          fromAddress: address,
+          provider: !!provider,
+          signer: !!signer
+        },
+        'API Parameters': {
+          fromTokenAddress: state.fromToken.address,
+          toTokenAddress: state.toToken.address,
+          amount: amount,
+          fromAddress: address,
+          slippage: state.slippage,
+          disableEstimate: false
+        },
+        'Environment Check': {
+          hasWindow: typeof window !== 'undefined',
+          hasEthereum: !!(window as any).ethereum,
+          isConnected: !!address,
+          chainId: chainId
+        }
+      });
+
       // Get the actual swap transaction data from 1inch API
       // This includes the optimized route across multiple DEXs
       const swapTx = await oneInchService.getSwapTransaction({
@@ -335,6 +423,16 @@ export function IntentSwap({ onSwapSuccess }: IntentSwapProps) {
         fromAddress: address,
         slippage: state.slippage,
         disableEstimate: false, // Enable gas estimation for better UX
+      });
+
+      console.log('✅ SWAP TRANSACTION - Successfully received:', {
+        swapTx: swapTx,
+        hasTo: !!swapTx.to,
+        hasData: !!swapTx.data,
+        hasValue: !!swapTx.value,
+        hasGas: !!swapTx.gas,
+        hasGasPrice: !!swapTx.gasPrice,
+        txKeys: Object.keys(swapTx)
       });
 
       // Execute the swap transaction
@@ -367,7 +465,26 @@ export function IntentSwap({ onSwapSuccess }: IntentSwapProps) {
         txHash: receipt.transactionHash, // For Etherscan link
       });
     } catch (error) {
-      console.error("Swap error:", error);
+      console.error("❌ SWAP ERROR - Detailed error information:", {
+        error: error,
+        errorMessage: error instanceof Error ? error.message : String(error),
+        errorStack: error instanceof Error ? error.stack : 'No stack trace',
+        errorType: typeof error,
+        swapState: {
+          hasQuote: !!state.quote,
+          fromAmount: state.fromAmount,
+          fromToken: state.fromToken?.symbol,
+          toToken: state.toToken?.symbol,
+          isApprovalNeeded: state.isApprovalNeeded,
+          slippage: state.slippage
+        },
+        walletState: {
+          hasAddress: !!address,
+          address: address,
+          chainId: chainId,
+          isConnected: isConnected
+        }
+      });
       setState(prev => ({
         ...prev,
         error: error instanceof Error ? error.message : "Swap failed",
@@ -742,11 +859,11 @@ export function IntentSwap({ onSwapSuccess }: IntentSwapProps) {
             <div className="overflow-y-auto max-h-64 p-2">
               {/* 
                 Token List Items
-                - Limited to 20 tokens for performance
+                - Show all popular tokens (curated list of famous tokens)
                 - Each token shows logo, symbol, and full name
                 - Click handler updates state and closes modal
               */}
-              {availableTokens.slice(0, 20).map((token) => (
+              {availableTokens.map((token) => (
                 <Button
                   key={token.address}
                   variant="ghost"
