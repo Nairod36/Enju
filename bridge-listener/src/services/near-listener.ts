@@ -106,12 +106,12 @@ export class NearListener extends EventEmitter {
   private async processBlock(blockHeight: number): Promise<void> {
     try {
       const block = await this.near.connection.provider.block({ blockId: blockHeight });
-      
+
       for (const chunk of block.chunks) {
         if (chunk.tx_root === '11111111111111111111111111111111') continue;
-        
+
         const chunkDetails = await this.near.connection.provider.chunk(chunk.chunk_hash);
-        
+
         for (const tx of chunkDetails.transactions) {
           if (tx.receiver_id === this.config.nearContractId) {
             await this.processTx(tx, blockHeight);
@@ -150,10 +150,10 @@ export class NearListener extends EventEmitter {
     try {
       // Parse log format: "Cross-chain HTLC created: cc-sender-receiver-amount-timestamp, sender: ..., amount: ..., timelock: ..."
       const matches = log.match(/HTLC created: ([^,]+), sender: ([^,]+), amount: ([^,]+), timelock: (\d+)/);
-      
+
       if (matches) {
         const [, contractId, sender, amount, timelock] = matches;
-        
+
         console.log(`📦 New NEAR HTLC detected:`, {
           contractId,
           sender,
@@ -165,7 +165,7 @@ export class NearListener extends EventEmitter {
 
         // Get full contract details
         const contractDetails = await this.getContractDetails(contractId);
-        
+
         if (contractDetails) {
           const event: NearHTLCEvent = {
             contractId,
@@ -190,10 +190,10 @@ export class NearListener extends EventEmitter {
     try {
       // Parse completion logs
       const matches = log.match(/HTLC (?:completed|withdrawn): ([^,]+)/);
-      
+
       if (matches) {
         const [, contractId] = matches;
-        
+
         console.log(`✅ NEAR HTLC completed:`, {
           contractId,
           txHash,
@@ -215,12 +215,12 @@ export class NearListener extends EventEmitter {
     try {
       // Try cross-chain contract first
       let result = await (this.contract as any).get_cross_chain_contract({ contract_id: contractId });
-      
+
       if (!result) {
         // Try regular contract
         result = await (this.contract as any).get_contract({ contract_id: contractId });
       }
-      
+
       if (result) {
         return {
           sender: result[0],
@@ -234,7 +234,7 @@ export class NearListener extends EventEmitter {
           ethTxHash: result[8] || null
         };
       }
-      
+
       return null;
     } catch (error) {
       console.error('❌ Error getting contract details:', error);
@@ -249,86 +249,85 @@ export class NearListener extends EventEmitter {
     ethAddress: string;
     amount: string;
   }): Promise<string> {
-    try {
-      console.log('🔄 Creating NEAR HTLC with params:', {
-        receiver: params.receiver,
-        hashlock: params.hashlock,
-        timelock: params.timelock,
-        ethAddress: params.ethAddress,
-        amount: params.amount
-      });
+    console.log('🔄 Creating NEAR HTLC via RPC with params:', params);
 
-      // Try fallback with NEAR CLI approach first due to persistent deserialization errors
-      console.log('⚠️ Using fallback: generating NEAR CLI command due to API deserialization issues');
-      
-      const hashlockBase64 = Buffer.from(params.hashlock.slice(2), 'hex').toString('base64');
-      const amountNEAR = (BigInt(params.amount) / BigInt('1000000000000000000000000')).toString();
-      
-      const cliCommand = `near call matthias-dev.testnet create_cross_chain_htlc '{
-  "receiver": "${params.receiver}",
-  "hashlock": "${hashlockBase64}",
-  "timelock": ${params.timelock},
-  "eth_address": "${params.ethAddress}"
-}' --accountId matthias-dev.testnet --amount ${amountNEAR}`;
+    // 1️⃣ Préparez args & envoyez la tx
+    const args = {
+      receiver: params.receiver,
+      // on convertit l’hex (0x...) en Base64
+      hashlock: Buffer
+        .from(params.hashlock.slice(2), 'hex')
+        .toString('base64'),
+      timelock: params.timelock,
+      eth_address: params.ethAddress
+    };
 
-      console.log('📋 NEAR CLI command for manual execution:');
-      console.log(cliCommand);
-      
-      // For now, return a mock transaction hash since the API calls keep failing
-      const mockTxHash = `near_cli_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      
-      console.log('💡 Manual execution required - automated NEAR API calls are failing with deserialization errors');
-      console.log('🔧 This suggests either:');
-      console.log('   1. Contract method signature mismatch');
-      console.log('   2. NEAR.js version incompatibility');
-      console.log('   3. Contract redeployment needed');
-      
-      return mockTxHash;
-      
-      // Keep the original API code commented for reference
-      /*
-      const args = {
-        receiver: params.receiver,
-        hashlock: Buffer.from(params.hashlock.slice(2), 'hex').toString('base64'),
-        timelock: params.timelock,
-        eth_address: params.ethAddress
-      };
+    // Convert ETH wei to NEAR yoctoNEAR (1 ETH = 1 NEAR, but different decimal places)
+    // ETH: 1 ETH = 10^18 wei
+    // NEAR: 1 NEAR = 10^24 yoctoNEAR
+    // So: 1 ETH (10^18 wei) = 1 NEAR (10^24 yoctoNEAR)
+    const ethWei = BigInt(params.amount);
+    const nearYocto = ethWei * BigInt('1000000'); // Convert 10^18 to 10^24
 
-      console.log('📋 NEAR args being sent:', JSON.stringify(args, null, 2));
+    console.log(`💰 Converting: ${params.amount} wei ETH → ${nearYocto.toString()} yoctoNEAR`);
 
-      const result = await this.account.functionCall({
-        contractId: this.config.nearContractId,
-        methodName: 'create_cross_chain_htlc',
-        args: args,
-        gas: BigInt('100000000000000'),
-        attachedDeposit: BigInt(params.amount)
-      });
+    const result = await this.account.functionCall({
+      contractId: this.config.nearContractId,
+      methodName: 'create_cross_chain_htlc',
+      args,
+      gas: BigInt('100000000000000'),
+      attachedDeposit: nearYocto,
+    });
 
-      console.log('✅ NEAR cross-chain HTLC created:', result);
-      return result.transaction.hash;
-      */
-    } catch (error) {
-      console.error('❌ Error creating NEAR HTLC:', error);
-      throw error;
+    // 2️⃣ Parcourez tous les logs pour trouver la ligne “Cross-chain HTLC created: <ID>”
+    const allLogs = result.receipts_outcome
+      .flatMap(r => r.outcome.logs);
+    const line = allLogs.find(l => l.startsWith('Cross-chain HTLC created:'));
+    if (!line) {
+      throw new Error('Log “Cross-chain HTLC created:” introuvable');
     }
+
+    // 3️⃣ Extraire l’ID interne (jusqu’à la virgule)
+    const [, internalId] = line.match(/Cross-chain HTLC created:\s*([^,]+)/)!;
+
+    console.log('✅ NEAR HTLC internal ID:', internalId);
+    return internalId;
   }
+
 
   async completeSwap(contractId: string, secret: string): Promise<void> {
     try {
-      await (this.contract as any).complete_cross_chain_swap({
-        contract_id: contractId,
-        preimage: Array.from(Buffer.from(secret.slice(2), 'hex')),
-        eth_tx_hash: 'resolved_by_listener'
-      }, {
-        gas: '100000000000000'
+      console.log('🔄 Completing cross‑chain swap on NEAR:', contractId);
+
+      const cleanId = contractId.replace(/[<>]/g, '');
+
+      console.log('📋 Contract ID:', cleanId);
+      // 1️⃣ Convertir le secret HEX en base64
+      const preimageBase64 = Buffer
+        .from(secret.slice(2), 'hex')    // enlève le "0x"
+        .toString('base64');
+
+      // 2️⃣ Appel via account.functionCall
+      const result = await this.account.functionCall({
+        contractId: this.config.nearContractId,
+        methodName: 'complete_cross_chain_swap',
+        args: {
+          contract_id: contractId,
+          preimage: preimageBase64,
+          eth_tx_hash: 'resolved_by_listener'
+        },
+        gas: BigInt('100000000000000'),  // 100 Tgas
+        attachedDeposit: BigInt(0)
       });
 
-      console.log('✅ NEAR swap completed:', contractId);
-    } catch (error) {
-      console.error('❌ Error completing NEAR swap:', error);
-      throw error;
+      console.log('✅ NEAR swap completed, txHash=', result.transaction.hash);
+    } catch (err) {
+      console.error('❌ Error completing NEAR swap:', err);
+      throw err;
     }
   }
+
+
 
   getStatus() {
     return {

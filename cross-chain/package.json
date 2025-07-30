@@ -12,6 +12,9 @@
     "resolver": "tsx src/start-resolver.ts start",
     "resolver:test": "tsx src/start-resolver.ts test",
     "test:bridge": "tsx src/test-bridge-flow.ts",
+    "test:real": "tsx src/real-transaction-test.ts",
+    "monitor:live": "tsx src/live-bridge-monitor.ts monitor",
+    "test:create": "tsx src/live-bridge-monitor.ts test",
     "monitor": "ts-node src/event-monitor.ts",
     "test": "jest",
     "lint": "eslint src/**/*.ts"

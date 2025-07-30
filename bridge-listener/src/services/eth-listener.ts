@@ -7,6 +7,7 @@ export class EthereumListener extends EventEmitter {
   private contract: ethers.Contract;
   private lastProcessedBlock: number = 0;
   private isListening: boolean = false;
+  private processedEvents = new Set<string>(); // 🔥 Cache pour éviter les doublons
 
   // InchDirectBridge ABI (events only)
   private readonly BRIDGE_ABI = [
@@ -70,6 +71,15 @@ export class EthereumListener extends EventEmitter {
     amount: ethers.BigNumber,
     event: ethers.Event
   ): Promise<void> {
+    const eventId = `${event.transactionHash}-${event.logIndex}`;
+    
+    // 🔥 Éviter les doublons
+    if (this.processedEvents.has(eventId)) {
+      console.log(`⚠️ Event ${eventId} already processed, skipping...`);
+      return;
+    }
+    this.processedEvents.add(eventId);
+
     console.log(`📦 New ETH → NEAR bridge detected:`, {
       escrow,
       hashlock,

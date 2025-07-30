@@ -6,20 +6,21 @@ import { TransactionsModule } from './transactions/transactions.module';
 import { IslandsModule } from './islands/islands.module';
 import { BridgeModule } from './bridge/bridge.module';
 import { HealthController } from './health/health.controller';
+import { HealthCronService } from './health/health-cron.service';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',
-    }), 
-    UsersModule, 
+    }),
+    UsersModule,
     TransactionsModule,
     IslandsModule,
     BridgeModule
   ],
   controllers: [HealthController],
-  providers: [PrismaService],
+  providers: [PrismaService, HealthCronService],
   exports: [PrismaService],
 })
 export class AppModule { }

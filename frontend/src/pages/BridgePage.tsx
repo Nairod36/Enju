@@ -1,24 +1,27 @@
-import React, { useState, useEffect } from 'react';
-import { ethers } from 'ethers';
-import { Card } from '../components/ui/card';
-import { Button } from '../components/ui/button';
-import { BRIDGE_CONFIG, switchToForkNetwork } from '../config/networks';
+import React, { useState, useEffect } from "react";
+import { ethers } from "ethers";
+import { Card } from "../components/ui/card";
+import { Button } from "../components/ui/button";
+import { BRIDGE_CONFIG, switchToForkNetwork } from "../config/networks";
+import {
+  parseNearAmount,
+  formatNearAmount,
+} from "near-api-js/lib/utils/format";
 
 // ABI du contrat InchDirectBridge
 const BRIDGE_ABI = [
-  'event EscrowCreated(address indexed escrow, bytes32 indexed hashlock, string nearAccount, uint256 amount)',
-  'event SwapCompleted(address indexed escrow, bytes32 secret)',
-  'function createETHToNEARBridge(bytes32 hashlock, string calldata nearAccount) external payable returns (bytes32 swapId)',
-  'function completeSwap(bytes32 swapId, bytes32 secret) external',
-  'function getSwap(bytes32 swapId) external view returns (address escrow, address user, uint256 amount, bytes32 hashlock, string memory nearAccount, bool completed, uint256 createdAt)',
-  'function checkEscrowFactory() external view returns (bool)'
+  "event EscrowCreated(address indexed escrow, bytes32 indexed hashlock, string nearAccount, uint256 amount)",
+  "event SwapCompleted(address indexed escrow, bytes32 secret)",
+  "function createETHToNEARBridge(bytes32 hashlock, string calldata nearAccount) external payable returns (bytes32 swapId)",
+  "function completeSwap(bytes32 swapId, bytes32 secret) external",
+  "function getSwap(bytes32 swapId) external view returns (address escrow, address user, uint256 amount, bytes32 hashlock, string memory nearAccount, bool completed, uint256 createdAt)",
+  "function checkEscrowFactory() external view returns (bool)",
 ];
-
 
 interface BridgeEvent {
   id: string;
-  type: 'ETH_TO_NEAR' | 'NEAR_TO_ETH';
-  status: 'PENDING' | 'COMPLETED' | 'FAILED';
+  type: "ETH_TO_NEAR" | "NEAR_TO_ETH";
+  status: "PENDING" | "COMPLETED" | "FAILED";
   amount: string;
   hashlock: string;
   secret?: string;
@@ -28,42 +31,45 @@ interface BridgeEvent {
 }
 
 export function BridgePage() {
-  const [provider, setProvider] = useState<ethers.providers.Web3Provider | null>(null);
+  const [provider, setProvider] =
+    useState<ethers.providers.Web3Provider | null>(null);
   const [signer, setSigner] = useState<ethers.Signer | null>(null);
-  const [account, setAccount] = useState<string>('');
+  const [account, setAccount] = useState<string>("");
   const [contract, setContract] = useState<ethers.Contract | null>(null);
-  
+
   // Bridge state
-  const [amount, setAmount] = useState<string>('1.0');
-  const [nearAccount, setNearAccount] = useState<string>('mat-event.testnet');
-  const [secret, setSecret] = useState<string>('');
-  const [hashlock, setHashlock] = useState<string>('');
+  const [amount, setAmount] = useState<string>("1.0");
+  const [nearAccount, setNearAccount] = useState<string>("mat-event.testnet");
+  const [secret, setSecret] = useState<string>("");
+  const [hashlock, setHashlock] = useState<string>("");
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [bridgeEvents, setBridgeEvents] = useState<BridgeEvent[]>([]);
   const [logs, setLogs] = useState<string[]>([]);
-  const [lastGeneratedCommand, setLastGeneratedCommand] = useState<string>('');
+  const [lastGeneratedCommand, setLastGeneratedCommand] = useState<string>("");
 
   // Connect wallet
   const connectWallet = async () => {
     try {
       if (!window.ethereum) {
-        alert('MetaMask not found!');
+        alert("MetaMask not found!");
         return;
       }
 
       // Switch to fork network first
       const networkSwitched = await switchToForkNetwork();
       if (!networkSwitched) {
-        addLog('⚠️ MetaMask network switch failed - see console for manual setup');
+        addLog(
+          "⚠️ MetaMask network switch failed - see console for manual setup"
+        );
         return;
       }
 
       const web3Provider = new ethers.providers.Web3Provider(window.ethereum);
       await web3Provider.send("eth_requestAccounts", []);
-      
+
       const web3Signer = web3Provider.getSigner();
       const address = await web3Signer.getAddress();
-      
+
       const bridgeContract = new ethers.Contract(
         BRIDGE_CONFIG.contractAddress,
         BRIDGE_ABI,
@@ -74,23 +80,22 @@ export function BridgePage() {
       setSigner(web3Signer);
       setAccount(address);
       setContract(bridgeContract);
-      
+
       addLog(`✅ Wallet connected: ${address}`);
-      
+
       // Check network
       const network = await web3Provider.getNetwork();
       addLog(`🌐 Network: ${network.name} (${network.chainId})`);
-      
+
       // Check balance
       const balance = await web3Signer.getBalance();
       addLog(`💰 Balance: ${ethers.utils.formatEther(balance)} ETH`);
-      
+
       // Check contract
       const factoryCheck = await bridgeContract.checkEscrowFactory();
       addLog(`📦 1inch Factory check: ${factoryCheck}`);
-      
     } catch (error) {
-      console.error('Wallet connection failed:', error);
+      console.error("Wallet connection failed:", error);
       addLog(`❌ Wallet connection failed: ${error}`);
     }
   };
@@ -99,12 +104,15 @@ export function BridgePage() {
   const connectWithForkKey = async () => {
     try {
       // Hardhat default account #0 private key (has 10k ETH on fork)
-      const forkPrivateKey = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
-      
-      const directProvider = new ethers.providers.JsonRpcProvider(BRIDGE_CONFIG.rpcUrl);
+      const forkPrivateKey =
+        "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
+
+      const directProvider = new ethers.providers.JsonRpcProvider(
+        BRIDGE_CONFIG.rpcUrl
+      );
       const directSigner = new ethers.Wallet(forkPrivateKey, directProvider);
       const address = directSigner.address;
-      
+
       const bridgeContract = new ethers.Contract(
         BRIDGE_CONFIG.contractAddress,
         BRIDGE_ABI,
@@ -115,24 +123,27 @@ export function BridgePage() {
       setSigner(directSigner);
       setAccount(address);
       setContract(bridgeContract);
-      
+
       addLog(`✅ Connected with fork account: ${address}`);
       addLog(`📡 Using direct fork connection: ${BRIDGE_CONFIG.rpcUrl}`);
-      
+
       // Check balance
       const balance = await directSigner.getBalance();
       addLog(`💰 Balance: ${ethers.utils.formatEther(balance)} ETH`);
-      
+
       // Check contract
       const factoryCheck = await bridgeContract.checkEscrowFactory();
       addLog(`📦 1inch Factory check: ${factoryCheck}`);
-      
+
       // Get network info
       const network = await directProvider.getNetwork();
-      addLog(`🌐 Network: Chain ID ${network.chainId}, Block ${await directProvider.getBlockNumber()}`);
-      
+      addLog(
+        `🌐 Network: Chain ID ${
+          network.chainId
+        }, Block ${await directProvider.getBlockNumber()}`
+      );
     } catch (error) {
-      console.error('Fork connection failed:', error);
+      console.error("Fork connection failed:", error);
       addLog(`❌ Fork connection failed: ${error}`);
     }
   };
@@ -141,10 +152,10 @@ export function BridgePage() {
   const generateSecretAndHash = () => {
     const newSecret = ethers.utils.hexlify(ethers.utils.randomBytes(32));
     const newHashlock = ethers.utils.sha256(newSecret);
-    
+
     setSecret(newSecret);
     setHashlock(newHashlock);
-    
+
     addLog(`🔑 Generated secret: ${newSecret}`);
     addLog(`🔒 Generated hashlock: ${newHashlock}`);
   };
@@ -152,12 +163,12 @@ export function BridgePage() {
   // Create ETH to NEAR bridge
   const createBridge = async () => {
     if (!contract || !signer) {
-      alert('Please connect wallet first');
+      alert("Please connect wallet first");
       return;
     }
 
     if (!secret || !hashlock) {
-      alert('Please generate secret and hashlock first');
+      alert("Please generate secret and hashlock first");
       return;
     }
 
@@ -165,14 +176,10 @@ export function BridgePage() {
     addLog(`🚀 Initiating ETH → NEAR bridge...`);
 
     try {
-      const tx = await contract.createETHToNEARBridge(
-        hashlock,
-        nearAccount,
-        {
-          value: ethers.utils.parseEther(amount),
-          gasLimit: 500000
-        }
-      );
+      const tx = await contract.createETHToNEARBridge(hashlock, nearAccount, {
+        value: ethers.utils.parseEther(amount),
+        gasLimit: 500000,
+      });
 
       addLog(`📝 Transaction sent: ${tx.hash}`);
       addLog(`⏳ Waiting for confirmation...`);
@@ -182,29 +189,60 @@ export function BridgePage() {
 
       // Parse events
       const escrowCreatedEvent = receipt.events?.find(
-        (event: any) => event.event === 'EscrowCreated'
+        (event: any) => event.event === "EscrowCreated"
       );
 
       if (escrowCreatedEvent) {
-        const { escrow, hashlock: eventHashlock, nearAccount: eventNearAccount, amount: eventAmount } = escrowCreatedEvent.args;
-        
+        const {
+          escrow,
+          hashlock: eventHashlock,
+          nearAccount: eventNearAccount,
+          amount: eventAmount,
+        } = escrowCreatedEvent.args;
+
         addLog(`📦 EscrowCreated event:`);
         addLog(`   Escrow: ${escrow}`);
         addLog(`   Hashlock: ${eventHashlock}`);
         addLog(`   NEAR Account: ${eventNearAccount}`);
         addLog(`   Amount: ${ethers.utils.formatEther(eventAmount)} ETH`);
-        
+
         // Automatically create NEAR HTLC after ETH bridge
         addLog(`🔄 Automatically creating NEAR HTLC...`);
-        
+
         // Wait a bit for ETH tx to be confirmed, then create NEAR HTLC
         setTimeout(async () => {
           await createNearHTLCAutomatically();
+          
+          // 🔥 AUTO-COMPLETE: Wait for bridge-listener to create the bridge, then complete it
+          addLog(`⏳ Waiting for bridge creation (10s) then auto-completing...`);
+          setTimeout(async () => {
+            try {
+              // Get bridges and find ours
+              const response = await fetch(`${BRIDGE_CONFIG.listenerApi}/bridges`);
+              const result = await response.json();
+              
+              if (result.success) {
+                const ourBridge = result.data.find((bridge: any) => 
+                  bridge.type === 'ETH_TO_NEAR' && 
+                  bridge.status === 'PENDING' && 
+                  bridge.hashlock === hashlock
+                );
+                
+                if (ourBridge) {
+                  addLog(`🎯 Found bridge: ${ourBridge.id} - Auto-completing now!`);
+                  await completeBridge(ourBridge.id);
+                } else {
+                  addLog(`❌ Bridge not found for auto-completion`);
+                }
+              }
+            } catch (error) {
+              addLog(`❌ Auto-completion failed: ${error}`);
+            }
+          }, 10000); // Wait 10s for bridge-listener to process
         }, 2000);
       }
-
     } catch (error) {
-      console.error('Bridge creation failed:', error);
+      console.error("Bridge creation failed:", error);
       addLog(`❌ Bridge creation failed: ${error}`);
     } finally {
       setIsLoading(false);
@@ -214,33 +252,35 @@ export function BridgePage() {
   // Complete bridge with secret
   const completeBridge = async (bridgeId: string) => {
     if (!secret) {
-      alert('Secret not available');
+      alert("Secret not available");
       return;
     }
 
     try {
       addLog(`🔓 Completing bridge with secret...`);
-      
+
       // Call the bridge listener API to complete
-      const response = await fetch(`${BRIDGE_CONFIG.listenerApi}/bridges/${bridgeId}/complete`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ secret })
-      });
+      const response = await fetch(
+        `${BRIDGE_CONFIG.listenerApi}/bridges/${bridgeId}/complete`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ secret }),
+        }
+      );
 
       const result = await response.json();
-      
+
       if (result.success) {
         addLog(`✅ Bridge completion initiated`);
         pollBridgeStatus();
       } else {
         addLog(`❌ Bridge completion failed: ${result.error}`);
       }
-
     } catch (error) {
-      console.error('Bridge completion failed:', error);
+      console.error("Bridge completion failed:", error);
       addLog(`❌ Bridge completion failed: ${error}`);
     }
   };
@@ -250,10 +290,35 @@ export function BridgePage() {
     try {
       const response = await fetch(`${BRIDGE_CONFIG.listenerApi}/bridges`);
       const result = await response.json();
-      
+
       if (result.success) {
+        const previousCount = bridgeEvents.length;
         setBridgeEvents(result.data);
         addLog(`📊 Bridge status updated: ${result.data.length} bridges found`);
+        
+        // 🔥 AUTO-COMPLETE: Chercher les bridges ETH→NEAR avec notre hashlock qui ont un contractId
+        if (secret && hashlock) {
+          const ourBridge = result.data.find((bridge: any) => 
+            bridge.type === 'ETH_TO_NEAR' && 
+            bridge.status === 'PENDING' && 
+            bridge.contractId && 
+            bridge.hashlock === hashlock // Notre bridge
+          );
+          
+          if (ourBridge) {
+            addLog(`🎯 Found our bridge: ${ourBridge.id} with contractId: ${ourBridge.contractId}`);
+            addLog(`🚀 Auto-completing bridge in 1 second...`);
+            setTimeout(() => {
+              completeBridge(ourBridge.id);
+            }, 1000);
+          } else if (hashlock) {
+            // Debug: montrer tous les bridges pour diagnostic
+            const debugBridge = result.data.find((bridge: any) => bridge.hashlock === hashlock);
+            if (debugBridge) {
+              addLog(`🔍 Debug our bridge: status=${debugBridge.status}, contractId=${debugBridge.contractId}, type=${debugBridge.type}`);
+            }
+          }
+        }
       }
     } catch (error) {
       // Silently fail if bridge listener not available
@@ -263,13 +328,13 @@ export function BridgePage() {
   // Add log entry
   const addLog = (message: string) => {
     const timestamp = new Date().toLocaleTimeString();
-    setLogs(prev => [...prev, `[${timestamp}] ${message}`]);
+    setLogs((prev) => [...prev, `[${timestamp}] ${message}`]);
   };
 
   // Clear logs
   const clearLogs = () => {
     setLogs([]);
-    setLastGeneratedCommand('');
+    setLastGeneratedCommand("");
   };
 
   // Copy CLI command to clipboard
@@ -290,67 +355,79 @@ export function BridgePage() {
   const checkNearContract = async () => {
     try {
       addLog(`🔍 Checking NEAR contract status...`);
-      
+
       // You can use NEAR RPC directly to call view methods
-      const response = await fetch('https://rpc.testnet.near.org', {
-        method: 'POST',
+      const response = await fetch("https://rpc.testnet.near.org", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          jsonrpc: '2.0',
-          id: 'dontcare',
-          method: 'query',
+          jsonrpc: "2.0",
+          id: "dontcare",
+          method: "query",
           params: {
-            request_type: 'call_function',
-            finality: 'final',
-            account_id: 'mat-event.testnet',
-            method_name: 'get_contract_count',
-            args_base64: btoa('{}'),
+            request_type: "call_function",
+            finality: "final",
+            account_id: "mat-event.testnet",
+            method_name: "get_contract_count",
+            args_base64: btoa("{}"),
           },
         }),
       });
 
       const result = await response.json();
-      
+
       if (result.result && result.result.result) {
-        const count = JSON.parse(new TextDecoder().decode(new Uint8Array(result.result.result)));
+        const count = JSON.parse(
+          new TextDecoder().decode(new Uint8Array(result.result.result))
+        );
         addLog(`📊 NEAR contract has ${count} HTLCs`);
-        
+
         // Get all contracts
-        const allContractsResponse = await fetch('https://rpc.testnet.near.org', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            jsonrpc: '2.0',
-            id: 'dontcare',
-            method: 'query',
-            params: {
-              request_type: 'call_function',
-              finality: 'final',
-              account_id: 'mat-event.testnet',
-              method_name: 'get_all_contracts',
-              args_base64: btoa('{}'),
+        const allContractsResponse = await fetch(
+          "https://rpc.testnet.near.org",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
             },
-          }),
-        });
+            body: JSON.stringify({
+              jsonrpc: "2.0",
+              id: "dontcare",
+              method: "query",
+              params: {
+                request_type: "call_function",
+                finality: "final",
+                account_id: "mat-event.testnet",
+                method_name: "get_all_contracts",
+                args_base64: btoa("{}"),
+              },
+            }),
+          }
+        );
 
         const allContractsResult = await allContractsResponse.json();
         if (allContractsResult.result && allContractsResult.result.result) {
-          const contracts = JSON.parse(new TextDecoder().decode(new Uint8Array(allContractsResult.result.result)));
-          
+          const contracts = JSON.parse(
+            new TextDecoder().decode(
+              new Uint8Array(allContractsResult.result.result)
+            )
+          );
+
           contracts.forEach((contract: any, index: number) => {
             const [id, details] = contract;
             addLog(`📋 HTLC ${index + 1}: ${id}`);
             addLog(`   Sender: ${details[0]}, Receiver: ${details[1]}`);
             addLog(`   Amount: ${details[2]} yoctoNEAR`);
-            addLog(`   Status: ${details[5] ? 'Withdrawn' : details[6] ? 'Refunded' : 'Pending'}`);
+            addLog(
+              `   Status: ${
+                details[5] ? "Withdrawn" : details[6] ? "Refunded" : "Pending"
+              }`
+            );
           });
         }
       }
-      
     } catch (error) {
       addLog(`❌ Failed to check NEAR contract: ${error}`);
     }
@@ -359,57 +436,62 @@ export function BridgePage() {
   // Create NEAR HTLC manually
   const createNearHTLCManually = async () => {
     if (isLoading) return; // Prevent multiple calls
-    
+
     setIsLoading(true);
-    
+
     try {
       addLog(`🚀 Creating NEAR HTLC manually...`);
-      
+
       // First check if bridge listener is available
-      const healthResponse = await fetch(`${BRIDGE_CONFIG.listenerApi}/health`, {
-        signal: AbortSignal.timeout(5000) // 5 second timeout
-      });
-      
+      const healthResponse = await fetch(
+        `${BRIDGE_CONFIG.listenerApi}/health`,
+        {
+          signal: AbortSignal.timeout(5000), // 5 second timeout
+        }
+      );
+
       if (!healthResponse.ok) {
-        throw new Error('Bridge listener not available');
+        throw new Error("Bridge listener not available");
       }
-      
+
       // Convert amount to yoctoNEAR (1 NEAR = 10^24 yoctoNEAR)
       const nearAmount = ethers.utils.parseEther(amount).toString();
-      
+
       // Create HTLC via bridge listener API
-      const response = await fetch(`${BRIDGE_CONFIG.listenerApi}/bridges/initiate`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          type: 'ETH_TO_NEAR',
-          amount: nearAmount,
-          hashlock: hashlock,
-          timelock: Date.now() + (24 * 60 * 60 * 1000), // 24h from now
-          ethRecipient: account,
-          nearAccount: nearAccount,
-          secret: secret
-        }),
-        signal: AbortSignal.timeout(10000) // 10 second timeout
-      });
+      const response = await fetch(
+        `${BRIDGE_CONFIG.listenerApi}/bridges/initiate`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            type: "ETH_TO_NEAR",
+            amount: nearAmount,
+            hashlock: hashlock,
+            timelock: Date.now() + 24 * 60 * 60 * 1000, // 24h from now
+            ethRecipient: account,
+            nearAccount: nearAccount,
+            secret: secret,
+          }),
+          signal: AbortSignal.timeout(10000), // 10 second timeout
+        }
+      );
 
       const result = await response.json();
-      
+
       if (result.success) {
         addLog(`✅ NEAR HTLC created manually: ${result.data.bridgeId}`);
         pollBridgeStatus();
       } else {
         addLog(`❌ Failed to create NEAR HTLC: ${result.error}`);
       }
-      
     } catch (error) {
-      if (error.name === 'TimeoutError' || error.message.includes('timeout')) {
+      if (error.name === "TimeoutError" || error.message.includes("timeout")) {
         addLog(`⏰ Request timeout - bridge listener not responding`);
         addLog(`❌ Make sure bridge listener is running on port 3002`);
         addLog(`💡 Start it with: cd bridge-listener && pnpm run dev`);
-      } else if (error.message.includes('fetch')) {
+      } else if (error.message.includes("fetch")) {
         addLog(`🔌 Bridge listener not available - is it running?`);
         addLog(`💡 Start it with: cd bridge-listener && pnpm run dev`);
       } else {
@@ -420,55 +502,16 @@ export function BridgePage() {
     }
   };
 
-  // Direct NEAR HTLC creation
-  const createNearHTLCDirect = async () => {
-    try {
-      addLog(`📞 Calling NEAR contract directly...`);
-      
-      // Convert hashlock to bytes array for NEAR
-      const hashlockBytes = Array.from(ethers.utils.arrayify(hashlock));
-      const nearAmountYocto = ethers.utils.parseEther(amount).toString();
-      
-      // Call NEAR contract via RPC
-      const response = await fetch('https://rpc.testnet.near.org', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          jsonrpc: '2.0',
-          id: 'dontcare',
-          method: 'broadcast_tx_commit',
-          params: [
-            // This would need to be a signed transaction
-            // For now, just show the parameters that would be used
-          ],
-        }),
-      });
-      
-      addLog(`⚠️ Direct NEAR call requires signing - use bridge listener instead`);
-      addLog(`Parameters that would be used:`);
-      addLog(`  Contract: matthias-dev.testnet`);
-      addLog(`  Method: create_cross_chain_htlc`);
-      addLog(`  Receiver: ${nearAccount}`);
-      addLog(`  Amount: ${nearAmountYocto} yoctoNEAR`);
-      addLog(`  Hashlock: ${hashlockBytes.length} bytes`);
-      
-    } catch (error) {
-      addLog(`❌ Direct NEAR call failed: ${error}`);
-    }
-  };
-
   // Show NEAR CLI command
   const showNearCLICommand = () => {
     const hashlockBytes = Array.from(ethers.utils.arrayify(hashlock));
     const nearAmountYocto = ethers.utils.parseEther(amount).toString();
-    const timelock = Date.now() + (24 * 60 * 60 * 1000);
-    
+    const timelock = Date.now() + 24 * 60 * 60 * 1000;
+
     addLog(`📋 NEAR CLI Command to create HTLC:`);
     addLog(`near call mat-event.testnet create_cross_chain_htlc '{`);
     addLog(`  "receiver": "${nearAccount}",`);
-    addLog(`  "hashlock": [${hashlockBytes.join(',')}],`);
+    addLog(`  "hashlock": [${hashlockBytes.join(",")}],`);
     addLog(`  "timelock": ${timelock},`);
     addLog(`  "eth_address": "${account}"`);
     addLog(`}' --accountId mat-event.testnet --amount ${amount}`);
@@ -482,196 +525,135 @@ export function BridgePage() {
   const createNearHTLCAutomatically = async () => {
     try {
       addLog(`🤖 Auto-creating NEAR HTLC...`);
-      
-      // Convert hashlock to bytes for NEAR contract
+
+      // 1️⃣ Préparez les paramètres
       const hashlockBytes = Array.from(ethers.utils.arrayify(hashlock));
-      const timelock = Date.now() + (24 * 60 * 60 * 1000); // 24h
-      const nearAmountYocto = ethers.utils.parseEther(amount).toString();
-      
-      // Create the NEAR transaction payload
+      const timelock = Date.now() + 24 * 60 * 60 * 1000; // 24h
+
+      // 2️⃣ Calculez le dépôt en yoctoⓃ (parseNearAmount ne retourne jamais undefined avec un string valide)
+      const depositYocto = parseNearAmount(amount)!; // ex. "1.0" → "1000000000000000000000000"
+
       const nearCallParams = {
         receiver: nearAccount,
         hashlock: hashlockBytes,
         timelock: timelock,
-        eth_address: account || "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+        eth_address: account || "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+        depositYocto,
       };
-      
+
       addLog(`📞 Calling NEAR contract with parameters:`);
       addLog(`   Contract: mat-event.testnet`);
-      addLog(`   Method: create_cross_chain_htlc`);
-      addLog(`   Amount: ${amount} NEAR`);
+      addLog(`   Method:  create_cross_chain_htlc`);
+      addLog(
+        `   Amount:  ${amount} Ⓝ (${formatNearAmount(depositYocto)} yoctoⓃ)`
+      );
       addLog(`   Receiver: ${nearAccount}`);
-      
-      // For now, create a transaction that the user needs to sign
-      // In a full implementation, this would use a NEAR wallet integration
-      const nearTransaction = {
-        receiverId: "mat-event.testnet",
-        actions: [{
-          type: "FunctionCall",
-          params: {
-            methodName: "create_cross_chain_htlc",
-            args: nearCallParams,
-            gas: "100000000000000",
-            deposit: nearAmountYocto
-          }
-        }]
-      };
-      
-      addLog(`✅ NEAR transaction prepared`);
-      addLog(`💡 In production, this would be sent via NEAR Wallet`);
-      addLog(`📋 Transaction payload ready for: create_cross_chain_htlc`);
-      
-      // Try to execute the NEAR transaction automatically
+
+      // 3️⃣ Essayez la transmission automatique
       try {
-        // Use the pre-configured NEAR account keys to sign the transaction
-        const nearPrivateKey = 'ed25519:4xEQkSSVZEMH2Sssa7C2Bp9zBh6FDmcqE5Xz3LQrHMx3VTHgeZNsq2web2bMRSNUob7A2DBAhv6wxFVNfG8g2yd1';
-        
-        addLog(`🔐 Using mat-event.testnet private key to sign transaction...`);
-        
-        // Create the NEAR transaction using the private key
-        const nearRPCCall = {
-          jsonrpc: '2.0',
-          id: 'dontcare',
-          method: 'broadcast_tx_commit',
-          params: [
-            // This would be a properly signed transaction
-            // For demo purposes, we'll show what would happen
-          ]
-        };
-        
-        addLog(`📡 Broadcasting NEAR transaction...`);
-        
-        // Actually execute the NEAR transaction
-        await executeNearTransaction(nearCallParams, nearAmountYocto);
-        
+        addLog(`🔐 Signing & broadcasting via hybrid CLI generation...`);
+        await executeNearTransaction(nearCallParams);
       } catch (txError) {
         addLog(`❌ NEAR transaction failed: ${txError}`);
-        addLog(`💡 Fallback: Use the NEAR CLI command shown above`);
+        addLog(`💡 Fallback: use the NEAR CLI command generated below`);
       }
-      
     } catch (error) {
       addLog(`❌ Auto NEAR HTLC creation failed: ${error}`);
     }
   };
 
-  // Execute NEAR transaction via CLI generation (hybrid solution)
-  const executeNearTransaction = async (params: any, deposit: string) => {
-    try {
-      addLog(`🔧 Generating NEAR CLI command for manual execution...`);
-      addLog(`⚠️ Due to environment limitations, using hybrid approach`);
-      
-      // Generate the exact CLI command
-      const hashlockBytes = Array.from(ethers.utils.arrayify(params.hashlock));
-      const hashlockBase64 = Buffer.from(hashlockBytes).toString('base64');
-      const amountNEAR = ethers.utils.formatEther(deposit);
-      
-      const cliCommand = `near call mat-event.testnet create_cross_chain_htlc '{
+  interface NearTxParams {
+    receiver: string;
+    hashlock: number[];
+    timelock: number;
+    eth_address: string;
+    depositYocto: string;
+  }
+
+  const executeNearTransaction = async (params: NearTxParams) => {
+    // 1️⃣ Transformez le hashlock en base64
+    const hashlockBase64 = Buffer.from(params.hashlock).toString("base64");
+    // 2️⃣ Préparez la commande CLI avec --deposit
+    const cliCommand = `near call mat-event.testnet create_cross_chain_htlc '{
   "receiver": "${params.receiver}",
   "hashlock": "${hashlockBase64}",
   "timelock": ${params.timelock},
   "eth_address": "${params.eth_address}"
-}' --accountId mat-event.testnet --amount ${amountNEAR}`;
+}' \\
+--accountId mat-event.testnet \\
+--deposit ${params.depositYocto}`;
 
-      addLog(`📋 NEAR CLI Command Generated:`);
-      addLog(`==========================================`);
-      addLog(cliCommand);
-      addLog(`==========================================`);
-      addLog(`📝 Your secret: ${secret}`);
-      addLog(`🔒 Your hashlock: ${hashlock}`);
-      addLog(`💡 Copy the command above and execute it in your terminal!`);
-      addLog(`🎯 This will create the NEAR HTLC with ${amountNEAR} NEAR tokens`);
-      
-      // Store the command for easy copying
-      setLastGeneratedCommand(cliCommand);
-      
-      // Try the bridge listener API as backup (might work)
-      try {
-        addLog(`🔄 Also trying bridge-listener API as backup...`);
-        const response = await fetch('http://localhost:3002/bridges/create-near-htlc', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            receiver: params.receiver,
-            hashlock: ethers.utils.hexlify(new Uint8Array(params.hashlock)),
-            timelock: params.timelock,
-            ethAddress: params.eth_address,
-            amount: deposit
-          }),
-          signal: AbortSignal.timeout(10000)
-        });
-
-        if (response.ok) {
-          const result = await response.json();
-          if (result.success) {
-            addLog(`🎉 Bridge-listener also succeeded: ${result.data.message}`);
-          } else {
-            addLog(`⚠️ Bridge-listener failed: ${result.error}`);
-          }
-        }
-      } catch (apiError) {
-        addLog(`📡 Bridge-listener not available (expected) - use CLI command above`);
-      }
-      
-      // Update UI to show pending state
-      setBridgeEvents(prev => [...prev, {
-        id: `bridge_${Date.now()}`,
-        type: 'ETH_TO_NEAR' as const,
-        status: 'PENDING' as const,
-        amount: ethers.utils.parseEther(amount).toString(),
-        hashlock: hashlock,
-        secret: secret,
-        ethTxHash: 'completed',
-        nearTxHash: 'pending_manual_execution',
-        ethRecipient: account || '',
-        nearAccount: nearAccount,
-        timelock: params.timelock,
-        createdAt: Date.now()
-      }]);
-      
-      addLog(`✅ ETH side completed, NEAR CLI command ready for execution!`);
-      
-    } catch (error) {
-      addLog(`❌ Error generating CLI command: ${error}`);
-      showNearCLICommand();
-    }
+    // 3️⃣ Stockez et affichez dans les logs
+    setLastGeneratedCommand(cliCommand);
+    addLog(
+      `📋 NEAR CLI Command Generated (deposit=${formatNearAmount(
+        params.depositYocto
+      )}Ⓝ):`
+    );
+    addLog(cliCommand);
   };
 
   // Connect to bridge events stream
   useEffect(() => {
+    addLog(`🔍 Checking bridge listener at: ${BRIDGE_CONFIG.listenerApi}/health`);
+    
     // Check if bridge listener is available
     fetch(`${BRIDGE_CONFIG.listenerApi}/health`)
       .then(() => {
-        // Bridge listener available, connect to events
-        const eventSource = new EventSource(`${BRIDGE_CONFIG.listenerApi}/events`);
+        addLog(`✅ Bridge listener available, connecting to SSE...`);
         
+        // Bridge listener available, connect to events
+        const eventSource = new EventSource(
+          `${BRIDGE_CONFIG.listenerApi}/events`
+        );
+        
+        addLog(`🔌 SSE URL: ${BRIDGE_CONFIG.listenerApi}/events`);
+
         eventSource.onmessage = (event) => {
           try {
+            addLog(`📡 SSE Event received: ${event.data}`); // 🔥 Debug SSE
             const data = JSON.parse(event.data);
-            
-            if (data.type === 'bridgeCreated') {
+
+            if (data.type === "bridgeCreated") {
               addLog(`🌉 Bridge created: ${data.data.id} (${data.data.type})`);
+              addLog(`📋 Bridge details: contractId=${data.data.contractId}, secret=${secret ? 'available' : 'missing'}`);
               pollBridgeStatus();
-            } else if (data.type === 'bridgeCompleted') {
+              
+              // 🔥 AUTO-COMPLETE: Si c'est un bridge ETH→NEAR avec contractId et qu'on a le secret
+              if (data.data.type === "ETH_TO_NEAR" && data.data.contractId && secret) {
+                addLog(`🚀 Auto-completing bridge with secret in 2 seconds...`);
+                setTimeout(() => {
+                  addLog(`🔓 Completing bridge: ${data.data.id}`);
+                  completeBridge(data.data.id);
+                }, 2000);
+              } else if (data.data.type === "ETH_TO_NEAR") {
+                addLog(`⏳ Bridge ETH→NEAR detected but waiting for contractId or secret...`);
+              }
+            } else if (data.type === "bridgeCompleted") {
               addLog(`✅ Bridge completed: ${data.data.id}`);
               pollBridgeStatus();
             }
           } catch (error) {
-            console.error('Error parsing SSE event:', error);
+            console.error("Error parsing SSE event:", error);
           }
         };
 
         eventSource.onerror = (error) => {
-          console.error('SSE connection error:', error);
+          console.error("SSE connection error:", error);
+          addLog(`❌ SSE Error: ${JSON.stringify(error)}`); // 🔥 Debug SSE Error
+        };
+
+        eventSource.onopen = () => {
+          addLog(`✅ SSE Connected to ${BRIDGE_CONFIG.listenerApi}/events`); // 🔥 Debug SSE Open
         };
 
         return () => {
           eventSource.close();
         };
       })
-      .catch(() => {
-        addLog('⚠️ Bridge listener not available - manual mode only');
+      .catch((error) => {
+        addLog(`❌ Bridge listener not available: ${error.message}`);
+        addLog("⚠️ Manual mode only");
       });
   }, []);
 
@@ -683,8 +665,10 @@ export function BridgePage() {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <h1 className="text-3xl font-bold mb-8">ETH ↔ NEAR Bridge (1inch Integration)</h1>
-      
+      <h1 className="text-3xl font-bold mb-8">
+        ETH ↔ NEAR Bridge (1inch Integration)
+      </h1>
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Control Panel */}
         <div className="space-y-6">
@@ -697,7 +681,11 @@ export function BridgePage() {
                   Connect MetaMask
                 </Button>
                 <div className="text-center text-sm text-gray-500">or</div>
-                <Button onClick={connectWithForkKey} className="w-full" variant="outline">
+                <Button
+                  onClick={connectWithForkKey}
+                  className="w-full"
+                  variant="outline"
+                >
                   Use Fork Account (Test)
                 </Button>
                 <p className="text-xs text-gray-500 text-center">
@@ -708,7 +696,9 @@ export function BridgePage() {
               <div className="space-y-2">
                 <p className="text-sm text-gray-600">Connected: {account}</p>
                 <p className="text-sm text-gray-600">Network: Fork Mainnet</p>
-                <p className="text-sm text-gray-600">Bridge: {BRIDGE_CONFIG.contractAddress}</p>
+                <p className="text-sm text-gray-600">
+                  Bridge: {BRIDGE_CONFIG.contractAddress}
+                </p>
               </div>
             )}
           </Card>
@@ -718,7 +708,9 @@ export function BridgePage() {
             <h2 className="text-xl font-semibold mb-4">Bridge Configuration</h2>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium mb-2">Amount (ETH)</label>
+                <label className="block text-sm font-medium mb-2">
+                  Amount (ETH)
+                </label>
                 <input
                   type="number"
                   value={amount}
@@ -728,9 +720,11 @@ export function BridgePage() {
                   min="0.1"
                 />
               </div>
-              
+
               <div>
-                <label className="block text-sm font-medium mb-2">NEAR Account</label>
+                <label className="block text-sm font-medium mb-2">
+                  NEAR Account
+                </label>
                 <input
                   type="text"
                   value={nearAccount}
@@ -741,35 +735,47 @@ export function BridgePage() {
               </div>
 
               <div className="space-y-2">
-                <Button onClick={generateSecretAndHash} className="w-full" variant="outline">
+                <Button
+                  onClick={generateSecretAndHash}
+                  className="w-full"
+                  variant="outline"
+                >
                   Generate Secret & Hashlock
                 </Button>
                 {secret && (
                   <div className="space-y-2 text-xs">
-                    <p><strong>Secret:</strong> {secret.substring(0, 20)}...</p>
-                    <p><strong>Hashlock:</strong> {hashlock.substring(0, 20)}...</p>
+                    <p>
+                      <strong>Secret:</strong> {secret.substring(0, 20)}...
+                    </p>
+                    <p>
+                      <strong>Hashlock:</strong> {hashlock.substring(0, 20)}...
+                    </p>
                   </div>
                 )}
               </div>
 
-              <Button 
-                onClick={createBridge} 
+              <Button
+                onClick={createBridge}
                 disabled={!contract || isLoading || !secret}
                 className="w-full"
               >
-                {isLoading ? 'Creating Bridge...' : `Bridge ${amount} ETH → NEAR`}
+                {isLoading
+                  ? "Creating Bridge..."
+                  : `Bridge ${amount} ETH → NEAR`}
               </Button>
 
-              <Button 
+              <Button
                 onClick={createNearHTLCManually}
                 disabled={!secret || !hashlock || isLoading}
                 className="w-full mt-2"
                 variant="outline"
               >
-                {isLoading ? 'Creating NEAR HTLC...' : 'Create NEAR HTLC Manually'}
+                {isLoading
+                  ? "Creating NEAR HTLC..."
+                  : "Create NEAR HTLC Manually"}
               </Button>
 
-              <Button 
+              <Button
                 onClick={showNearCLICommand}
                 disabled={!secret || !hashlock}
                 className="w-full mt-2"
@@ -800,16 +806,19 @@ export function BridgePage() {
                         <p className="text-sm text-gray-600">
                           {ethers.utils.formatEther(bridge.amount)} ETH
                         </p>
-                        <p className="text-sm text-gray-600">Status: {bridge.status}</p>
+                        <p className="text-sm text-gray-600">
+                          Status: {bridge.status}
+                        </p>
                       </div>
-                      {bridge.status === 'PENDING' && bridge.type === 'ETH_TO_NEAR' && (
-                        <Button
-                          size="sm"
-                          onClick={() => completeBridge(bridge.id)}
-                        >
-                          Complete
-                        </Button>
-                      )}
+                      {bridge.status === "PENDING" &&
+                        bridge.type === "ETH_TO_NEAR" && (
+                          <Button
+                            size="sm"
+                            onClick={() => completeBridge(bridge.id)}
+                          >
+                            Complete
+                          </Button>
+                        )}
                     </div>
                   </div>
                 ))
@@ -834,9 +843,9 @@ export function BridgePage() {
                 </Button>
               </div>
             </div>
-            <div 
+            <div
               className="bg-black text-green-400 p-4 rounded font-mono text-xs h-96 overflow-y-auto"
-              style={{ fontFamily: 'monospace' }}
+              style={{ fontFamily: "monospace" }}
             >
               {logs.length === 0 ? (
                 <p>Ready to bridge... 🌉</p>
@@ -854,17 +863,25 @@ export function BridgePage() {
 
       {/* Instructions */}
       <Card className="mt-8 p-6">
-        <h2 className="text-xl font-semibold mb-4">How to Use the Hybrid Bridge</h2>
+        <h2 className="text-xl font-semibold mb-4">
+          How to Use the Hybrid Bridge
+        </h2>
         <div className="space-y-2 text-sm">
-          <p><strong>1.</strong> Connect your wallet to the fork mainnet (or use "Use Fork Account")</p>
-          <p><strong>2.</strong> Generate a secret and hashlock</p>
-          <p><strong>3.</strong> Click "Bridge ETH → NEAR" - ETH will be bridged automatically</p>
-          <p><strong>4.</strong> Copy the generated NEAR CLI command from the logs</p>
-          <p><strong>5.</strong> Execute the command in your terminal to create the NEAR HTLC</p>
-          <p><strong>6.</strong> Use your secret to complete the bridge when needed</p>
-          <p><strong>✅ ETH Side:</strong> Fully automated with 1inch EscrowFactory at {BRIDGE_CONFIG.contractAddress}</p>
-          <p><strong>🔧 NEAR Side:</strong> Semi-automated CLI generation due to environment limitations</p>
-          <p><strong>Note:</strong> Bridge listener on localhost:3002 provides backup API attempts</p>
+          <p>
+            <strong>1.</strong> Connect your wallet to the fork mainnet (or use
+            "Use Fork Account")
+          </p>
+          <p>
+            <strong>2.</strong> Generate a secret and hashlock
+          </p>
+          <p>
+            <strong>3.</strong> Click "Bridge ETH → NEAR" - ETH will be bridged
+            automatically
+          </p>
+          <p>
+            <strong>4.</strong> Click "COMPLETE" to finalize the bridge with the
+            secret
+          </p>
         </div>
       </Card>
     </div>

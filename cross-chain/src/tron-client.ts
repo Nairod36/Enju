@@ -55,19 +55,10 @@ export class TronClient {
         feeLimit: 100000000 // 100 TRX fee limit
       });
 
-      // Generate swap ID (should match contract logic)
-      const swapId = this.tronWeb.utils.crypto.keccak256(
-        this.tronWeb.utils.abi.encodeParams(
-          ['address', 'bytes32', 'string', 'string', 'uint256'],
-          [
-            this.tronWeb.defaultAddress.base58,
-            hashlock,
-            targetAccount,
-            targetChain,
-            Date.now()
-          ]
-        )
-      );
+      // Generate swap ID using Node.js crypto (simpler approach)
+      const crypto = require('crypto');
+      const swapData = `${this.tronWeb.defaultAddress.base58}-${hashlock}-${targetAccount}-${targetChain}-${Date.now()}`;
+      const swapId = '0x' + crypto.createHash('sha256').update(swapData).digest('hex');
 
       return {
         success: true,
