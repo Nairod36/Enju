@@ -10,6 +10,11 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@near-wallet-selector/core": "^9.2.0",
+    "@near-wallet-selector/meteor-wallet": "^9.2.0",
+    "@near-wallet-selector/modal-ui": "^9.2.0",
+    "@near-wallet-selector/my-near-wallet": "^9.2.0",
+    "@near-wallet-selector/react-hook": "^9.2.0",
     "@radix-ui/react-dialog": "^1.1.14",
     "@radix-ui/react-progress": "^1.1.7",
     "@radix-ui/react-slot": "^1.2.3",
@@ -23,6 +28,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "ethers": "^5.7.2",
+    "install": "^0.13.0",
     "lucide-react": "^0.525.0",
     "near-api-js": "^6.2.4",
     "noisejs": "^2.1.0",

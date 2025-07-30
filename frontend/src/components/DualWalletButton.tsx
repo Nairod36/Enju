@@ -1,24 +1,22 @@
-import React, { useState } from 'react';
-import { createPortal } from 'react-dom';
-import { Button } from './ui/button';
-import { useAccount, useDisconnect } from 'wagmi';
-import { useAppKit } from '@reown/appkit/react';
-import { useNearWallet } from '@/hooks/useNearWallet';
-import { Wallet, ChevronDown, X } from 'lucide-react';
+import React, { useState } from "react";
+import { createPortal } from "react-dom";
+import { Button } from "./ui/button";
+import { useAccount, useDisconnect } from "wagmi";
+import { useAppKit } from "@reown/appkit/react";
+import { Wallet, ChevronDown, X } from "lucide-react";
+import { useWalletSelector } from "@near-wallet-selector/react-hook";
 
 export function DualWalletButton() {
   const { address: ethAddress, isConnected: ethConnected } = useAccount();
   const { disconnect: disconnectEth } = useDisconnect();
   const { open } = useAppKit();
-  
-  const { 
-    accountId: nearAccountId, 
-    isConnected: nearConnected, 
-    isLoading: nearLoading,
-    connectWallet: connectNear, 
-    disconnectWallet: disconnectNear,
-    formatAccountId 
-  } = useNearWallet();
+
+  // NEAR wallet selector hooks
+  const {
+    signedAccountId: nearAccountId,
+    signOut: signOutNear,
+    signIn: signInNear
+  } = useWalletSelector();
 
   const [showWalletModal, setShowWalletModal] = useState(false);
 
@@ -27,7 +25,7 @@ export function DualWalletButton() {
       await open();
       setShowWalletModal(false);
     } catch (error) {
-      console.error('ETH connection failed:', error);
+      console.error("ETH connection failed:", error);
     }
   };
 
@@ -35,20 +33,36 @@ export function DualWalletButton() {
     return `${addr.substring(0, 6)}...${addr.substring(addr.length - 4)}`;
   };
 
-  const handleConnectNear = async () => {
-    await connectNear();
-    setShowWalletModal(false);
+  const formatAccountId = (accountId: string) => {
+    if (accountId.length <= 20) return accountId;
+    return `${accountId.substring(0, 8)}...${accountId.substring(accountId.length - 8)}`;
   };
 
+  const handleConnectNear = async () => {
+    try {
+      await signInNear();
+      setShowWalletModal(false);
+    } catch (error) {
+      console.error("NEAR connection failed:", error);
+    }
+  };
+
+  const nearConnected = !!nearAccountId;
   const bothConnected = ethConnected && nearConnected;
   const noneConnected = !ethConnected && !nearConnected;
 
   // Modal component avec portal
-  const WalletModal = ({ title, children }: { title: string; children: React.ReactNode }) => {
+  const WalletModal = ({
+    title,
+    children,
+  }: {
+    title: string;
+    children: React.ReactNode;
+  }) => {
     if (!showWalletModal) return null;
-    
+
     return createPortal(
-      <div 
+      <div
         className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center"
         style={{ zIndex: 9999 }}
         onClick={(e) => {
@@ -57,7 +71,10 @@ export function DualWalletButton() {
           }
         }}
       >
-        <div className="bg-white rounded-2xl p-6 w-96 max-w-[90vw] shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div
+          className="bg-white rounded-2xl p-6 w-96 max-w-[90vw] shadow-2xl"
+          onClick={(e) => e.stopPropagation()}
+        >
           <div className="flex items-center justify-between mb-6">
             <h3 className="text-xl font-semibold text-gray-900">{title}</h3>
             <Button
@@ -99,7 +116,9 @@ export function DualWalletButton() {
               </div>
               <div className="flex-1 text-left">
                 <div className="font-medium text-gray-900">Ethereum</div>
-                <div className="text-sm text-gray-500">Connect with MetaMask or WalletConnect</div>
+                <div className="text-sm text-gray-500">
+                  Connect with MetaMask or WalletConnect
+                </div>
               </div>
               <ChevronDown className="w-5 h-5 text-gray-400 rotate-[-90deg] group-hover:text-gray-600" />
             </button>
@@ -107,8 +126,7 @@ export function DualWalletButton() {
             {/* NEAR Wallet */}
             <button
               onClick={handleConnectNear}
-              disabled={nearLoading}
-              className="w-full flex items-center gap-4 p-4 rounded-xl border border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition-all group disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full flex items-center gap-4 p-4 rounded-xl border border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition-all group"
             >
               <div className="w-10 h-10 rounded-xl bg-gradient-to-r from-purple-500 to-purple-600 flex items-center justify-center text-white text-xl">
                 Ⓝ
@@ -116,7 +134,7 @@ export function DualWalletButton() {
               <div className="flex-1 text-left">
                 <div className="font-medium text-gray-900">NEAR Protocol</div>
                 <div className="text-sm text-gray-500">
-                  {nearLoading ? 'Connecting...' : 'Connect with NEAR Wallet'}
+                  Connect with NEAR Wallet
                 </div>
               </div>
               <ChevronDown className="w-5 h-5 text-gray-400 rotate-[-90deg] group-hover:text-gray-600" />
@@ -165,7 +183,7 @@ export function DualWalletButton() {
             {formatAccountId(nearAccountId)}
           </span>
           <Button
-            onClick={disconnectNear}
+            onClick={() => signOutNear()}
             variant="ghost"
             size="sm"
             className="h-6 w-6 p-0 hover:bg-red-50 hover:text-red-600 ml-1"
@@ -202,7 +220,9 @@ export function DualWalletButton() {
                 </div>
                 <div className="flex-1 text-left">
                   <div className="font-medium text-gray-900">Ethereum</div>
-                  <div className="text-sm text-gray-500">Connect with MetaMask</div>
+                  <div className="text-sm text-gray-500">
+                    Connect with MetaMask
+                  </div>
                 </div>
                 <ChevronDown className="w-5 h-5 text-gray-400 rotate-[-90deg] group-hover:text-gray-600" />
               </button>
@@ -211,8 +231,7 @@ export function DualWalletButton() {
             {!nearConnected && (
               <button
                 onClick={handleConnectNear}
-                disabled={nearLoading}
-                className="w-full flex items-center gap-4 p-4 rounded-xl border border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition-all group disabled:opacity-50"
+                className="w-full flex items-center gap-4 p-4 rounded-xl border border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition-all group"
               >
                 <div className="w-10 h-10 rounded-xl bg-gradient-to-r from-purple-500 to-purple-600 flex items-center justify-center text-white text-xl">
                   Ⓝ
@@ -220,7 +239,7 @@ export function DualWalletButton() {
                 <div className="flex-1 text-left">
                   <div className="font-medium text-gray-900">NEAR Protocol</div>
                   <div className="text-sm text-gray-500">
-                    {nearLoading ? 'Connecting...' : 'Connect with NEAR Wallet'}
+                    Connect with NEAR Wallet
                   </div>
                 </div>
                 <ChevronDown className="w-5 h-5 text-gray-400 rotate-[-90deg] group-hover:text-gray-600" />

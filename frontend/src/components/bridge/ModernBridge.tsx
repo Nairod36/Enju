@@ -12,7 +12,7 @@ import {
 import { BridgeModal } from "./BridgeModal";
 import { useAccount } from "wagmi";
 import { useCustomBalance } from "@/hooks/useCustomBalance";
-import { useNearWallet } from "@/hooks/useNearWallet";
+// import { useNearWallet } from "@/hooks/useNearWallet";
 import { ethers } from "ethers";
 import { BRIDGE_CONFIG } from "@/config/networks";
 
@@ -40,11 +40,11 @@ const chainNames = {
 export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
   const { address, isConnected, chainId } = useAccount();
   const { balance, isLoading: balanceLoading } = useCustomBalance();
-  const {
-    accountId: nearAccountId,
-    isConnected: nearConnected,
-    balance: nearBalance,
-  } = useNearWallet();
+  // const {
+  //   accountId: nearAccountId,
+  //   isConnected: nearConnected,
+  //   balance: nearBalance,
+  // } = useNearWallet();
 
   // Debug logging
   useEffect(() => {
@@ -175,7 +175,7 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
     const needsNearWallet = fromChain === "near" || toChain === "near";
 
     if (needsEthWallet && !isConnected) return;
-    if (needsNearWallet && !nearConnected) return;
+    // if (needsNearWallet && !nearConnected) return;
     if (!fromAmount) return;
 
     setIsLoading(true);
@@ -184,7 +184,6 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
       fromAmount,
       fromChain,
       toChain,
-      nearAccount: toChain === "near" ? nearAccountId : undefined,
     };
 
     setBridgeData(newBridgeData as any);
@@ -278,7 +277,7 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
                       )}
                     </div>
                   )}
-                  {fromChain === "near" && nearConnected && (
+                  {/* {fromChain === "near" && nearConnected && (
                     <div className="text-xs text-gray-500">
                       {nearBalance ? (
                         <div>
@@ -291,15 +290,15 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
                         <p>Loading NEAR balance...</p>
                       )}
                     </div>
-                  )}
+                  )} */}
                   {fromChain === "ethereum" && !isConnected && (
                     <p className="text-xs text-red-500">
                       Connect Ethereum wallet
                     </p>
                   )}
-                  {fromChain === "near" && !nearConnected && (
+                  {/* {fromChain === "near" && !nearConnected && (
                     <p className="text-xs text-red-500">Connect NEAR wallet</p>
-                  )}
+                  )} */}
                 </div>
 
                 <div className="relative">
@@ -392,7 +391,7 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
                   <label className="text-xs font-semibold text-gray-700">
                     NEAR Account
                   </label>
-                  {nearConnected && nearAccountId ? (
+                  {/* {nearConnected && nearAccountId ? (
                     <div className="w-full px-2.5 py-1.5 bg-purple-50 border border-purple-200 rounded-lg text-sm">
                       <div className="flex items-center gap-2">
                         <div className="w-2 h-2 bg-purple-400 rounded-full animate-pulse"></div>
@@ -405,7 +404,7 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
                     <div className="w-full px-2.5 py-2.5 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600">
                       Please connect your NEAR wallet
                     </div>
-                  )}
+                  )} */}
                 </div>
               )}
 
@@ -462,8 +461,8 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
                   !fromAmount ||
                   isLoading ||
                   (fromChain === "ethereum" && !isConnected) ||
-                  (fromChain === "near" && !nearConnected) ||
-                  (toChain === "near" && !nearConnected) ||
+                  // (fromChain === "near" && !nearConnected) ||
+                  // (toChain === "near" && !nearConnected) ||
                   (toChain === "ethereum" && !isConnected)
                 }
                 className="w-full h-12 bg-gradient-to-r from-emerald-600 to-blue-600 hover:from-emerald-700 hover:to-blue-700 text-white font-bold text-sm rounded-lg shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 transform hover:scale-[1.02]"
@@ -474,10 +473,10 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
                     Processing...
                   </div>
                 ) : (fromChain === "ethereum" && !isConnected) ||
-                  (fromChain === "near" && !nearConnected) ? (
+                  fromChain === "near" ? (
                   "Connect Wallet"
                 ) : (toChain === "ethereum" && !isConnected) ||
-                  (toChain === "near" && !nearConnected) ? (
+                  toChain === "near" ? (
                   "Connect Destination Wallet"
                 ) : (
                   `Bridge ${
