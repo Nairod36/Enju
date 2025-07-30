@@ -28,10 +28,23 @@ import {
   Zap,
   AlertCircle,
   Loader2,
+  Info,
 } from "lucide-react";
 import { useAccount } from "wagmi"; // Wallet connection and account info
 import { ethers } from "ethers"; // Blockchain interaction utilities
-import { oneInchService, Token, SwapQuote, POPULAR_TOKENS } from "@/services/oneInchService";
+import { 
+  fusionService, 
+  Token, 
+  FusionQuote, 
+  FUSION_TOKENS,
+  FusionOrder,
+  OrderStatus
+} from "@/services/oneInchFusionService";
+import { 
+  TEST_ACCOUNTS, 
+  LOCAL_FORK_CONFIG,
+  isConnectedToLocalFork 
+} from "@/utils/localFork";
 
 // Component props interface - allows parent components to handle swap success events
 interface IntentSwapProps {
@@ -41,26 +54,28 @@ interface IntentSwapProps {
 /**
  * SwapState Interface
  * 
- * Centralized state management for all swap-related data.
+ * Centralized state management for all Fusion swap-related data.
  * This approach keeps the component organized and makes state updates predictable.
  */
 interface SwapState {
-  fromToken: Token;           // Source token for the swap
-  toToken: Token;             // Destination token for the swap
-  fromAmount: string;         // User input amount (as string to handle decimals)
-  toAmount: string;           // Calculated output amount from 1inch API
-  quote: SwapQuote | null;    // Full quote object from 1inch API
-  isLoadingQuote: boolean;    // Loading state for quote fetching
-  slippage: number;           // User-configured slippage tolerance (0.5-5%)
-  isApprovalNeeded: boolean;  // Whether token approval is required
-  isApproving: boolean;       // Loading state for approval transaction
-  isSwapping: boolean;        // Loading state for swap transaction
-  error: string | null;       // Error message display
+  fromToken: Token;             // Source token for the swap
+  toToken: Token;               // Destination token for the swap
+  fromAmount: string;           // User input amount (as string to handle decimals)
+  toAmount: string;             // Calculated output amount from Fusion API
+  quote: FusionQuote | null;    // Full quote object from 1inch Fusion API
+  isLoadingQuote: boolean;      // Loading state for quote fetching
+  slippage: number;             // User-configured slippage tolerance (0.5-5%)
+  isApprovalNeeded: boolean;    // Whether token approval is required
+  isApproving: boolean;         // Loading state for approval transaction
+  isSwapping: boolean;          // Loading state for swap execution
+  error: string | null;         // Error message display
+  activeOrder: OrderStatus | null; // Active Fusion order status
+  preset: 'fast' | 'medium' | 'slow'; // Fusion order execution speed
 }
 
 // Default tokens - ETH and WETH are the most common trading pair for testing
-const ETH_TOKEN = POPULAR_TOKENS[0]; // ETH (native token)
-const WETH_TOKEN = POPULAR_TOKENS[1]; // WETH (wrapped ETH - simple swap)
+const ETH_TOKEN = FUSION_TOKENS[0]; // ETH (native token)
+const WETH_TOKEN = FUSION_TOKENS[1]; // WETH (wrapped ETH - simple swap)
 
 export function IntentSwap({ onSwapSuccess }: IntentSwapProps) {
   // Wagmi hook - provides wallet connection status, user address, and chain info
@@ -78,14 +93,16 @@ export function IntentSwap({ onSwapSuccess }: IntentSwapProps) {
     fromToken: ETH_TOKEN,        // Start with ETH as default
     toToken: WETH_TOKEN,         // WETH is a simple swap from ETH
     fromAmount: "",              // Empty until user inputs
-    toAmount: "",                // Calculated from 1inch API
-    quote: null,                 // Will contain full quote data
+    toAmount: "",                // Calculated from 1inch Fusion API
+    quote: null,                 // Will contain full quote data with auction info
     isLoadingQuote: false,       // UI loading state
     slippage: 1,                 // 1% default slippage (reasonable for most swaps)
     isApprovalNeeded: false,     // ETH doesn't need approval, ERC-20s do
     isApproving: false,          // Approval transaction state
     isSwapping: false,           // Swap transaction state
     error: null,                 // Error message for user feedback
+    activeOrder: null,           // Currently active Fusion order
+    preset: 'fast',              // Default to fast execution
   });
 
   /**
@@ -96,18 +113,28 @@ export function IntentSwap({ onSwapSuccess }: IntentSwapProps) {
    */
   const [showTokenSelector, setShowTokenSelector] = useState<'from' | 'to' | null>(null);
   const [showSettings, setShowSettings] = useState(false);
-  const [availableTokens, setAvailableTokens] = useState<Token[]>(POPULAR_TOKENS);
+  const [availableTokens, setAvailableTokens] = useState<Token[]>(FUSION_TOKENS);
+  const [isLocalFork, setIsLocalFork] = useState(false);
+
+  // Check if connected to local fork
+  useEffect(() => {
+    const checkFork = async () => {
+      const connected = await isConnectedToLocalFork();
+      setIsLocalFork(connected);
+    };
+    checkFork();
+  }, [chainId, address]);
 
   /**
    * Token Loading Effect
    * 
-   * Initialize with popular tokens only for a cleaner user experience.
+   * Initialize with Fusion tokens only for a cleaner user experience.
    * This avoids showing hundreds of obscure tokens and focuses on well-known ones.
    */
   useEffect(() => {
-    // Use only popular tokens - no API call needed
+    // Use only Fusion-supported tokens - no API call needed
     // This provides a curated list of well-known tokens that users actually want to trade
-    setAvailableTokens(POPULAR_TOKENS);
+    setAvailableTokens(FUSION_TOKENS);
   }, []);
 
   /**
@@ -138,14 +165,14 @@ export function IntentSwap({ onSwapSuccess }: IntentSwapProps) {
   }, [state.fromAmount, state.fromToken.address, state.toToken.address]);
 
   /**
-   * Get Price Quote from 1inch API
+   * Get Price Quote from 1inch Fusion API
    * 
    * useCallback optimization prevents unnecessary re-creation of this function.
    * This is important because the function is used in useEffect dependencies.
    * 
    * Process:
    * 1. Convert user input to wei/token units using ethers.js
-   * 2. Call 1inch API for best route across 100+ DEXs
+   * 2. Call 1inch Fusion API for best route with Dutch auction mechanics
    * 3. Convert response back to human-readable format
    * 4. Check if token approval is needed (for ERC-20 tokens only)
    */
@@ -163,19 +190,20 @@ export function IntentSwap({ onSwapSuccess }: IntentSwapProps) {
         state.fromToken.decimals
       ).toString();
 
-      console.log('🔍 QUOTE REQUEST - Detailed Parameters:', {
+      console.log('🔍 FUSION QUOTE REQUEST - Detailed Parameters:', {
         'Raw Input': {
           fromAmount: state.fromAmount,
           fromToken: state.fromToken.symbol,
           toToken: state.toToken.symbol,
           slippage: state.slippage,
-          userAddress: address
+          userAddress: address,
+          preset: state.preset
         },
         'API Parameters': {
           fromTokenAddress: state.fromToken.address,
           toTokenAddress: state.toToken.address,
           amount: amount,
-          fromAddress: address || "",
+          walletAddress: address || "",
           slippage: state.slippage
         },
         'Token Details': {
@@ -202,26 +230,29 @@ export function IntentSwap({ onSwapSuccess }: IntentSwapProps) {
         }
       });
 
-      // Call 1inch API for the best swap route and price quote
-      const quote = await oneInchService.getQuote({
+      // Call 1inch Fusion API for the best swap route with Dutch auction mechanics
+      const quote = await fusionService.getFusionQuote({
         fromTokenAddress: state.fromToken.address,
         toTokenAddress: state.toToken.address,
         amount,
-        fromAddress: address || "", // User's wallet address
-        slippage: state.slippage,   // User's slippage tolerance
+        walletAddress: address || "", // User's wallet address
+        slippage: state.slippage,     // User's slippage tolerance
+        includeTokensInfo: true,
+        includeProtocols: true,
+        includeGas: true,
       });
 
-      console.log('✅ QUOTE SUCCESS - Response:', quote);
+      console.log('✅ FUSION QUOTE SUCCESS - Response:', quote);
 
       // Validate quote response
       if (!quote || !quote.toTokenAmount) {
-        console.error('❌ QUOTE VALIDATION FAILED:', {
+        console.error('❌ FUSION QUOTE VALIDATION FAILED:', {
           hasQuote: !!quote,
           quoteKeys: quote ? Object.keys(quote) : 'null',
           hasToTokenAmount: quote ? !!quote.toTokenAmount : false,
           toTokenAmount: quote ? quote.toTokenAmount : 'undefined'
         });
-        throw new Error("Invalid quote response from 1inch API");
+        throw new Error("Invalid quote response from 1inch Fusion API");
       }
 
       // Convert the response back to human-readable format
@@ -230,10 +261,12 @@ export function IntentSwap({ onSwapSuccess }: IntentSwapProps) {
         state.toToken.decimals
       );
 
-      console.log('📊 QUOTE CONVERSION:', {
+      console.log('📊 FUSION QUOTE CONVERSION:', {
         rawToTokenAmount: quote.toTokenAmount,
         toTokenDecimals: state.toToken.decimals,
-        formattedToAmount: toAmount
+        formattedToAmount: toAmount,
+        auctionInfo: quote.auction,
+        feeAmount: quote.feeAmount
       });
 
       // Update state with successful quote data
@@ -250,7 +283,7 @@ export function IntentSwap({ onSwapSuccess }: IntentSwapProps) {
         checkApproval(amount);
       }
     } catch (error) {
-      console.error("❌ QUOTE ERROR - Detailed error information:", {
+      console.error("❌ FUSION QUOTE ERROR - Detailed error information:", {
         error: error,
         errorMessage: error instanceof Error ? error.message : String(error),
         errorStack: error instanceof Error ? error.stack : 'No stack trace',
@@ -265,13 +298,13 @@ export function IntentSwap({ onSwapSuccess }: IntentSwapProps) {
       // Handle errors gracefully with user-friendly messages
       setState(prev => ({
         ...prev,
-        error: error instanceof Error ? error.message : "Failed to get quote",
+        error: error instanceof Error ? error.message : "Failed to get Fusion quote",
         isLoadingQuote: false,
         toAmount: "",
         quote: null,
       }));
     }
-  }, [state.fromAmount, state.fromToken, state.toToken, state.slippage, address]);
+  }, [state.fromAmount, state.fromToken, state.toToken, state.slippage, state.preset, address]);
 
   /**
    * Check Token Approval Status
@@ -288,8 +321,8 @@ export function IntentSwap({ onSwapSuccess }: IntentSwapProps) {
     if (!address) return;
 
     try {
-      // Use the new utility method to check if allowance is sufficient
-      const isAllowanceSufficient = await oneInchService.checkAllowance(
+      // Use Fusion service to check if allowance is sufficient
+      const isAllowanceSufficient = await fusionService.checkFusionAllowance(
         state.fromToken.address,
         address,
         amount
@@ -306,23 +339,35 @@ export function IntentSwap({ onSwapSuccess }: IntentSwapProps) {
    * Handle Token Approval Transaction
    * 
    * When users need to approve a token, this function:
-   * 1. Gets the approval transaction data from 1inch API
+   * 1. Gets the approval transaction data from 1inch Fusion API
    * 2. Prompts user to sign the transaction with their wallet
    * 3. Waits for transaction confirmation
    * 4. Updates the approval status
    */
   const handleApproval = async () => {
-    if (!address) return;
+    if (!address || !isConnected) {
+      setState(prev => ({ ...prev, error: 'Wallet not connected. Please connect your wallet first.' }));
+      return;
+    }
 
     setState(prev => ({ ...prev, isApproving: true, error: null }));
 
     try {
+      if (!window.ethereum) {
+        throw new Error('No wallet provider found. Please install MetaMask or another Web3 wallet.');
+      }
+
       // Create Web3 provider from user's wallet (MetaMask, etc.)
       const provider = new ethers.providers.Web3Provider(window.ethereum as any);
-      const signer = provider.getSigner();
+      
+      // Ensure the provider is connected and has accounts
+      await provider.send("eth_requestAccounts", []);
+      
+      // Get signer with proper account handling
+      const signer = provider.getSigner(address);
 
-      // Get approval transaction data from 1inch API
-      const approvalTx = await oneInchService.getApprovalTransaction(
+      // Get approval transaction data from 1inch Fusion API
+      const approvalTx = await fusionService.getFusionApprovalTransaction(
         state.fromToken.address
       );
 
@@ -355,15 +400,16 @@ export function IntentSwap({ onSwapSuccess }: IntentSwapProps) {
   };
 
   /**
-   * Execute Token Swap Transaction
+   * Execute Fusion Order Transaction
    * 
    * This is the main swap function that:
-   * 1. Gets the optimal swap transaction from 1inch API
-   * 2. Executes the transaction through the user's wallet
-   * 3. Handles success/failure and notifies parent component
+   * 1. Creates a Fusion order with intent-based mechanics
+   * 2. Signs the order using the user's wallet
+   * 3. Submits the order to the Fusion network
+   * 4. Monitors order execution and handles success/failure
    * 
-   * The 1inch API handles all the complex routing across multiple DEXs
-   * and returns a single transaction that achieves the best rate.
+   * The 1inch Fusion protocol handles all the complex routing and MEV protection
+   * through a professional resolver network with Dutch auction mechanics.
    */
   const handleSwap = async () => {
     if (!address || !state.quote) return;
@@ -371,9 +417,28 @@ export function IntentSwap({ onSwapSuccess }: IntentSwapProps) {
     setState(prev => ({ ...prev, isSwapping: true, error: null }));
 
     try {
+      // Validate wallet connection first
+      if (!address || !isConnected) {
+        throw new Error('Wallet not connected. Please connect your wallet first.');
+      }
+
+      if (!window.ethereum) {
+        throw new Error('No wallet provider found. Please install MetaMask or another Web3 wallet.');
+      }
+
       // Create Web3 provider and signer for transaction execution
       const provider = new ethers.providers.Web3Provider(window.ethereum as any);
-      const signer = provider.getSigner();
+      
+      // Ensure the provider is connected and has accounts
+      await provider.send("eth_requestAccounts", []);
+      
+      // Get signer with proper account handling
+      const signer = provider.getSigner(address);
+      
+      // Get network information
+      const network = await provider.getNetwork();
+      const signerAddress = await signer.getAddress();
+      const balance = await signer.getBalance();
 
       // Convert amount to token units (same as in getQuote)
       const amount = ethers.utils.parseUnits(
@@ -381,7 +446,41 @@ export function IntentSwap({ onSwapSuccess }: IntentSwapProps) {
         state.fromToken.decimals
       ).toString();
 
-      console.log('🚀 SWAP REQUEST - Initiating swap with detailed parameters:', {
+      // 🌐 NETWORK & ADDRESS INFORMATION
+      console.log('🌐 NETWORK & ADDRESS DETAILS:', {
+        'Network Information': {
+          chainId: network.chainId,
+          networkName: network.name,
+          expectedChainId: 1, // Ethereum Mainnet
+          isCorrectNetwork: network.chainId === 1,
+        },
+        'Wallet Information': {
+          connectedAddress: address,
+          signerAddress: signerAddress,
+          addressMatch: address?.toLowerCase() === signerAddress.toLowerCase(),
+          walletBalance: ethers.utils.formatEther(balance),
+          walletBalanceWei: balance.toString(),
+        },
+        'Token Addresses': {
+          fromTokenAddress: state.fromToken.address,
+          fromTokenSymbol: state.fromToken.symbol,
+          fromTokenName: state.fromToken.name,
+          toTokenAddress: state.toToken.address,
+          toTokenSymbol: state.toToken.symbol,
+          toTokenName: state.toToken.name,
+          isETHSwap: state.fromToken.address === '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE',
+        },
+        'Provider Information': {
+          providerConnected: !!provider,
+          signerConnected: !!signer,
+          walletProvider: (window as any).ethereum?.isMetaMask ? 'MetaMask' : 
+                          (window as any).ethereum?.isWalletConnect ? 'WalletConnect' : 
+                          (window as any).ethereum?.isCoinbaseWallet ? 'Coinbase' : 
+                          'Unknown Wallet',
+        }
+      });
+
+      console.log('🚀 FUSION SWAP REQUEST - Initiating order with detailed parameters:', {
         'Component State': {
           fromToken: state.fromToken.symbol,
           fromTokenAddress: state.fromToken.address,
@@ -389,22 +488,25 @@ export function IntentSwap({ onSwapSuccess }: IntentSwapProps) {
           toTokenAddress: state.toToken.address,
           fromAmount: state.fromAmount,
           slippage: state.slippage,
+          preset: state.preset,
           hasQuote: !!state.quote,
           isApprovalNeeded: state.isApprovalNeeded
         },
         'Calculated Values': {
           amount: amount,
-          fromAddress: address,
+          walletAddress: address,
           provider: !!provider,
           signer: !!signer
         },
-        'API Parameters': {
+        'Fusion Parameters': {
           fromTokenAddress: state.fromToken.address,
           toTokenAddress: state.toToken.address,
           amount: amount,
-          fromAddress: address,
+          walletAddress: address,
           slippage: state.slippage,
-          disableEstimate: false
+          preset: state.preset,
+          allowPartialFill: true,
+          allowMultipleFills: false
         },
         'Environment Check': {
           hasWindow: typeof window !== 'undefined',
@@ -414,58 +516,174 @@ export function IntentSwap({ onSwapSuccess }: IntentSwapProps) {
         }
       });
 
-      // Get the actual swap transaction data from 1inch API
-      // This includes the optimized route across multiple DEXs
-      const swapTx = await oneInchService.getSwapTransaction({
+      // Step 1: Create Fusion order with intent-based mechanics
+      const orderResponse = await fusionService.createFusionOrder({
         fromTokenAddress: state.fromToken.address,
         toTokenAddress: state.toToken.address,
         amount,
-        fromAddress: address,
+        walletAddress: address,
         slippage: state.slippage,
-        disableEstimate: false, // Enable gas estimation for better UX
+        preset: state.preset,
+        allowPartialFill: true,
+        allowMultipleFills: false,
       });
 
-      console.log('✅ SWAP TRANSACTION - Successfully received:', {
-        swapTx: swapTx,
-        hasTo: !!swapTx.to,
-        hasData: !!swapTx.data,
-        hasValue: !!swapTx.value,
-        hasGas: !!swapTx.gas,
-        hasGasPrice: !!swapTx.gasPrice,
-        txKeys: Object.keys(swapTx)
+      console.log('✅ FUSION ORDER CREATED - Successfully received:', {
+        orderResponse: orderResponse,
+        hasOrder: !!orderResponse.order,
+        hasSignature: !!orderResponse.signature,
+        hasQuoteId: !!orderResponse.quoteId,
+        orderKeys: Object.keys(orderResponse)
       });
 
-      // Execute the swap transaction
-      const tx = await signer.sendTransaction({
-        to: swapTx.to,           // 1inch router contract
-        data: swapTx.data,       // Encoded function call with routing data
-        value: swapTx.value,     // ETH value (non-zero for ETH swaps)
-        gasPrice: swapTx.gasPrice, // Optimized gas price
-        gasLimit: swapTx.gas,    // Estimated gas limit
+      // Step 2: Sign the order using user's wallet
+      const signature = await fusionService.signFusionOrder(orderResponse.order, address);
+
+      console.log('✅ FUSION ORDER SIGNED - Order signature created');
+
+      // Step 3: Submit the order to the Fusion network
+      const submitResponse = await fusionService.submitFusionOrder(
+        orderResponse.order,
+        signature,
+        orderResponse.quoteId
+      );
+
+      console.log('✅ FUSION ORDER SUBMITTED - Order in execution:', {
+        orderHash: submitResponse.orderHash,
+        success: submitResponse.success
       });
 
-      // Wait for transaction confirmation
-      const receipt = await tx.wait();
+      // Step 4: Execute the actual swap transaction
+      if (submitResponse.success && submitResponse.orderHash && orderResponse.interaction) {
+        // Create Web3 provider for transaction execution
+        const provider = new ethers.providers.Web3Provider(window.ethereum as any);
+        const signer = provider.getSigner();
 
-      // Reset form state after successful swap
-      setState(prev => ({
-        ...prev,
-        isSwapping: false,
-        fromAmount: "",
-        toAmount: "",
-        quote: null,
-      }));
+        // Prepare transaction details
+        const transactionValue = state.fromToken.address === ETH_TOKEN.address ? amount : '0';
+        
+        // 📋 TRANSACTION DETAILS LOGGING
+        console.log('📋 TRANSACTION EXECUTION DETAILS:', {
+          'Transaction Parameters': {
+            to: orderResponse.interaction.target,
+            data: orderResponse.interaction.data,
+            value: transactionValue,
+            valueInETH: ethers.utils.formatEther(transactionValue),
+            from: address,
+          },
+          'Contract Addresses': {
+            targetContract: orderResponse.interaction.target,
+            fromTokenContract: state.fromToken.address,
+            toTokenContract: state.toToken.address,
+            isETHSwap: state.fromToken.address === ETH_TOKEN.address,
+          },
+          'Network Verification': {
+            currentChainId: chainId,
+            expectedChainId: 1,
+            networkCorrect: chainId === 1,
+          },
+          'Gas Estimation': {
+            estimatedGas: state.quote?.estimatedGas || 'Not available',
+            willEstimateGas: true,
+          }
+        });
 
-      // Notify parent component of successful swap with transaction details
-      onSwapSuccess?.({
-        fromToken: state.fromToken,
-        toToken: state.toToken,
-        fromAmount: state.fromAmount,
-        toAmount: state.toAmount,
-        txHash: receipt.transactionHash, // For Etherscan link
-      });
+        // Execute the swap transaction
+        const tx = await signer.sendTransaction({
+          to: orderResponse.interaction.target,
+          data: orderResponse.interaction.data,
+          value: transactionValue,
+        });
+
+        console.log('🚀 SWAP TRANSACTION SENT - Complete Details:', {
+          transactionHash: tx.hash,
+          from: tx.from,
+          to: tx.to,
+          value: tx.value?.toString(),
+          valueInETH: tx.value ? ethers.utils.formatEther(tx.value) : '0',
+          gasLimit: tx.gasLimit?.toString(),
+          gasPrice: tx.gasPrice?.toString(),
+          gasPriceInGwei: tx.gasPrice ? ethers.utils.formatUnits(tx.gasPrice, 'gwei') : 'N/A',
+          nonce: tx.nonce,
+          chainId: tx.chainId,
+          data: tx.data?.substring(0, 100) + '...', // Truncate data for readability
+        });
+
+        // Wait for transaction confirmation
+        const receipt = await tx.wait();
+        
+        console.log('✅ SWAP TRANSACTION CONFIRMED - Complete Receipt Details:', {
+          'Transaction Receipt': {
+            transactionHash: receipt.transactionHash,
+            blockNumber: receipt.blockNumber,
+            blockHash: receipt.blockHash,
+            gasUsed: receipt.gasUsed?.toString(),
+            effectiveGasPrice: receipt.effectiveGasPrice?.toString(),
+            effectiveGasPriceGwei: receipt.effectiveGasPrice ? 
+              ethers.utils.formatUnits(receipt.effectiveGasPrice, 'gwei') : 'N/A',
+            status: receipt.status, // 1 = success, 0 = failed
+            confirmations: receipt.confirmations,
+          },
+          'Network Information': {
+            chainId: chainId,
+            network: 'Ethereum Mainnet',
+            explorerLink: `https://etherscan.io/tx/${receipt.transactionHash}`,
+          },
+          'Gas Analysis': {
+            gasUsed: receipt.gasUsed?.toString(),
+            gasLimit: tx.gasLimit?.toString(),
+            gasEfficiency: receipt.gasUsed && tx.gasLimit ? 
+              `${((receipt.gasUsed.toNumber() / tx.gasLimit.toNumber()) * 100).toFixed(2)}%` : 'N/A',
+            totalCostETH: receipt.gasUsed && receipt.effectiveGasPrice ? 
+              ethers.utils.formatEther(receipt.gasUsed.mul(receipt.effectiveGasPrice)) : 'N/A',
+          },
+          'Event Logs': {
+            logsCount: receipt.logs?.length || 0,
+            hasLogs: (receipt.logs?.length || 0) > 0,
+          }
+        });
+
+        // Store the active order for status tracking
+        setState(prev => ({
+          ...prev,
+          activeOrder: {
+            orderHash: submitResponse.orderHash,
+            status: 'filled',
+            remainingMakerAmount: '0',
+            fills: [{
+              txHash: receipt.transactionHash,
+              filledMakerAmount: amount,
+              filledTakerAmount: orderResponse.order.takerAmount,
+              timestamp: Date.now(),
+            }],
+            createdAt: Date.now(),
+            fillTx: [receipt.transactionHash],
+          },
+          isSwapping: false,
+          fromAmount: "",
+          toAmount: "",
+          quote: null,
+        }));
+
+        // Notify parent component of successful swap
+        onSwapSuccess?.({
+          fromToken: state.fromToken,
+          toToken: state.toToken,
+          fromAmount: state.fromAmount,
+          toAmount: state.toAmount,
+          orderHash: submitResponse.orderHash,
+          txHash: receipt.transactionHash,
+          fills: [{
+            txHash: receipt.transactionHash,
+            filledMakerAmount: amount,
+            filledTakerAmount: orderResponse.order.takerAmount,
+            timestamp: Date.now(),
+          }],
+        });
+      }
+
     } catch (error) {
-      console.error("❌ SWAP ERROR - Detailed error information:", {
+      console.error("❌ FUSION SWAP ERROR - Detailed error information:", {
         error: error,
         errorMessage: error instanceof Error ? error.message : String(error),
         errorStack: error instanceof Error ? error.stack : 'No stack trace',
@@ -476,7 +694,8 @@ export function IntentSwap({ onSwapSuccess }: IntentSwapProps) {
           fromToken: state.fromToken?.symbol,
           toToken: state.toToken?.symbol,
           isApprovalNeeded: state.isApprovalNeeded,
-          slippage: state.slippage
+          slippage: state.slippage,
+          preset: state.preset
         },
         walletState: {
           hasAddress: !!address,
@@ -487,7 +706,7 @@ export function IntentSwap({ onSwapSuccess }: IntentSwapProps) {
       });
       setState(prev => ({
         ...prev,
-        error: error instanceof Error ? error.message : "Swap failed",
+        error: error instanceof Error ? error.message : "Fusion swap failed",
         isSwapping: false,
       }));
     }
@@ -541,8 +760,9 @@ export function IntentSwap({ onSwapSuccess }: IntentSwapProps) {
     if (state.error) return "Error";                        // Error state
     if (state.isApprovalNeeded) return `Approve ${state.fromToken.symbol}`; // Need approval
     if (state.isApproving) return "Approving...";           // Approving
-    if (state.isSwapping) return "Swapping...";             // Swapping
-    return `Swap ${state.fromToken.symbol} → ${state.toToken.symbol}`; // Ready to swap
+    if (state.isSwapping) return "Creating Order...";       // Creating Fusion order
+    if (state.activeOrder?.status === 'pending') return "Order Pending..."; // Order executing
+    return `Create Fusion Order`; // Ready to create order
   };
 
   /**
@@ -591,13 +811,46 @@ export function IntentSwap({ onSwapSuccess }: IntentSwapProps) {
    */
   return (
     <div className="space-y-4">
+      {/* Development Notice for Local Fork */}
+      {isLocalFork && address && (
+        <Card className="border-yellow-200 bg-yellow-50">
+          <CardContent className="p-4">
+            <div className="flex items-start gap-3">
+              <Info className="h-5 w-5 text-yellow-600 mt-0.5" />
+              <div className="flex-1">
+                <h3 className="text-sm font-semibold text-yellow-800 mb-1">
+                  🔧 Development Mode - Local Ethereum Fork
+                </h3>
+                <p className="text-sm text-yellow-700 mb-2">
+                  Connected to local fork at <code className="bg-yellow-100 px-1 rounded">{LOCAL_FORK_CONFIG.rpcUrl}</code>
+                </p>
+                {address && !TEST_ACCOUNTS.some(acc => acc.address.toLowerCase() === address.toLowerCase()) && (
+                  <div className="text-sm text-yellow-700">
+                    <p className="mb-1">⚠️ Your current wallet doesn't have test ETH. Use a test account:</p>
+                    <div className="bg-yellow-100 p-2 rounded text-xs font-mono">
+                      <div>Address: {TEST_ACCOUNTS[0].address}</div>
+                      <div>Private Key: {TEST_ACCOUNTS[0].privateKey}</div>
+                    </div>
+                    <p className="mt-1 text-xs">
+                      <a href="/dev/fork" className="underline hover:no-underline">
+                        Visit /dev/fork for complete setup instructions
+                      </a>
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Header Section - Establishes component identity and branding */}
       <div className="text-center space-y-1">
         <h2 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
           Intent Swap
         </h2>
         <p className="text-sm text-gray-500">
-          Powered by 1inch Fusion Protocol
+          Powered by 1inch Fusion SDK
         </p>
       </div>
 
@@ -621,11 +874,11 @@ export function IntentSwap({ onSwapSuccess }: IntentSwapProps) {
             {/* 
               Collapsible Settings Panel
               - Only shows when user clicks settings
-              - Provides slippage tolerance controls
+              - Provides slippage tolerance and execution speed controls
               - Uses predefined values for ease of use
             */}
             {showSettings && (
-              <div className="bg-gray-50 p-3 rounded-lg border">
+              <div className="bg-gray-50 p-3 rounded-lg border space-y-4">
                 <div className="space-y-2">
                   <label className="text-sm font-semibold text-gray-700">
                     Slippage Tolerance
@@ -644,6 +897,36 @@ export function IntentSwap({ onSwapSuccess }: IntentSwapProps) {
                       </Button>
                     ))}
                   </div>
+                </div>
+                
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-gray-700">
+                    Execution Speed (Fusion)
+                  </label>
+                  <div className="flex gap-2">
+                    {/* Fusion execution presets */}
+                    {[
+                      { value: 'fast', label: 'Fast', desc: 'Higher fees, quicker execution' },
+                      { value: 'medium', label: 'Medium', desc: 'Balanced speed and cost' },
+                      { value: 'slow', label: 'Slow', desc: 'Lower fees, patient execution' }
+                    ].map((preset) => (
+                      <Button
+                        key={preset.value}
+                        variant={state.preset === preset.value ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setState(prev => ({ ...prev, preset: preset.value as 'fast' | 'medium' | 'slow' }))}
+                        className="text-xs flex-col h-auto py-2"
+                        title={preset.desc}
+                      >
+                        <div>{preset.label}</div>
+                      </Button>
+                    ))}
+                  </div>
+                  <p className="text-xs text-gray-500">
+                    {state.preset === 'fast' && 'Higher fees, quicker execution via professional resolvers'}
+                    {state.preset === 'medium' && 'Balanced speed and cost with Dutch auction mechanics'}
+                    {state.preset === 'slow' && 'Lower fees, patient execution with better price discovery'}
+                  </p>
                 </div>
               </div>
             )}
@@ -753,9 +1036,9 @@ export function IntentSwap({ onSwapSuccess }: IntentSwapProps) {
             </div>
 
             {/* 
-              Quote Information Panel
-              - Only shows when we have a valid quote
-              - Displays exchange rate, gas costs, and slippage
+              Fusion Quote Information Panel
+              - Only shows when we have a valid Fusion quote
+              - Displays exchange rate, auction info, fees, and execution details
               - Blue color scheme indicates informational content
             */}
             {state.quote && (
@@ -777,6 +1060,28 @@ export function IntentSwap({ onSwapSuccess }: IntentSwapProps) {
                     <span className="font-semibold">{formatNumber(
                       ethers.utils.formatUnits(state.quote.estimatedGas, 'gwei')
                     )} gwei</span>
+                  </div>
+                  
+                  {/* Fusion Fee */}
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Fusion Fee</span>
+                    <span className="font-semibold">
+                      {formatNumber(ethers.utils.formatEther(state.quote.feeAmount || '0'))} ETH
+                    </span>
+                  </div>
+                  
+                  {/* Dutch Auction Info */}
+                  {state.quote.auction && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Auction Duration</span>
+                      <span className="font-semibold">{state.quote.auction.duration}s</span>
+                    </div>
+                  )}
+                  
+                  {/* Execution Preset */}
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Execution Speed</span>
+                    <span className="font-semibold capitalize">{state.preset}</span>
                   </div>
                   
                   {/* Slippage Tolerance */}
@@ -824,13 +1129,13 @@ export function IntentSwap({ onSwapSuccess }: IntentSwapProps) {
 
             {/* 
               Protocol Attribution
-              - Subtle branding for 1inch integration
+              - Subtle branding for 1inch Fusion integration
               - Builds trust and transparency
             */}
             <div className="text-center">
               <div className="flex items-center justify-center gap-2 text-xs text-gray-500">
                 <Zap className="w-3 h-3" />
-                <span>Best rates aggregated from 100+ DEXs</span>
+                <span>Intent-based swaps with Dutch auction mechanics</span>
               </div>
             </div>
           </div>

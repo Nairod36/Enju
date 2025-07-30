@@ -9,6 +9,7 @@ import { AppPage } from "./pages/app/AppPage";
 import { AppDashboard } from "./pages/app/AppDashboard";
 import ThreePage from "./pages/app/ThreePage";
 import { SwapPage } from "./pages/SwapPage";
+import LocalForkHelper from "./components/dev/LocalForkHelper";
 
 const rootRoute = createRootRoute({
   component: () => (
@@ -48,10 +49,17 @@ const ThreeDGameRoute = createRoute({
   component: ThreePage,
 });
 
+const devForkRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/dev/fork",
+  component: LocalForkHelper,
+});
+
 const routeTree = rootRoute.addChildren([
   homeRoute,
   appRoute.addChildren([appDashboardRoute, appSwapRoute]),
   ThreeDGameRoute,
+  devForkRoute,
 ]);
 
 export const router = createRouter({ routeTree });
