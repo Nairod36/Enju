@@ -12,6 +12,7 @@ export class EthereumListener extends EventEmitter {
   // InchDirectBridge ABI (events only)
   private readonly BRIDGE_ABI = [
     'event EscrowCreated(address indexed escrow, bytes32 indexed hashlock, string nearAccount, uint256 amount)',
+    'event NEARToETHEscrowCreated(address indexed escrow, bytes32 indexed hashlock, address indexed ethRecipient, uint256 amount)',
     'event SwapCompleted(address indexed escrow, bytes32 secret)',
     'function getSwap(bytes32 swapId) external view returns (address escrow, address user, uint256 amount, bytes32 hashlock, string memory nearAccount, bool completed, uint256 createdAt)'
   ];
@@ -48,8 +49,11 @@ export class EthereumListener extends EventEmitter {
     this.isListening = true;
     console.log('👂 Starting Ethereum event listening...');
     
-    // Listen for new EscrowCreated events
+    // Listen for new EscrowCreated events (ETH → NEAR)
     this.contract.on('EscrowCreated', this.handleEscrowCreated.bind(this));
+    
+    // Listen for NEARToETHEscrowCreated events (NEAR → ETH) - ignore these as they're handled by bridge-resolver
+    this.contract.on('NEARToETHEscrowCreated', this.handleNEARToETHEscrow.bind(this));
     this.contract.on('SwapCompleted', this.handleSwapCompleted.bind(this));
     
     // Also poll for missed events every 10 seconds
@@ -62,6 +66,17 @@ export class EthereumListener extends EventEmitter {
     this.isListening = false;
     this.contract.removeAllListeners();
     console.log('🛑 Ethereum listener stopped');
+  }
+
+  private async handleNEARToETHEscrow(
+    escrow: string,
+    hashlock: string,
+    ethRecipient: string,
+    amount: bigint,
+    event: ethers.EventLog
+  ): Promise<void> {
+    // Ignore NEAR→ETH escrows as they're created by bridge-resolver, not user
+    console.log(`🔄 Ignoring NEAR→ETH escrow created by bridge-resolver: ${escrow}`);
   }
 
   private async handleEscrowCreated(

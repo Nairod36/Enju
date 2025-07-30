@@ -3,6 +3,7 @@ pragma solidity ^0.8.19;
 
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/utils/Strings.sol";
 import { Address, AddressLib } from "../lib/cross-chain-swap/lib/solidity-utils/contracts/libraries/AddressLib.sol";
 import "../lib/cross-chain-swap/contracts/interfaces/IEscrowFactory.sol";
 import "../lib/cross-chain-swap/contracts/interfaces/IBaseEscrow.sol";
@@ -37,6 +38,13 @@ contract InchDirectBridge is ReentrancyGuard {
         address indexed escrow,
         bytes32 indexed hashlock,
         string nearAccount,
+        uint256 amount
+    );
+    
+    event NEARToETHEscrowCreated(
+        address indexed escrow,
+        bytes32 indexed hashlock,
+        address indexed ethRecipient,
         uint256 amount
     );
     
@@ -145,6 +153,57 @@ contract InchDirectBridge is ReentrancyGuard {
         }
     }
     
+    
+    /**
+     * @dev Create NEAR to ETH bridge - bridge-listener creates ETH escrow for user
+     * @param hashlock The hash of the secret for HTLC
+     * @param ethRecipient ETH address to receive tokens
+     */
+    function createNEARToETHBridge(
+        bytes32 hashlock,
+        address ethRecipient
+    ) external payable nonReentrant returns (bytes32 swapId) {
+        require(msg.value > 0, "Amount must be greater than 0");
+        require(hashlock != bytes32(0), "Invalid hashlock");
+        require(ethRecipient != address(0), "ETH recipient required");
+        
+        // Create immutables for 1inch escrow - reverse direction for NEAR→ETH
+        IBaseEscrow.Immutables memory immutables = IBaseEscrow.Immutables({
+            orderHash: keccak256(abi.encodePacked(msg.sender, hashlock, block.timestamp)),
+            hashlock: hashlock,
+            maker: Address.wrap(uint160(msg.sender)), // Bridge-listener as maker
+            taker: Address.wrap(uint160(ethRecipient)), // User as taker
+            token: Address.wrap(uint160(address(0))), // ETH (zero address)
+            amount: msg.value,
+            safetyDeposit: 0,
+            timelocks: _createTimelocks()
+        });
+        
+        // Get the deterministic escrow address
+        address escrowAddress = ESCROW_FACTORY.addressOfEscrowSrc(immutables);
+        
+        // Send ETH to the escrow address (1inch pattern)
+        payable(escrowAddress).transfer(msg.value);
+        
+        swapId = keccak256(abi.encodePacked(
+            escrowAddress,
+            hashlock,
+            ethRecipient,
+            block.timestamp
+        ));
+        
+        swaps[swapId] = BridgeSwap({
+            escrow: escrowAddress,
+            user: ethRecipient, // The ETH recipient is the user
+            amount: msg.value,
+            hashlock: hashlock,
+            nearAccount: "", // Empty for NEAR→ETH direction  
+            completed: false,
+            createdAt: block.timestamp
+        });
+        
+        emit NEARToETHEscrowCreated(escrowAddress, hashlock, ethRecipient, msg.value);
+    }
     
     /**
      * @dev Complete bridge swap with secret
