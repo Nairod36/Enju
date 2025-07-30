@@ -1,7 +1,8 @@
 import { Link } from "@tanstack/react-router";
 import { Button } from "../ui/button";
-import { Wallet, User, Settings } from "lucide-react";
+import { User, Settings } from "lucide-react";
 import FluidLogo from "../FluidLogo";
+import { DualWalletButton } from "../DualWalletButton";
 
 export function AppHeader() {
   return (
@@ -42,11 +43,17 @@ export function AppHeader() {
             >
               Marketplace
             </Link>
+            <Link
+              to="/bridge"
+              className="text-slate-700 hover:text-slate-900 transition-colors px-3 py-2 rounded-lg hover:bg-emerald-50"
+            >
+              Bridge
+            </Link>
           </nav>
 
           {/* Actions */}
           <div className="flex items-center gap-3">
-            <appkit-button />
+            <DualWalletButton />
 
             <Button
               variant="ghost"

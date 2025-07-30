@@ -1,0 +1,34 @@
+{
+  "name": "bridge-listener-service",
+  "version": "1.0.0",
+  "description": "Cross-chain bridge event listener for ETH ↔ NEAR with 1inch integration",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "ts-node src/index.ts",
+    "watch": "nodemon --exec ts-node src/index.ts"
+  },
+  "dependencies": {
+    "ethers": "^5.7.2",
+    "near-api-js": "^4.0.3",
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "ws": "^8.14.2",
+    "node-cron": "^3.0.3"
+  },
+  "devDependencies": {
+    "@types/node": "^20.8.0",
+    "@types/express": "^4.17.17",
+    "@types/cors": "^2.8.14",
+    "@types/ws": "^8.5.6",
+    "@types/node-cron": "^3.0.8",
+    "typescript": "^5.2.2",
+    "ts-node": "^10.9.1",
+    "nodemon": "^3.0.1"
+  },
+  "keywords": ["bridge", "cross-chain", "ethereum", "near", "1inch", "htlc"],
+  "author": "Matthias",
+  "license": "MIT"
+}
