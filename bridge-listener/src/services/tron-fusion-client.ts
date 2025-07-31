@@ -58,34 +58,38 @@ export class TronFusionClient {
         await this.initializeFusionBridgeContract();
       }
 
-      // immutables.amount et immutables.safetyDeposit sont déjà en Sun (string)
-      // Ne pas reconvertir ! Utiliser directement les valeurs
-      const trxAmount = immutables.amount; // Assume already converted
-      const amountInSun = this.tronWeb.toSun(trxAmount); // ❌ À NE PAS FAIRE
-      const safetyDepositInSun = this.tronWeb.toSun(immutables.safetyDeposit); // ❌ À NE PAS FAIRE
-      
-      // Convert addresses for TRON compatibility
+
+      // Convert addresses for TRON compatibility (et conversion en Sun)
       const tronImmutables = this.convertToTronImmutables(immutables);
-      
+      // Utiliser les valeurs converties (string d'entier)
+      const amountInSun = BigInt(tronImmutables.amount);
+      const safetyDepositInSun = BigInt(tronImmutables.safetyDeposit);
+      const totalRequiredSun = amountInSun + safetyDepositInSun;
+
       // Check balance before sending
       const currentBalance = await this.tronWeb.trx.getBalance();
       const balanceInTrx = this.tronWeb.fromSun(currentBalance);
-      const totalRequired = this.tronWeb.fromSun(amountInSun + trxAmount);
-      
+      const totalRequiredTrx = this.tronWeb.fromSun(totalRequiredSun.toString());
+
       console.log('🚀 Creating TRON Fusion+ escrow...');
       console.log('💰 Current balance:', balanceInTrx, 'TRX');
-      console.log('💸 Required amount:', totalRequired, 'TRX');
-      console.log('📋 Immutables:', {
+      console.log('💸 Required amount:', totalRequiredTrx, 'TRX');
+      console.log('� Valeurs brutes Sun:', {
+        amountInSun: tronImmutables.amount,
+        safetyDepositInSun: tronImmutables.safetyDeposit,
+        totalRequiredSun: totalRequiredSun.toString()
+      });
+      console.log('�📋 Immutables:', {
         orderHash: tronImmutables.orderHash,
         hashlock: tronImmutables.hashlock.substring(0, 10) + '...',
         maker: tronImmutables.maker,
         taker: tronImmutables.taker,
-        amount: trxAmount,
-        safetyDeposit: immutables.safetyDeposit
+        amount: this.tronWeb.fromSun(amountInSun.toString()),
+        safetyDeposit: this.tronWeb.fromSun(safetyDepositInSun.toString())
       });
-      
-      if (parseFloat(balanceInTrx) < parseFloat(totalRequired)) {
-        throw new Error(`Insufficient TRX balance: ${balanceInTrx} TRX < ${totalRequired} TRX required`);
+
+      if (BigInt(currentBalance) < totalRequiredSun) {
+        throw new Error(`Insufficient TRX balance: ${balanceInTrx} TRX < ${totalRequiredTrx} TRX required`);
       }
 
       // Format parameters in the exact order expected by the contract ABI
@@ -113,7 +117,7 @@ export class TronFusionClient {
         tronMaker,
         ethTaker
       ).send({
-        callValue: amountInSun + safetyDepositInSun, // Contract requires full amount + safety deposit
+        callValue: totalRequiredSun.toString(), // Contract requires full amount + safety deposit
         feeLimit: 100000000 // 100 TRX fee limit
       });
 
@@ -360,18 +364,22 @@ export class TronFusionClient {
    * Convert ETH Immutables to TRON format
    */
   private convertToTronImmutables(ethImmutables: FusionImmutables): TronImmutables {
-    // Amounts are already in TRX format, convert to Sun for contract
-    const amountInSun = this.tronWeb.toSun(parseFloat(ethImmutables.amount));
-    const safetyDepositInSun = this.tronWeb.toSun(parseFloat(ethImmutables.safetyDeposit));
-    
+    // Si la valeur contient un point, on considère que c'est du TRX (décimal), sinon déjà en Sun (entier)
+    const amountInSun = ethImmutables.amount.includes('.')
+      ? this.tronWeb.toSun(ethImmutables.amount)
+      : ethImmutables.amount;
+    const safetyDepositInSun = ethImmutables.safetyDeposit.includes('.')
+      ? this.tronWeb.toSun(ethImmutables.safetyDeposit)
+      : ethImmutables.safetyDeposit;
+
     return {
       orderHash: ethImmutables.orderHash,
       hashlock: ethImmutables.hashlock,
       maker: ethImmutables.maker, // ETH address as hex
       taker: ethImmutables.taker, // Resolver ETH address
       token: ethImmutables.token, // address(0) for TRX
-      amount: amountInSun.toString(), // Already converted to Sun units
-      safetyDeposit: safetyDepositInSun.toString(), // Already converted to Sun units
+      amount: amountInSun.toString(),
+      safetyDeposit: safetyDepositInSun.toString(),
       timelocks: this.convertToTronTimelocks(ethImmutables.timelocks)
     };
   }
