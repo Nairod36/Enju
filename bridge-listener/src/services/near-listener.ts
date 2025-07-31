@@ -48,6 +48,11 @@ export class NearListener extends EventEmitter {
           'get_contract',
           'get_cross_chain_contract',
           'get_contract_count',
+          // Partial Fills methods
+          'get_partial_fill_swap',
+          'get_partial_fill',
+          'get_swap_partial_fills',
+          'get_swap_progress',
           'get_all_contracts',
           'check_preimage',
           'is_authorized_resolver'
@@ -59,7 +64,12 @@ export class NearListener extends EventEmitter {
           'complete_cross_chain_swap',
           'refund',
           'refund_cross_chain',
-          'authorize_resolver'
+          'authorize_resolver',
+          // Partial Fills methods
+          'create_partial_fill_swap',
+          'create_partial_fill',
+          'complete_partial_fill',
+          'refund_partial_fill'
         ],
         useLocalViewExecution: false
       }
@@ -302,6 +312,7 @@ export class NearListener extends EventEmitter {
     timelock: number;
     ethAddress: string;
     amount: string;
+    usePartialFills?: boolean; // NEW: Optional flag from frontend
   }): Promise<string> {
     console.log('🔄 Creating NEAR HTLC via RPC with params:', params);
 
@@ -331,29 +342,127 @@ export class NearListener extends EventEmitter {
     
     console.log(`💰 Conversion: ${ethAmount} ETH → ${nearAmount} NEAR (${nearYocto.toString()} yoctoNEAR)`);
 
+    // 🔥 AUTO-DETECT: Determine if partial fills are enabled
+    // For now, we default to partial fills mode since the contract is updated
+    const usePartialFills = params.usePartialFills !== false; // Default to true
+    
+    if (usePartialFills) {
+      console.log(`✅ 🧩 PARTIAL FILLS MODE: User will sign for EXACT amount: ${nearAmount} NEAR`);
+      console.log(`🎯 Using optimized system - no more huge amounts!`);
+    } else {
+      console.log(`✅ 🔄 STANDARD MODE: Using traditional cross-chain HTLC`);
+      console.log(`⚠️ User will sign for: ${nearAmount} NEAR`);
+    }
+      
+    // Use the updated cross-chain HTLC method (which now uses exact amounts)
     const result = await this.account.functionCall({
       contractId: this.config.nearContractId,
       methodName: 'create_cross_chain_htlc',
       args,
       gas: BigInt('100000000000000'),
-      attachedDeposit: nearYocto,
+      attachedDeposit: nearYocto, // Always exact amount now
     });
 
-    // 2️⃣ Parcourez tous les logs pour trouver la ligne “Cross-chain HTLC created: <ID>”
+    console.log(`✅ ${usePartialFills ? 'Partial Fill' : 'Standard'} HTLC created`);
+    
+    // Extract contract ID
     const allLogs = result.receipts_outcome
       .flatMap(r => r.outcome.logs);
     const line = allLogs.find(l => l.startsWith('Cross-chain HTLC created:'));
     if (!line) {
-      throw new Error('Log “Cross-chain HTLC created:” introuvable');
+      throw new Error('HTLC creation log not found');
     }
 
-    // 3️⃣ Extraire l’ID interne (jusqu’à la virgule)
     const [, internalId] = line.match(/Cross-chain HTLC created:\s*([^,]+)/)!;
-
-    console.log('✅ NEAR HTLC internal ID:', internalId);
+    console.log(`✅ HTLC ID: ${internalId}`);
     return internalId;
   }
 
+  // 🔥 NEW: Create partial fill (user signs only for the specific amount)
+  async createPartialFill(params: {
+    swapId: string;
+    hashlock: string;
+    fillAmount: string; // In yoctoNEAR
+  }): Promise<string> {
+    console.log('🔄 Creating NEAR Partial Fill...');
+    console.log('📋 Params:', params);
+
+    const args = {
+      swap_id: params.swapId,
+      hashlock: Buffer
+        .from(params.hashlock.slice(2), 'hex')
+        .toString('base64'),
+      fill_amount: params.fillAmount
+    };
+
+    console.log(`🎯 User will sign for EXACT partial amount: ${params.fillAmount} yoctoNEAR`);
+
+    const result = await this.account.functionCall({
+      contractId: this.config.nearContractId,
+      methodName: 'create_partial_fill',
+      args,
+      gas: BigInt('100000000000000'),
+      attachedDeposit: BigInt(params.fillAmount), // Exact partial fill amount
+    });
+
+    console.log('✅ Partial Fill created:', result.transaction.hash);
+    
+    // Extract fill ID from logs
+    const allLogs = result.receipts_outcome
+      .flatMap(r => r.outcome.logs);
+    const line = allLogs.find(l => l.startsWith('Partial Fill created:'));
+    if (!line) {
+      throw new Error('Partial Fill creation log not found');
+    }
+
+    const [, fillId] = line.match(/Partial Fill created:\s*([^,]+)/)!;
+    console.log('✅ Partial Fill ID:', fillId);
+    
+    return fillId;
+  }
+
+  // 🔥 NEW: Create main swap for partial fills
+  async createPartialFillSwap(params: {
+    receiver: string;
+    totalAmount: string; // In yoctoNEAR
+    ethAddress: string;
+    timelock: number;
+  }): Promise<string> {
+    console.log('🔄 Creating Partial Fill Swap (main order)...');
+    console.log('📋 Params:', params);
+
+    const args = {
+      receiver: params.receiver,
+      total_amount: params.totalAmount,
+      eth_address: params.ethAddress,
+      timelock: params.timelock
+    };
+
+    console.log(`🎯 Creating main swap for total: ${params.totalAmount} yoctoNEAR`);
+
+    const result = await this.account.functionCall({
+      contractId: this.config.nearContractId,
+      methodName: 'create_partial_fill_swap',
+      args,
+      gas: BigInt('100000000000000'),
+      attachedDeposit: BigInt('0'), // No deposit for main swap creation
+    });
+
+    console.log('✅ Partial Fill Swap created:', result.transaction.hash);
+    
+    // Extract swap ID from logs
+    const allLogs = result.receipts_outcome
+      .flatMap(r => r.outcome.logs);
+    const line = allLogs.find(l => l.startsWith('Partial Fill Swap created:'));
+    if (!line) {
+      throw new Error('Partial Fill Swap creation log not found');
+    }
+
+    const [, swapId] = line.match(/Partial Fill Swap created:\s*([^,]+)/)!;
+    console.log('✅ Partial Fill Swap ID:', swapId);
+    
+    return swapId;
+  }
 
   async completeSwap(contractId: string, secret: string): Promise<void> {
     try {

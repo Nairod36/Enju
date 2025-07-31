@@ -13,8 +13,8 @@ export const FORK_MAINNET_CONFIG = {
 };
 
 export const BRIDGE_CONFIG = {
-  // CrossChainResolver contract (deployed with partial fills)
-  contractAddress: '0x81fA25baDbe26BAbbD95A457a8d78c73C5B99db4',
+  // CrossChainResolver contract (deployed with partial fills - fixed version)
+  contractAddress: '0x49C1A0c3cbd229118dEC660EBE7728Edce1CDc54',
   rpcUrl: 'http://vps-b11044fd.vps.ovh.net:8545/',
   listenerApi: 'http://localhost:3002',
   nearContract: 'matthias-dev.testnet',

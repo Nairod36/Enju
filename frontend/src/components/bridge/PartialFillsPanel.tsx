@@ -118,8 +118,64 @@ export function PartialFillsPanel({ swapId, isVisible }: PartialFillsPanelProps)
     }
   }, [isVisible, swapId]);
 
-  if (!isVisible || !swapId) {
-    return null;
+  if (!isVisible) {
+    return (
+      <Card className="w-full max-w-2xl mx-auto mt-4">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            🧩 Partial Fills (1inch Fusion+)
+            <Badge variant="secondary">Feature Available</Badge>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="text-center text-muted-foreground">
+            <div className="space-y-2">
+              <div className="text-lg">🚀 Ready for Smart Fills!</div>
+              <p className="text-sm">
+                Any bridge order can benefit from partial fills - better execution and routing regardless of size!
+              </p>
+              <div className="grid grid-cols-2 gap-4 mt-4 text-xs">
+                <div className="p-3 bg-blue-50 rounded-lg">
+                  <div className="font-semibold text-blue-800">💡 Benefits</div>
+                  <ul className="mt-1 text-blue-600">
+                    <li>• Faster fills</li>
+                    <li>• Better prices</li>
+                    <li>• Real-time progress</li>
+                  </ul>
+                </div>
+                <div className="p-3 bg-green-50 rounded-lg">
+                  <div className="font-semibold text-green-800">📊 Example</div>
+                  <div className="mt-1 text-green-600">
+                    <div>Order: 0.05 ETH</div>
+                    <div>Fill 1: 0.02 ETH ⚡</div>
+                    <div>Fill 2: 0.03 ETH ⚡</div>
+                    <div className="font-semibold">✅ Complete!</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!swapId) {
+    return (
+      <Card className="w-full max-w-2xl mx-auto mt-4">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            🧩 Partial Fills Tracking
+            <Badge variant="outline">Waiting for Bridge</Badge>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="text-center text-muted-foreground">
+            Complete a bridge transaction to see partial fills tracking in action!
+          </div>
+        </CardContent>
+      </Card>
+    );
   }
 
   return (

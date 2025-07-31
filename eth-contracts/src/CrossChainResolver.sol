@@ -206,34 +206,22 @@ contract CrossChainResolver is Ownable {
         bytes32 hashlock,
         string calldata nearAccount
     ) external payable returns (address escrow) {
-        // Simple implementation without using deploySrc for now
+        // Simplified implementation - just track the bridge without using 1inch factory for now
         require(msg.value > 0, "Amount must be greater than 0");
         require(hashlock != bytes32(0), "Invalid hashlock");
         require(bytes(nearAccount).length > 0, "NEAR account required");
         require(_isValidNearAccount(nearAccount), "Invalid NEAR account format");
         
-        uint256 safetyDeposit = 0.01 ether;
-        require(msg.value > safetyDeposit, "Insufficient value for bridge + safety deposit");
+        // Use a simple escrow address based on the sender and hashlock
+        // This is temporary until we properly integrate with 1inch factory
+        escrow = address(uint160(uint256(keccak256(abi.encodePacked(
+            msg.sender,
+            hashlock,
+            block.timestamp
+        )))));
         
-        uint256 amount = msg.value - safetyDeposit;
-        
-        // Create immutables for 1inch escrow
-        IBaseEscrow.Immutables memory immutables = IBaseEscrow.Immutables({
-            orderHash: keccak256(abi.encodePacked(msg.sender, hashlock, block.timestamp)),
-            hashlock: hashlock,
-            maker: Address.wrap(uint160(msg.sender)), // User as maker
-            taker: Address.wrap(uint160(address(this))), // Resolver as taker
-            token: Address.wrap(uint160(address(0))), // ETH (zero address)
-            amount: amount,
-            safetyDeposit: safetyDeposit,
-            timelocks: _createTimelocks()
-        });
-        
-        // Get the deterministic escrow address from 1inch factory (legacy function)
-        escrow = ESCROW_FACTORY.addressOfEscrowSrc(immutables);
-        
-        // Transfer funds to the deterministic escrow address
-        payable(escrow).transfer(msg.value);
+        // Store the funds in this contract for now (to be transferred to proper escrow later)
+        // In a real implementation, this would go to the 1inch escrow
         
         // Create swap tracking
         bytes32 swapId = keccak256(abi.encodePacked(
@@ -248,9 +236,9 @@ contract CrossChainResolver is Ownable {
             srcEscrow: escrow,
             dstEscrow: address(0),
             user: msg.sender,
-            totalAmount: amount,
+            totalAmount: msg.value,
             filledAmount: 0,
-            remainingAmount: amount,
+            remainingAmount: msg.value,
             hashlock: hashlock,
             destinationChain: DestinationChain.NEAR,
             destinationAccount: nearAccount,
@@ -260,8 +248,8 @@ contract CrossChainResolver is Ownable {
         });
         
         // Emit legacy events for backward compatibility
-        emit EscrowCreated(escrow, hashlock, DestinationChain.NEAR, nearAccount, amount);
-        emit EscrowCreatedLegacy(escrow, hashlock, nearAccount, amount);
+        emit EscrowCreated(escrow, hashlock, DestinationChain.NEAR, nearAccount, msg.value);
+        emit EscrowCreatedLegacy(escrow, hashlock, nearAccount, msg.value);
     }
     
     /**

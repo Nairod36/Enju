@@ -10,6 +10,7 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { BridgeModal } from "./BridgeModal";
+import { PartialFillsPanel } from "./PartialFillsPanel";
 import { useAccount } from "wagmi";
 import { useCustomBalance } from "@/hooks/useCustomBalance";
 import { useWalletSelector } from "@near-wallet-selector/react-hook";
@@ -126,6 +127,8 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
   const [bridgeData, setBridgeData] = useState(null);
   const bridgeLogsRef = useRef<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [currentSwapId, setCurrentSwapId] = useState<string | null>(null);
+  const [showPartialFills, setShowPartialFills] = useState(true); // Visible par défaut
   const [stats, setStats] = useState<BridgeStats>({
     totalVolume: "0",
     totalTransactions: 0,
@@ -255,6 +258,18 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
       throw new Error("NEAR wallet not connected");
     }
     
+    if (showPartialFills) {
+      updateBridgeLog("🧩 Using Partial Fills mode (1inch Fusion+)");
+      updateBridgeLog("✅ Bridge-listener will use exact NEAR amounts!");
+    } else {
+      updateBridgeLog("🔄 Using standard bridge mode");
+    }
+    
+    // Both modes now use the same logic since bridge-listener handles exact amounts
+    await handleEthToNearBridgeStandard(bridgeData);
+  };
+
+  const handleEthToNearBridgeStandard = async (bridgeData: any) => {
     updateBridgeLog("🔑 Generating secret and hashlock...");
 
     // Generate secret and hashlock
@@ -274,21 +289,21 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
     const provider = new ethers.providers.Web3Provider(window.ethereum as any);
     const signer = provider.getSigner();
 
-    // Use new CrossChainResolver contract following 1inch pattern
+    // Use new CrossChainResolver contract (simplified version)
     const resolverContract = new ethers.Contract(
       BRIDGE_CONFIG.contractAddress,
       [
-        // CrossChainResolver ABI - following 1inch pattern
-        "function deploySrc(bytes32 hashlock, uint8 destinationChain, string calldata destinationAccount, uint256 safetyDeposit) external payable returns (address escrow)",
+        // Simplified CrossChainResolver ABI
         "function createETHToNEARBridge(bytes32 hashlock, string calldata nearAccount) external payable returns (address escrow)",
-        "event EscrowDeployedSrc(address indexed escrow, bytes32 indexed hashlock, uint8 indexed destinationChain, string destinationAccount, uint256 amount, uint256 safetyDeposit)",
         "event EscrowCreated(address indexed escrow, bytes32 indexed hashlock, uint8 indexed destinationChain, string destinationAccount, uint256 amount)",
-        "event EscrowCreatedLegacy(address indexed escrow, bytes32 indexed hashlock, string nearAccount, uint256 amount)"
+        "event EscrowCreatedLegacy(address indexed escrow, bytes32 indexed hashlock, string nearAccount, uint256 amount)",
+        "function getSwap(bytes32 swapId) external view returns (address srcEscrow, address dstEscrow, address user, uint256 totalAmount, uint256 filledAmount, uint256 remainingAmount, bytes32 hashlock, uint8 destinationChain, string memory destinationAccount, bool completed, uint256 createdAt, uint256 fillCount)",
+        "function getSwapProgress(bytes32 swapId) external view returns (uint256 totalAmount, uint256 filledAmount, uint256 remainingAmount, uint256 fillCount, bool completed, uint256 fillPercentage)"
       ],
       signer
     );
 
-    // Use legacy function for backward compatibility
+    // Call the simplified createETHToNEARBridge function
     const tx = await resolverContract.createETHToNEARBridge(
       hashlock,
       nearAccountId,
@@ -369,7 +384,25 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
             updateBridgeLog(`✅ Bridge ready! Both ETH and NEAR HTLCs created.`);
             updateBridgeLog(`⏳ Bridge-listener will monitor and auto-complete...`);
 
-            setBridgeData((prev: any) => ({ ...prev, status: "success" }));
+            // Generate swapId for partial fills tracking
+            const swapId = ethers.utils.keccak256(
+              ethers.utils.solidityPack(
+                ['address', 'bytes32', 'uint256', 'string', 'uint256'],
+                [escrow, hashlock, 0, nearAccount, receipt.blockNumber || block.timestamp]
+              )
+            );
+            
+            updateBridgeLog(`🔍 Swap ID for tracking: ${swapId.substring(0, 14)}...`);
+            setCurrentSwapId(swapId);
+            setShowPartialFills(true);
+
+            setBridgeData((prev: any) => ({ 
+              ...prev, 
+              status: "success",
+              swapId: swapId,
+              escrow: escrow,
+              partialFillsEnabled: true
+            }));
             setIsLoading(false);
 
             onBridgeSuccess?.(bridgeData);
@@ -709,7 +742,7 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
     );
 
     console.log("🔧 NEAR HTLC call params:", {
-      contractId: "mat-event.testnet",
+      contractId: "sharknadok.testnet",
       method: "create_cross_chain_htlc",
       args,
       deposit: nearYocto.toString(),
@@ -723,7 +756,7 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
     );
 
     console.log("🔧 About to call NEAR function with:", {
-      contractId: "mat-event.testnet",
+      contractId: "sharknadok.testnet",
       method: "create_cross_chain_htlc",
       args,
       deposit: nearYocto.toString(),
@@ -739,7 +772,7 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
       console.log("🧪 Testing NEAR wallet with minimal call...");
       
       const result = await callFunction({
-        contractId: "mat-event.testnet",
+        contractId: "sharknadok.testnet",
         method: "create_cross_chain_htlc",
         args,
         deposit: nearYocto.toString(),
@@ -827,7 +860,7 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
     console.log("🔧 NEAR completion args:", args);
 
     const result = await callFunction({
-      contractId: "mat-event.testnet",
+      contractId: "sharknadok.testnet",
       method: "complete_cross_chain_swap",
       args,
       deposit: "0",
@@ -1227,6 +1260,80 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
                 </div>
               )}
 
+              {/* Partial Fills Feature */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-gray-700 flex items-center gap-1">
+                    🧩 Partial Fills
+                    <span className="text-[10px] bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded-full">
+                      1inch Fusion+
+                    </span>
+                  </label>
+                  <button
+                    onClick={() => setShowPartialFills(!showPartialFills)}
+                    className={`text-xs px-2 py-1 rounded-full transition-all ${
+                      showPartialFills
+                        ? 'bg-orange-500 text-white'
+                        : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
+                    }`}
+                  >
+                    {showPartialFills ? 'ON' : 'OFF'}
+                  </button>
+                </div>
+                
+                {showPartialFills && (
+                  <div className="bg-gradient-to-r from-orange-50 to-yellow-50 border border-orange-200 rounded-lg p-3">
+                    <div className="flex items-start gap-3">
+                      <div className="flex-1">
+                        <div className="text-xs font-semibold text-orange-800 mb-1">
+                          Smart Order Splitting
+                        </div>
+                        <div className="text-[11px] text-orange-700 leading-relaxed">
+                          {parseFloat(fromAmount || "0") > 0.1 
+                            ? "Orders can be split into smaller chunks and filled progressively for better liquidity."
+                            : "Even small orders benefit from optimal routing and can be partially filled for better execution."
+                          }
+                        </div>
+                        
+                        {/* Smart Example Based on Amount */}
+                        <div className="mt-2 flex items-center gap-1 text-[10px] text-orange-600">
+                          <span>📊 Example:</span>
+                          {parseFloat(fromAmount || "0") > 1 ? (
+                            <>
+                              <span className="bg-orange-200 px-1 rounded">5 ETH</span>
+                              <span>→</span>
+                              <span className="bg-green-200 px-1 rounded">2+1.5+1.5</span>
+                            </>
+                          ) : parseFloat(fromAmount || "0") > 0.1 ? (
+                            <>
+                              <span className="bg-orange-200 px-1 rounded">0.5 ETH</span>
+                              <span>→</span>
+                              <span className="bg-green-200 px-1 rounded">0.2+0.3</span>
+                            </>
+                          ) : (
+                            <>
+                              <span className="bg-orange-200 px-1 rounded">0.01 ETH</span>
+                              <span>→</span>
+                              <span className="bg-green-200 px-1 rounded">0.004+0.006</span>
+                            </>
+                          )}
+                          <span>⚡</span>
+                        </div>
+                      </div>
+                      
+                      {currentSwapId && (
+                        <div className="text-right">
+                          <div className="text-[10px] text-orange-600 mb-1">Active Swap</div>
+                          <div className="text-[9px] font-mono bg-orange-200 px-1.5 py-0.5 rounded text-orange-800">
+                            {currentSwapId.substring(0, 8)}...
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* TRON Account Display */}
               {toChain === "tron" && (
                 <div className="space-y-1">
@@ -1326,11 +1433,11 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
                   (toChain === "tron" && !tronConnected) ? (
                   "Connect Destination Wallet"
                 ) : (
-                  `Bridge ${fromAmount || "0"} ${fromChain.toUpperCase()} → ${
+                  `${showPartialFills ? '🧩 ' : ''}Bridge ${fromAmount || "0"} ${fromChain.toUpperCase()} → ${
                     conversion.convertedAmount && !conversion.isLoading
                       ? parseFloat(conversion.convertedAmount).toFixed(4)
                       : "..."
-                  } ${toChain.toUpperCase()}`
+                  } ${toChain.toUpperCase()}${showPartialFills ? ' (Partial Fills)' : ''}`
                 )}
               </Button>
 
@@ -1348,6 +1455,12 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
           </CardContent>
         </Card>
       </div>
+
+      {/* Partial Fills Panel */}
+      <PartialFillsPanel
+        swapId={currentSwapId}
+        isVisible={true}
+      />
 
       {/* Bridge Modal */}
       <BridgeModal

@@ -9,27 +9,25 @@ export class EthereumListener extends EventEmitter {
   private isListening: boolean = false;
   private processedEvents = new Set<string>(); // 🔥 Cache pour éviter les doublons
 
-  // CrossChainResolver ABI (following 1inch pattern)
+  // CrossChainResolver ABI (simplified for new contract)
   private readonly BRIDGE_ABI = [
-    // Events from CrossChainResolver
+    // Legacy events that the new contract emits
+    'event EscrowCreated(address indexed escrow, bytes32 indexed hashlock, uint8 indexed destinationChain, string destinationAccount, uint256 amount)',
+    'event EscrowCreatedLegacy(address indexed escrow, bytes32 indexed hashlock, string nearAccount, uint256 amount)',
+    
+    // New CrossChainResolver events
     'event EscrowDeployedSrc(address indexed escrow, bytes32 indexed hashlock, uint8 indexed destinationChain, string destinationAccount, uint256 amount, uint256 safetyDeposit)',
     'event EscrowDeployedDst(address indexed escrow, bytes32 indexed hashlock, address indexed recipient, uint256 amount)',
     'event EscrowWithdrawn(address indexed escrow, bytes32 secret, address indexed recipient)',
-    'event EscrowCancelled(address indexed escrow, address indexed user)',
+    
     // Partial Fill events
     'event PartialFillCreated(bytes32 indexed swapId, bytes32 indexed fillId, address indexed escrow, uint256 fillAmount, uint256 remainingAmount)',
-    'event PartialFillCompleted(bytes32 indexed fillId, bytes32 secret, address indexed recipient, uint256 amount)',
     'event SwapFullyFilled(bytes32 indexed swapId, uint256 totalFilled, uint256 fillCount)',
-    // Legacy events for backward compatibility
-    'event EscrowCreated(address indexed escrow, bytes32 indexed hashlock, uint8 indexed destinationChain, string destinationAccount, uint256 amount)',
-    'event EscrowCreatedLegacy(address indexed escrow, bytes32 indexed hashlock, string nearAccount, uint256 amount)',
+    
     // Functions
-    'function deploySrc(bytes32 hashlock, uint8 destinationChain, string calldata destinationAccount, uint256 safetyDeposit) external payable returns (address escrow)',
-    'function deployDst(bytes32 hashlock, address recipient, uint256 amount) external payable returns (address escrow)',
-    'function withdraw(address escrowAddress, bytes32 secret) external',
-    'function cancel(address escrowAddress) external',
     'function createETHToNEARBridge(bytes32 hashlock, string calldata nearAccount) external payable returns (address escrow)',
-    'function getSwap(bytes32 swapId) external view returns (address srcEscrow, address dstEscrow, address user, uint256 amount, bytes32 hashlock, uint8 destinationChain, string memory destinationAccount, bool completed, uint256 createdAt)'
+    'function getSwap(bytes32 swapId) external view returns (address srcEscrow, address dstEscrow, address user, uint256 totalAmount, uint256 filledAmount, uint256 remainingAmount, bytes32 hashlock, uint8 destinationChain, string memory destinationAccount, bool completed, uint256 createdAt, uint256 fillCount)',
+    'function getSwapProgress(bytes32 swapId) external view returns (uint256 totalAmount, uint256 filledAmount, uint256 remainingAmount, uint256 fillCount, bool completed, uint256 fillPercentage)'
   ];
 
   constructor(private config: ResolverConfig) {
@@ -67,30 +65,19 @@ export class EthereumListener extends EventEmitter {
     console.log(`🔧 RPC URL: ${this.config.ethRpcUrl}`);
     console.log(`🔧 Current block: ${this.lastProcessedBlock}`);
     
-    // Listen for CrossChainResolver events
-    console.log('🎯 Setting up EscrowDeployedSrc event listener (1inch resolver pattern)...');
-    this.contract.on('EscrowDeployedSrc', this.handleEscrowDeployedSrc.bind(this));
+    // Focus on the events that our simplified contract actually emits
+    console.log('🎯 Setting up EscrowCreated event listener (main event)...');
+    this.contract.on('EscrowCreated', this.handleNewEscrowCreated.bind(this));
     
-    console.log('🎯 Setting up EscrowDeployedDst event listener...');
-    this.contract.on('EscrowDeployedDst', this.handleEscrowDeployedDst.bind(this));
+    console.log('🎯 Setting up EscrowCreatedLegacy event listener (backward compatibility)...');
+    this.contract.on('EscrowCreatedLegacy', this.handleLegacyEscrowCreated.bind(this));
     
-    console.log('🎯 Setting up EscrowWithdrawn event listener...');
-    this.contract.on('EscrowWithdrawn', this.handleEscrowWithdrawn.bind(this));
-    
-    // Partial Fill event listeners
+    // Advanced events (if available in future updates)
     console.log('🎯 Setting up PartialFillCreated event listener...');
     this.contract.on('PartialFillCreated', this.handlePartialFillCreated.bind(this));
     
-    console.log('🎯 Setting up PartialFillCompleted event listener...');
-    this.contract.on('PartialFillCompleted', this.handlePartialFillCompleted.bind(this));
-    
     console.log('🎯 Setting up SwapFullyFilled event listener...');
     this.contract.on('SwapFullyFilled', this.handleSwapFullyFilled.bind(this));
-    
-    // Legacy events for backward compatibility
-    console.log('🎯 Setting up legacy EscrowCreated event listeners...');
-    this.contract.on('EscrowCreated', this.handleNewEscrowCreated.bind(this));
-    this.contract.on('EscrowCreatedLegacy', this.handleLegacyEscrowCreated.bind(this));
     
     console.log('✅ All event listeners set up successfully');
     
