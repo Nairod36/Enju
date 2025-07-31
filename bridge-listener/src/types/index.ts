@@ -1,16 +1,19 @@
 export interface BridgeEvent {
   id: string;
   type: 'ETH_TO_NEAR' | 'NEAR_TO_ETH' | 'ETH_TO_TRON' | 'TRON_TO_ETH';
-  status: 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'REFUNDED';
+  status: 'PENDING' | 'PROCESSING' | 'ACTIVE' | 'COMPLETED' | 'FAILED' | 'REFUNDED';
   ethTxHash?: string;
   nearTxHash?: string;
+  tronTxHash?: string;
   escrowAddress?: string;
   contractId?: string;
+  orderHash?: string; // 1inch Fusion+ order hash
   hashlock: string;
   secret?: string;
   amount: string;
   ethRecipient: string;
   nearAccount: string;
+  tronAddress?: string; // TRON address for ETH<->TRON swaps
   timelock: number;
   createdAt: number;
   completedAt?: number;

@@ -2,8 +2,8 @@ import dotenv from 'dotenv';
 import { BridgeAPI } from './api/server';
 import { ResolverConfig } from './types';
 
-// Load environment variables
-dotenv.config();
+// Load environment variables from parent directory
+dotenv.config({ path: require('path').resolve(__dirname, '../../.env') });
 
 async function main() {
   console.log('🌉 Bridge Listener Service Starting...');
@@ -53,6 +53,23 @@ async function main() {
   console.log(`   NEAR Account: ${config.nearAccountId}`);
   console.log(`   1inch Factory: ${config.inchEscrowFactory}`);
   console.log(`   API Port: ${port}`);
+  
+  // Show TRON configuration status
+  const tronPrivateKey = process.env.TRON_PRIVATE_KEY;
+  const tronHost = process.env.TRON_FULL_HOST;
+  const tronContract = process.env.TRON_FUSION_BRIDGE_CONTRACT;
+  
+  if (tronPrivateKey && tronHost && tronContract) {
+    console.log(`   TRON Host: ${tronHost}`);
+    console.log(`   TRON Contract: ${tronContract}`);
+    console.log(`   TRON Key: ${tronPrivateKey.substring(0, 10)}...`);
+    console.log('✅ TRON Fusion+ bridge enabled');
+  } else {
+    console.log('⚠️ TRON configuration incomplete:');
+    console.log(`   TRON_PRIVATE_KEY: ${tronPrivateKey ? '✅' : '❌'}`);
+    console.log(`   TRON_FULL_HOST: ${tronHost ? '✅' : '❌'}`);
+    console.log(`   TRON_FUSION_BRIDGE_CONTRACT: ${tronContract ? '✅' : '❌'}`);
+  }
   console.log('');
 
   try {
