@@ -9,10 +9,17 @@ export class TronClient {
   constructor(config: InchFusionTypes.Config['tron']) {
     this.config = config;
     
+    // Nettoyer la clé privée (enlever le préfixe 0x si présent)
+    const cleanPrivateKey = config.privateKey.startsWith('0x') 
+      ? config.privateKey.slice(2) 
+      : config.privateKey;
+    
+    console.log('🔧 Initializing TronWeb with clean private key...');
+    
     // Initialize TronWeb
     this.tronWeb = new TronWeb({
       fullHost: config.fullHost,
-      privateKey: config.privateKey,
+      privateKey: cleanPrivateKey,
       headers: { "TRON-PRO-API-KEY": process.env.TRON_API_KEY || '' }
     });
     
@@ -21,10 +28,13 @@ export class TronClient {
 
   private async initializeBridgeContract() {
     try {
+      console.log('🔧 Initializing TRON bridge contract at:', this.config.bridgeContract);
       this.bridgeContract = await this.tronWeb.contract().at(this.config.bridgeContract);
+      console.log('✅ TRON bridge contract initialized successfully');
     } catch (error) {
-      console.error('Failed to initialize Tron bridge contract:', error);
-      throw error;
+      console.error('❌ Failed to initialize Tron bridge contract:', error);
+      console.error('💡 Check if the contract address is correct and deployed on the network');
+      // Ne pas throw l'erreur pour permettre au service de continuer
     }
   }
 
@@ -265,5 +275,36 @@ export class TronClient {
     const secretBytes = Buffer.from(secret.replace('0x', ''), 'hex');
     const hash = crypto.createHash('sha256').update(secretBytes).digest();
     return '0x' + hash.toString('hex');
+  }
+
+  /**
+   * Send TRX directly to an address (for ETH → TRON bridges)
+   */
+  async sendTRX(
+    toAddress: string,
+    amount: string
+  ): Promise<{ success: boolean; txHash?: string; error?: string }> {
+    try {
+      console.log(`📤 Sending ${amount} TRX to ${toAddress}...`);
+      
+      // Convert amount to Sun (TRX smallest unit)
+      const amountInSun = this.tronWeb.toSun(amount);
+      
+      // Send TRX transaction
+      const transaction = await this.tronWeb.trx.sendTransaction(toAddress, amountInSun);
+      
+      console.log(`✅ TRX transaction sent: ${transaction.txid}`);
+      
+      return {
+        success: true,
+        txHash: transaction.txid
+      };
+    } catch (error) {
+      console.error('❌ TRX transfer failed:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
   }
 }

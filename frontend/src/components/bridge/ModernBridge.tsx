@@ -200,14 +200,22 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
     setIsLoading(true);
 
     try {
+      console.log('🎯 Bridge routing:', { fromChain, toChain });
+      
       if (fromChain === "ethereum" && toChain === "near") {
+        console.log('📍 Using ETH → NEAR bridge');
         await handleEthToNearBridge(newBridgeData);
       } else if (fromChain === "near" && toChain === "ethereum") {
+        console.log('📍 Using NEAR → ETH bridge');
         await handleNearToEthBridge(newBridgeData);
       } else if (fromChain === "ethereum" && toChain === "tron") {
+        console.log('📍 Using ETH → TRON bridge');
         await handleEthToTronBridge(newBridgeData);
       } else if (fromChain === "tron" && toChain === "ethereum") {
+        console.log('📍 Using TRON → ETH bridge');
         await handleTronToEthBridge(newBridgeData);
+      } else {
+        throw new Error(`Unsupported bridge route: ${fromChain} → ${toChain}`);
       }
     } catch (error) {
       console.error('Bridge failed:', error);
@@ -342,6 +350,7 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
   };
 
   const handleEthToTronBridge = async (bridgeData: any) => {
+    console.log('🚀 Starting ETH → TRON bridge process');
     updateBridgeLog('🔑 Generating secret and hashlock...');
     
     // Generate secret and hashlock
@@ -352,14 +361,63 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
     bridgeData.hashlock = hashlock;
     
     updateBridgeLog(`🔒 Generated hashlock: ${hashlock.substring(0, 14)}...`);
+    updateBridgeLog(`📡 Registering secret with relayer...`);
+    
+    // Enregistrer le secret auprès du relayer pour traitement automatique
+    try {
+      await fetch(`${BRIDGE_CONFIG.listenerApi}/register-secret`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          hashlock,
+          secret
+        })
+      });
+      updateBridgeLog(`✅ Secret registered with relayer`);
+    } catch (error) {
+      updateBridgeLog(`⚠️ Failed to register secret with relayer: ${error}`);
+    }
+    
     updateBridgeLog(`🚀 Initiating ETHEREUM → TRON bridge...`);
     updateBridgeLog(`💰 Amount: ${fromAmount} ETHEREUM`);
     updateBridgeLog(`📋 TRON destination: ${tronAddress}`);
     updateBridgeLog(`📝 You need to sign with MetaMask...`);
 
     // Create ETH HTLC using the new multi-chain contract
-    const provider = new ethers.providers.Web3Provider(window.ethereum as any);
+    if (!window.ethereum) {
+      throw new Error('MetaMask not found');
+    }
+
+    // Force network refresh to avoid cached network issues
+    const provider = new ethers.providers.Web3Provider(window.ethereum as any, 'any');
+    
+    // Force a refresh of accounts and network
+    await provider.send('eth_requestAccounts', []);
+    
+    // Get the current network and verify it's correct
+    const network = await provider.getNetwork();
+    console.log('🌐 Current network:', network);
+    
+    if (network.chainId !== 1) {
+      throw new Error(`Wrong network. Expected chainId 1, got ${network.chainId}`);
+    }
+    
     const signer = provider.getSigner();
+    
+    // Vérifier que le wallet est bien connecté
+    const signerAddress = await signer.getAddress();
+    console.log('👤 Signer address:', signerAddress);
+    
+    if (signerAddress.toLowerCase() !== address?.toLowerCase()) {
+      throw new Error('Wallet address mismatch');
+    }
+    
+    console.log('📝 Contract details:', {
+      contractAddress: BRIDGE_CONFIG.contractAddress,
+      tronAddress,
+      fromAmount,
+      signerAddress
+    });
     
     const bridgeContract = new ethers.Contract(
       BRIDGE_CONFIG.contractAddress,
@@ -370,6 +428,20 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
       signer
     );
 
+    // Vérifier que la fonction existe
+    try {
+      console.log('🔍 Checking if createETHToTRONBridge function exists...');
+      await bridgeContract.estimateGas.createETHToTRONBridge(hashlock, tronAddress, {
+        value: ethers.utils.parseEther(fromAmount),
+      });
+      console.log('✅ Function exists and gas estimation successful');
+    } catch (gasError) {
+      console.error('❌ Gas estimation failed:', gasError);
+      updateBridgeLog(`❌ Contract function error: ${gasError}`);
+      throw gasError;
+    }
+
+    console.log('⚡ Calling createETHToTRONBridge...');
     const tx = await bridgeContract.createETHToTRONBridge(hashlock, tronAddress, {
       value: ethers.utils.parseEther(fromAmount),
       gasLimit: 500000,
@@ -388,13 +460,19 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
     if (escrowCreatedEvent) {
       const { escrow, amount: eventAmount } = escrowCreatedEvent.args;
       updateBridgeLog(`📦 ETH HTLC created: ${escrow.substring(0, 14)}...`);
-      updateBridgeLog(`🔄 Creating TRON HTLC with your wallet...`);
+      updateBridgeLog(`🔄 Processing bridge to TRON...`);
 
-      // Create TRON HTLC
-      await createTronHTLC(escrow, hashlock, eventAmount.toString());
+      // The bridge-listener will automatically detect this ETH bridge and create the TRON HTLC
+      const ethAmountInEther = ethers.utils.formatEther(eventAmount);
+      updateBridgeLog(`💰 ETH locked: ${ethAmountInEther} ETH`);
+      updateBridgeLog(`🔄 Bridge-listener will create TRON HTLC automatically...`);
+      updateBridgeLog(`📱 You will receive TRX on: ${tronAddress}`);
       
-      updateBridgeLog(`✅ Bridge ready! Both ETH and TRON HTLCs created.`);
-      updateBridgeLog(`⏳ Bridge-listener will monitor and auto-complete...`);
+      updateBridgeLog(`✅ ETH bridge initiated successfully!`);
+      updateBridgeLog(`⏳ Bridge-listener is creating TRON HTLC...`);
+      updateBridgeLog(`🔑 You will need to reveal the secret to claim your TRX`);
+      updateBridgeLog(`💾 Secret: ${bridgeData.secret}`);
+      updateBridgeLog(`🔒 Hashlock: ${hashlock.substring(0, 14)}...`);
       
       setBridgeData((prev: any) => ({ ...prev, status: 'success' }));
       setIsLoading(false);
@@ -435,18 +513,37 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
   };
 
   const createTronHTLC = async (ethAddress: string, hashlock: string, amount: string) => {
-    const contractAddress = BRIDGE_CONFIG.tron.contractAddress;
+    const contractAddress = BRIDGE_CONFIG.tron?.contractAddress || 'TA879tNjuFCd8w57V3BHNhsshehKn1Ks86';
     
     try {
+      // Check TRON balance first
+      const currentTronBalance = parseFloat(tronBalance || '0');
+      const amountTRX = parseFloat(amount) / 1000000; // Convert SUN to TRX
+      const estimatedFees = 50; // Estimated 50 TRX for transaction fees
+      const requiredAmountTRX = amountTRX + estimatedFees;
+      
+      updateBridgeLog(`💰 TRON Balance: ${currentTronBalance.toFixed(4)} TRX`);
+      updateBridgeLog(`📊 Bridge Amount: ${amountTRX.toFixed(6)} TRX`);
+      updateBridgeLog(`💸 Estimated Fees: ${estimatedFees} TRX`);
+      updateBridgeLog(`🔢 Total Required: ${requiredAmountTRX.toFixed(4)} TRX`);
+      
+      if (currentTronBalance < requiredAmountTRX) {
+        throw new Error(`Insufficient TRON balance. Need ${requiredAmountTRX.toFixed(4)} TRX, have ${currentTronBalance.toFixed(4)} TRX`);
+      }
+      updateBridgeLog(`🔧 TRON HTLC Parameters:`);
+      updateBridgeLog(`   • Receiver: ${tronAddress}`);
+      updateBridgeLog(`   • Contract: ${contractAddress}`);
+      updateBridgeLog(`   • Amount in SUN: ${amount}`);
+      updateBridgeLog(`   • Amount in TRX: ${tronWeb?.fromSun ? tronWeb.fromSun(amount) : parseFloat(amount) / 1000000} TRX`);
+      
       // Call TRON contract using TronWeb
       const result = await callTronContract(
         contractAddress,
         'createTronBridge',
         [
-          tronAddress, // receiver
-          hashlock.startsWith('0x') ? hashlock.slice(2) : hashlock, // hashlock sans 0x
-          Date.now() + 24 * 60 * 60 * 1000, // timelock (24h)
-          ethAddress // ethAddress
+          hashlock, // hashlock with 0x prefix (TronWeb expects this format)
+          ethAddress, // targetAccount (ETH address to receive funds)
+          'ethereum' // targetChain
         ],
         {
           callValue: amount, // Amount in SUN
@@ -466,6 +563,40 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
     return chain === "ethereum"
       ? "from-blue-500 to-blue-600"
       : "from-purple-500 to-purple-600";
+  };
+
+  // Fonction pour révéler le secret et récupérer les TRX
+  const claimTronTokens = async () => {
+    if (!bridgeData.secret || !bridgeData.hashlock) {
+      updateBridgeLog(`❌ Missing secret or hashlock data`);
+      return;
+    }
+
+    try {
+      updateBridgeLog(`🔓 Revealing secret to claim TRX...`);
+      
+      const contractAddress = BRIDGE_CONFIG.tron?.contractAddress || 'TA879tNjuFCd8w57V3BHNhsshehKn1Ks86';
+      
+      // Appeler completeSwap sur le contrat TRON
+      const result = await callTronContract(
+        contractAddress,
+        'completeSwap',
+        [
+          bridgeData.hashlock, // swapId ou hashlock
+          bridgeData.secret    // secret
+        ],
+        {
+          feeLimit: 50000000 // 50 TRX fee limit
+        }
+      );
+
+      updateBridgeLog(`✅ Secret revealed! TRX claimed successfully!`);
+      updateBridgeLog(`📱 Transaction: ${result.substring(0, 20)}...`);
+      updateBridgeLog(`💰 Check your TRON wallet for the received TRX`);
+      
+    } catch (error) {
+      updateBridgeLog(`❌ Failed to claim TRX: ${error}`);
+    }
   };
 
   return (
@@ -808,6 +939,16 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
                   } ${toChain.toUpperCase()}`
                 )}
               </Button>
+
+              {/* Claim TRX Button - Shown after ETH → TRON bridge */}
+              {bridgeData?.status === 'success' && bridgeData?.secret && fromChain === 'ethereum' && toChain === 'tron' && (
+                <Button
+                  onClick={claimTronTokens}
+                  className="w-full h-12 bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 text-white font-bold text-sm rounded-lg shadow-lg transition-all duration-200 transform hover:scale-[1.02] mt-2"
+                >
+                  🔓 Reveal Secret & Claim TRX
+                </Button>
+              )}
 
               {/* Connection Status - Compact */}
               {isConnected && (

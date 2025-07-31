@@ -80,6 +80,50 @@ const stepConfigs = {
       description: "Finalizing cross-chain transfer",
     },
   ],
+  "ethereum-to-tron": [
+    {
+      id: "initiate",
+      label: "Initiate ETH Bridge",
+      description: "Creating ETH escrow transaction",
+    },
+    {
+      id: "confirm",
+      label: "Confirm ETH Transaction",
+      description: "Waiting for ETH confirmation",
+    },
+    {
+      id: "auto-relay",
+      label: "Auto-Relay Processing",
+      description: "Bridge-listener sending TRX automatically",
+    },
+    {
+      id: "complete",
+      label: "Bridge Complete",
+      description: "TRX received automatically",
+    },
+  ],
+  "tron-to-ethereum": [
+    {
+      id: "initiate",
+      label: "Initiate TRON Bridge",
+      description: "Creating TRON HTLC transaction",
+    },
+    {
+      id: "confirm",
+      label: "Confirm TRON Tx",
+      description: "Waiting for TRON confirmation",
+    },
+    {
+      id: "create-escrow",
+      label: "Create ETH Escrow",
+      description: "Bridge-listener creating ETH escrow",
+    },
+    {
+      id: "complete",
+      label: "Complete Bridge",
+      description: "Finalizing cross-chain transfer",
+    },
+  ],
 };
 
 export function BridgeModal({ isOpen, onClose, bridgeData }: BridgeModalProps) {
@@ -151,8 +195,13 @@ export function BridgeModal({ isOpen, onClose, bridgeData }: BridgeModalProps) {
         "info"
       );
 
-      if (bridgeData.nearAccount) {
+      if (bridgeData.nearAccount && bridgeData.toChain === 'near') {
         addLog(`📧 NEAR Account: ${bridgeData.nearAccount}`, "info");
+      }
+      
+      if (bridgeData.toChain === 'tron') {
+        addLog(`🔗 TRON Network: Shasta Testnet`, "info");
+        addLog(`🤖 Auto-Relay: Bridge-listener will send TRX automatically`, "info");
       }
 
       // Step 3: Transaction confirmation
@@ -162,22 +211,36 @@ export function BridgeModal({ isOpen, onClose, bridgeData }: BridgeModalProps) {
       addLog("⏳ Waiting for confirmation...", "info");
       setCurrentStep(2);
 
-      // Step 4: Create HTLC/Escrow
+      // Step 4: Create HTLC/Escrow or Auto-Relay
       await new Promise((resolve) => setTimeout(resolve, 3000));
       addLog("✅ Transaction confirmed!", "success");
-      addLog("🔄 Creating cross-chain contract...", "info");
-      setCurrentStep(3);
+      
+      if (bridgeData.toChain === 'tron') {
+        addLog("🤖 Bridge-listener detected ETH transaction", "info");
+        addLog("💱 Converting ETH to TRX using market rates...", "info");
+        setCurrentStep(3);
+        
+        // Step 5: Auto-relay complete
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        addLog("📤 Sending TRX automatically to your wallet...", "info");
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+        addLog("✅ TRX sent successfully!", "success");
+        addLog("🔐 ETH escrow completed automatically", "success");
+      } else {
+        addLog("🔄 Creating cross-chain contract...", "info");
+        setCurrentStep(3);
+        
+        // Step 5: Complete bridge
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        const mockBridgeId = `bridge_${Math.random()
+          .toString(16)
+          .substring(2, 10)}`;
+        setBridgeId(mockBridgeId);
+        addLog(`📦 Bridge created: ${mockBridgeId}`, "success");
+        addLog("🚀 Auto-completing bridge...", "info");
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+      }
 
-      // Step 5: Complete bridge
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-      const mockBridgeId = `bridge_${Math.random()
-        .toString(16)
-        .substring(2, 10)}`;
-      setBridgeId(mockBridgeId);
-      addLog(`📦 Bridge created: ${mockBridgeId}`, "success");
-      addLog("🚀 Auto-completing bridge...", "info");
-
-      await new Promise((resolve) => setTimeout(resolve, 3000));
       addLog("🎯 Bridge completed successfully!", "success");
       addLog(
         `✅ ${

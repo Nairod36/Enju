@@ -201,6 +201,44 @@ export class BridgeAPI {
       });
     });
 
+    // Register secret for relayer (ETH → TRON bridges)
+    this.app.post('/register-secret', async (req, res) => {
+      try {
+        const { hashlock, secret } = req.body;
+        
+        if (!hashlock || !secret) {
+          return res.status(400).json({
+            success: false,
+            error: 'Missing required fields: hashlock, secret'
+          });
+        }
+
+        // Verify that the secret matches the hashlock
+        const ethers = require('ethers');
+        const computedHashlock = ethers.keccak256(secret);
+        
+        if (computedHashlock.toLowerCase() !== hashlock.toLowerCase()) {
+          return res.status(400).json({
+            success: false,
+            error: 'Secret does not match the provided hashlock'
+          });
+        }
+
+        // Register the secret in the resolver
+        this.resolver.registerSecret(hashlock, secret);
+        
+        res.json({
+          success: true,
+          message: 'Secret registered successfully for relayer processing'
+        });
+      } catch (error) {
+        res.status(500).json({
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
+    });
+
     // ===== PRICE ORACLE ENDPOINTS =====
     
     // Get current prices
@@ -344,6 +382,10 @@ export class BridgeAPI {
       console.log(`📊 Health check: http://localhost:${this.port}/health`);
       console.log(`🌉 Bridges API: http://localhost:${this.port}/bridges`);
       console.log(`📡 Events stream: http://localhost:${this.port}/events`);
+      const status = this.resolver.getStatus();
+      if (status.tronEnabled) {
+        console.log(`🔗 ETH ↔ TRON Resolver active`);
+      }
     });
   }
 
@@ -355,6 +397,7 @@ export class BridgeAPI {
     }
     
     await this.resolver.stop();
+    
     console.log('✅ Bridge API stopped');
   }
 }

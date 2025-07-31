@@ -1,26 +1,52 @@
 import { EventEmitter } from 'events';
 import { EthereumListener } from './eth-listener';
 import { NearListener } from './near-listener';
+import { TronClient } from './tron-client';
+import { PriceOracle } from './price-oracle';
 import { BridgeEvent, EthEscrowCreatedEvent, NearHTLCEvent, ResolverConfig, SwapRequest } from '../types';
 import { ethers } from 'ethers';
 
 export class BridgeResolver extends EventEmitter {
   private ethListener: EthereumListener;
   private nearListener: NearListener;
+  private tronClient?: TronClient;
+  private priceOracle: PriceOracle;
   private activeBridges: Map<string, BridgeEvent> = new Map();
   private resolverSigner: ethers.Wallet;
+  private ethProvider: ethers.JsonRpcProvider;
   private ethToNearMap = new Map<string, string>();
   private processedTxHashes = new Set<string>(); // 🔥 Cache pour éviter les doublons
+  private secretStore = new Map<string, string>(); // 🔑 Cache des secrets pour les relayers
+  private isRunning = false;
+
+  // Contrats déployés
+  private readonly ETH_BRIDGE_CONTRACT = '0xaC7e97aC94f5b0708849bb622eCBAE69aE826038';
+  private readonly TRON_BRIDGE_CONTRACT = 'TA879tNjuFCd8w57V3BHNhsshehKn1Ks86';
 
   constructor(private config: ResolverConfig) {
     super();
 
     this.ethListener = new EthereumListener(config);
     this.nearListener = new NearListener(config);
+    this.priceOracle = new PriceOracle();
 
     // Initialize resolver signer for ETH transactions
-    const provider = new ethers.JsonRpcProvider(config.ethRpcUrl);
-    this.resolverSigner = new ethers.Wallet(config.ethPrivateKey, provider);
+    this.ethProvider = new ethers.JsonRpcProvider(config.ethRpcUrl);
+    this.resolverSigner = new ethers.Wallet(config.ethPrivateKey, this.ethProvider);
+
+    // Initialiser TRON si les variables d'environnement sont présentes
+    if (process.env.TRON_PRIVATE_KEY && process.env.TRON_FULL_HOST && process.env.TRON_BRIDGE_CONTRACT) {
+      const tronConfig = {
+        privateKey: process.env.TRON_PRIVATE_KEY,
+        fullHost: process.env.TRON_FULL_HOST,
+        bridgeContract: process.env.TRON_BRIDGE_CONTRACT,
+        chainId: process.env.TRON_CHAIN_ID || '2'
+      };
+      this.tronClient = new TronClient(tronConfig);
+      console.log('✅ TRON client initialized in BridgeResolver');
+    } else {
+      console.log('⚠️ TRON configuration missing, ETH ↔ TRON bridges disabled');
+    }
 
     this.setupEventHandlers();
   }
@@ -37,13 +63,25 @@ export class BridgeResolver extends EventEmitter {
   async start(): Promise<void> {
     console.log('🚀 Starting Bridge Resolver...');
 
+    this.isRunning = true;
+
     await this.ethListener.startListening();
     await this.nearListener.startListening();
+
+    // Démarrer les watchers TRON si disponible
+    if (this.tronClient) {
+      console.log('🚀 Starting ETH ↔ TRON watchers...');
+      await Promise.all([
+        this.watchEthToTronSwaps(),
+        this.watchTronToEthSwaps()
+      ]);
+    }
 
     console.log('✅ Bridge Resolver is running');
   }
 
   async stop(): Promise<void> {
+    this.isRunning = false;
     await this.ethListener.stopListening();
     await this.nearListener.stopListening();
     console.log('🛑 Bridge Resolver stopped');
@@ -351,6 +389,53 @@ export class BridgeResolver extends EventEmitter {
     return `${type.toLowerCase()}_${hashlock.slice(2, 12)}_${Date.now()}`;
   }
 
+  private generateSecret(): string {
+    const crypto = require('crypto');
+    const randomBytes = crypto.randomBytes(32);
+    return '0x' + randomBytes.toString('hex');
+  }
+
+  /**
+   * Trouve le secret correspondant à un hashlock (pour le relayer automatique)
+   * En production, ceci pourrait interroger une base de données de secrets connus
+   * ou utiliser une méthode cryptographique pour dériver le secret
+   */
+  private async findSecretForHashlock(hashlock: string): Promise<string | null> {
+    try {
+      console.log('🔍 Relayer searching for secret matching hashlock:', hashlock.substring(0, 14) + '...');
+      
+      // Méthode 1: Chercher dans le cache de secrets du relayer
+      const cachedSecret = this.secretStore.get(hashlock);
+      if (cachedSecret) {
+        console.log('✅ Secret found in relayer cache!');
+        return cachedSecret;
+      }
+      
+      // Méthode 2: Chercher dans les événements ETH récents pour trouver un secret révélé
+      const secret = await this.extractSecretFromEthEvents(hashlock);
+      if (secret) {
+        console.log('✅ Secret found in ETH events!');
+        this.secretStore.set(hashlock, secret); // Cache le secret trouvé
+        return secret;
+      }
+      
+      console.log('❌ No secret found for hashlock');
+      return null;
+      
+    } catch (error) {
+      console.error('❌ Error finding secret for hashlock:', error);
+      return null;
+    }
+  }
+
+  /**
+   * API pour que le frontend puisse enregistrer un secret (pour les relayers)
+   */
+  public registerSecret(hashlock: string, secret: string): void {
+    console.log('📝 Registering secret for hashlock:', hashlock.substring(0, 14) + '...');
+    this.secretStore.set(hashlock, secret);
+  }
+
   // Getters
   getBridge(bridgeId: string): BridgeEvent | undefined {
     return this.activeBridges.get(bridgeId);
@@ -377,7 +462,459 @@ export class BridgeResolver extends EventEmitter {
       activeBridges: this.activeBridges.size,
       ethListener: this.ethListener.getStatus(),
       nearListener: this.nearListener.getStatus(),
-      resolverAddress: this.resolverSigner.address
+      resolverAddress: this.resolverSigner.address,
+      tronEnabled: !!this.tronClient
     };
+  }
+
+  // ===== ETH ↔ TRON BRIDGE METHODS =====
+
+  /**
+   * Watcher ETH → TRON swaps
+   */
+  private async watchEthToTronSwaps(): Promise<void> {
+    console.log('👀 Watching ETH → TRON swaps...');
+    console.log('📋 Contract address:', this.ETH_BRIDGE_CONTRACT);
+
+    const bridgeContract = new ethers.Contract(
+      this.ETH_BRIDGE_CONTRACT,
+      [
+        'event EscrowCreated(address indexed escrow, bytes32 indexed hashlock, uint8 indexed destinationChain, string destinationAccount, uint256 amount)',
+        'function createETHToTRONBridge(bytes32 hashlock, string calldata tronAddress) external payable returns (bytes32 swapId)',
+        'function completeSwap(bytes32 swapId, bytes32 secret) external'
+      ],
+      this.resolverSigner
+    );
+
+    console.log('📡 Setting up EscrowCreated event listener...');
+
+    // Écouter les événements EscrowCreated pour les bridges TRON (destinationChain = 1)
+    bridgeContract.on('EscrowCreated', async (escrow, hashlock, destinationChain, destinationAccount, amount, event) => {
+      console.log('🔔 EscrowCreated event detected:', {
+        escrow: escrow.substring(0, 10) + '...',
+        hashlock: hashlock.substring(0, 10) + '...',
+        destinationChain: destinationChain.toString(),
+        destinationAccount,
+        amount: ethers.formatEther(amount)
+      });
+
+      if (!this.isRunning) {
+        console.log('⚠️ Resolver not running, ignoring event');
+        return;
+      }
+      
+      // Vérifier que c'est bien un bridge vers TRON (destinationChain = 1)
+      const chainId = Number(destinationChain);
+      if (chainId !== 1) {
+        console.log(`⏭️ Ignoring event - destinationChain=${chainId} (not TRON=1)`);
+        return;
+      }
+      
+      console.log('🎯 Processing ETH → TRON bridge event...');
+
+      try {
+        await this.processEthToTronSwap(escrow, destinationAccount, amount, hashlock);
+      } catch (error) {
+        console.error('❌ Failed to process ETH → TRON swap:', error);
+      }
+    });
+
+    // Écouter aussi tous les événements pour déboguer
+    bridgeContract.on('*', (event) => {
+      console.log('📡 Any event detected:', event);
+    });
+
+    console.log('✅ ETH → TRON event listeners set up');
+
+    // Vérifier les événements récents (derniers 100 blocs) au cas où on aurait raté quelque chose
+    try {
+      console.log('🔍 Checking for recent ETH → TRON events...');
+      const latestBlock = await this.ethProvider.getBlockNumber();
+      const fromBlock = Math.max(0, latestBlock - 500);
+      
+      console.log(`📊 Scanning blocks ${fromBlock} to ${latestBlock} for EscrowCreated events...`);
+      
+      const filter = bridgeContract.filters.EscrowCreated();
+      const events = await bridgeContract.queryFilter(filter, fromBlock, latestBlock);
+      
+      console.log(`📋 Found ${events.length} EscrowCreated events in recent blocks`);
+      
+      for (const event of events) {
+        if ('args' in event && event.args) {
+          const [escrow, hashlock, destinationChain, destinationAccount, amount] = event.args;
+          console.log(`📝 Event: escrow=${escrow.substring(0,10)}... destinationChain=${destinationChain} (type: ${typeof destinationChain}) account=${destinationAccount} amount=${ethers.formatEther(amount)} ETH`);
+          
+          // Convertir destinationChain en nombre pour comparaison
+          const chainId = Number(destinationChain);
+          console.log(`🔍 Converted destinationChain: ${chainId} (TRON=1)`);
+          
+          if (chainId === 1) {
+            console.log('🎯 Found recent TRON bridge event, processing...');
+            try {
+              await this.processEthToTronSwap(escrow, destinationAccount, amount, hashlock);
+            } catch (error) {
+              console.error('❌ Failed to process recent ETH → TRON event:', error);
+            }
+          } else {
+            console.log(`⏭️ Skipping event - chainId=${chainId} (not TRON=1)`);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('❌ Failed to check recent events:', error);
+    }
+  }
+
+  /**
+   * Watcher TRON → ETH swaps
+   */
+  private async watchTronToEthSwaps(): Promise<void> {
+    console.log('👀 Watching TRON → ETH swaps...');
+
+    if (!this.tronClient) return;
+
+    // Utiliser le système d'événements Tron
+    this.tronClient.watchBridgeEvents(async (event) => {
+      if (!this.isRunning) return;
+      
+      if (event.type === 'EscrowCreated') {
+        console.log('🔔 TRON → ETH swap detected:', event.data);
+        
+        try {
+          await this.processTronToEthSwap(event.data);
+        } catch (error) {
+          console.error('❌ Failed to process TRON → ETH swap:', error);
+        }
+      }
+    });
+  }
+
+  /**
+   * Traiter un swap ETH → TRON
+   */
+  private async processEthToTronSwap(
+    escrowAddress: string,
+    tronAddress: string,
+    ethAmount: bigint,
+    hashlock: string
+  ): Promise<void> {
+    console.log('⚙️ Processing ETH → TRON swap...');
+
+    if (!this.tronClient) {
+      throw new Error('TRON client not initialized');
+    }
+
+    try {
+      // 1. Calculer l'équivalent TRX
+      const ethAmountStr = ethers.formatEther(ethAmount);
+      const trxAmount = await this.priceOracle.convertEthToTrx(ethAmountStr);
+      console.log(`💱 Converting ${ethAmountStr} ETH → ${trxAmount} TRX`);
+
+      // 2. Envoyer directement les TRX à l'utilisateur (relayer automatique)
+      console.log(`💸 Sending ${trxAmount} TRX directly to ${tronAddress}...`);
+      
+      const tronResult = await this.tronClient.sendTRX(tronAddress, trxAmount);
+
+      if (!tronResult.success) {
+        throw new Error(`TRON transfer failed: ${tronResult.error}`);
+      }
+
+      console.log('✅ TRX sent directly to user:', tronResult.txHash?.substring(0, 10) + '...');
+
+      // 3. Créer un bridge event pour le tracking
+      const bridgeId = this.generateBridgeId(hashlock, 'ETH_TO_TRON');
+      const bridgeEvent: BridgeEvent = {
+        id: bridgeId,
+        type: 'ETH_TO_TRON' as any,
+        status: 'PENDING',
+        ethTxHash: '', // À remplir si nécessaire
+        escrowAddress,
+        hashlock,
+        amount: ethAmountStr,
+        ethRecipient: tronAddress,
+        nearAccount: '', // N/A pour TRON
+        timelock: Date.now() + (24 * 60 * 60 * 1000),
+        createdAt: Date.now(),
+      };
+
+      this.activeBridges.set(bridgeId, bridgeEvent);
+
+      // 4. Générer le secret correspondant au hashlock et compléter ETH automatiquement
+      console.log('🔑 Relayer validating and completing ETH side...');
+      
+      // Le relayer trouve le secret qui correspond au hashlock fourni
+      const secret = await this.findSecretForHashlock(hashlock);
+      
+      if (secret) {
+        console.log('🔓 Secret found, completing ETH swap...');
+        await this.completeEthSwap(escrowAddress, secret);
+        
+        // Marquer le bridge comme complété
+        bridgeEvent.status = 'COMPLETED';
+        bridgeEvent.secret = secret;
+        bridgeEvent.completedAt = Date.now();
+        
+        console.log('✅ ETH → TRON bridge completed by relayer!');
+        this.emit('bridgeCompleted', bridgeEvent);
+      } else {
+        console.error('❌ Relayer could not find secret for hashlock');
+        bridgeEvent.status = 'FAILED';
+      }
+
+    } catch (error) {
+      console.error('❌ ETH → TRON processing failed:', error);
+    }
+  }
+
+  /**
+   * Monitorer la révélation du secret sur TRON pour compléter ETH
+   */
+  private monitorTronSecretRevelation(hashlock: string, ethEscrowAddress: string, tronSwapId: string): void {
+    console.log('👁️ Monitoring TRON secret revelation for', hashlock.substring(0, 10) + '...');
+
+    const checkInterval = setInterval(async () => {
+      if (!this.isRunning) {
+        clearInterval(checkInterval);
+        return;
+      }
+
+      try {
+        // Vérifier sur TRON si le swap a été complété (secret révélé)
+        if (this.tronClient) {
+          const tronSwap = await this.tronClient.getSwap(tronSwapId);
+          
+          if (tronSwap && tronSwap.completed) {
+            console.log('🔓 Secret revealed on TRON, completing ETH side...');
+            clearInterval(checkInterval);
+            
+            // Extraire le secret depuis les événements TRON
+            const secret = await this.extractSecretFromTronEvents(tronSwapId);
+            if (secret) {
+              await this.completeEthSwap(ethEscrowAddress, secret);
+              
+              // Marquer le bridge comme complété
+              const bridgeEvent = Array.from(this.activeBridges.values())
+                .find(b => b.hashlock === hashlock);
+              if (bridgeEvent) {
+                bridgeEvent.status = 'COMPLETED';
+                this.emit('bridgeCompleted', bridgeEvent);
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error checking TRON secret revelation:', error);
+      }
+    }, 10000); // Check every 10 seconds
+
+    // Timeout après 24h
+    setTimeout(() => {
+      clearInterval(checkInterval);
+      console.log('⏰ TRON secret revelation timeout for', hashlock.substring(0, 10) + '...');
+    }, 24 * 60 * 60 * 1000);
+  }
+
+  /**
+   * Traiter un swap TRON → ETH
+   */
+  private async processTronToEthSwap(eventData: any): Promise<void> {
+    console.log('⚙️ Processing TRON → ETH swap...');
+
+    try {
+      // 1. Calculer l'équivalent ETH
+      const trxAmount = eventData.amount;
+      const ethAmount = await this.priceOracle.convertTrxToEth(trxAmount);
+      console.log(`💱 Converting ${trxAmount} TRX → ${ethAmount} ETH`);
+
+      // 2. Créer le swap ETH correspondant
+      const ethBridge = new ethers.Contract(
+        this.ETH_BRIDGE_CONTRACT,
+        [
+          'function createSwap(bytes32 hashlock, string calldata targetAccount) external payable returns (bytes32)',
+          'function completeSwap(bytes32 swapId, bytes32 secret) external'
+        ],
+        this.resolverSigner
+      );
+
+      const tx = await ethBridge.createSwap(
+        eventData.hashlock,
+        eventData.targetAccount,
+        {
+          value: ethers.parseEther(ethAmount),
+          gasLimit: 200000
+        }
+      );
+
+      await tx.wait();
+      console.log('✅ ETH bridge created:', tx.hash);
+
+      // 3. Monitorer la révélation du secret sur ETH
+      this.monitorEthSecretRevelation(eventData.hashlock, eventData.escrow);
+
+    } catch (error) {
+      console.error('❌ TRON → ETH processing failed:', error);
+    }
+  }
+
+  /**
+   * Monitorer la révélation du secret (ETH → TRON)
+   */
+  private monitorSecretRevelation(hashlock: string, ethSwapId: string, tronSwapId: string): void {
+    console.log('👁️ Monitoring secret revelation for', hashlock.substring(0, 10) + '...');
+
+    // Vérifier périodiquement si le secret a été révélé
+    const checkInterval = setInterval(async () => {
+      if (!this.isRunning) {
+        clearInterval(checkInterval);
+        return;
+      }
+
+      try {
+        // Vérifier sur TRON si le swap a été complété (secret révélé)
+        if (this.tronClient) {
+          const tronSwap = await this.tronClient.getSwap(tronSwapId);
+          
+          if (tronSwap.completed) {
+            console.log('🔓 Secret revealed on TRON, completing ETH side...');
+            clearInterval(checkInterval);
+            
+            // Extraire le secret depuis les événements TRON
+            const secret = await this.extractSecretFromTronEvents(tronSwapId);
+            if (secret) {
+              await this.completeEthSwap(ethSwapId, secret);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error checking secret revelation:', error);
+      }
+    }, 10000); // Check every 10 seconds
+
+    // Timeout après 24h
+    setTimeout(() => {
+      clearInterval(checkInterval);
+      console.log('⏰ Secret revelation timeout for', hashlock.substring(0, 10) + '...');
+    }, 24 * 60 * 60 * 1000);
+  }
+
+  /**
+   * Monitorer la révélation du secret (TRON → ETH)
+   */
+  private monitorEthSecretRevelation(hashlock: string, tronSwapId: string): void {
+    console.log('👁️ Monitoring ETH secret revelation for', hashlock.substring(0, 10) + '...');
+
+    const checkInterval = setInterval(async () => {
+      if (!this.isRunning) {
+        clearInterval(checkInterval);
+        return;
+      }
+
+      try {
+        // Vérifier si le secret a été révélé sur ETH en regardant les événements
+        const secret = await this.extractSecretFromEthEvents(hashlock);
+        
+        if (secret && this.tronClient) {
+          console.log('🔓 Secret revealed on ETH, completing TRON side...');
+          clearInterval(checkInterval);
+          
+          // Compléter le côté TRON
+          await this.tronClient.completeSwap(tronSwapId, secret);
+        }
+      } catch (error) {
+        console.error('Error checking ETH secret revelation:', error);
+      }
+    }, 10000);
+
+    setTimeout(() => {
+      clearInterval(checkInterval);
+      console.log('⏰ ETH secret revelation timeout for', hashlock.substring(0, 10) + '...');
+    }, 24 * 60 * 60 * 1000);
+  }
+
+  /**
+   * Extraire le secret depuis les événements TRON
+   */
+  private async extractSecretFromTronEvents(tronSwapId: string): Promise<string | null> {
+    try {
+      // Dans un vrai scénario, il faudrait parser les événements SwapCompleted du contrat TRON
+      // Pour l'instant, on simule l'extraction du secret
+      console.log('🔍 Extracting secret from TRON events for swap:', tronSwapId);
+      
+      // TODO: Implémenter la logique réelle d'extraction du secret depuis les événements TRON
+      // Cela nécessiterait de parser les logs de transaction qui ont révélé le secret
+      
+      return null; // Placeholder - à implémenter avec la vraie logique
+    } catch (error) {
+      console.error('Failed to extract secret from TRON events:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Extraire le secret depuis les événements ETH
+   */
+  private async extractSecretFromEthEvents(hashlock: string): Promise<string | null> {
+    try {
+      console.log('🔍 Extracting secret from ETH events for hashlock:', hashlock.substring(0, 10) + '...');
+      
+      const bridgeContract = new ethers.Contract(
+        this.ETH_BRIDGE_CONTRACT,
+        [
+          'event SwapCompleted(bytes32 indexed swapId, bytes32 secret)',
+          'function getSwap(bytes32 swapId) external view returns (address user, uint256 amount, bytes32 hashlock, string memory targetAccount, bool completed, bool refunded, uint256 timelock)'
+        ],
+        this.resolverSigner
+      );
+
+      // Chercher les événements SwapCompleted récents
+      const filter = bridgeContract.filters.SwapCompleted();
+      const events = await bridgeContract.queryFilter(filter, -1000); // Last 1000 blocks
+
+      // Trouver l'événement correspondant au hashlock
+      for (const event of events) {
+        if ('args' in event && event.args) {
+          const swapId = event.args.swapId;
+          const secret = event.args.secret;
+          
+          // Vérifier si ce secret correspond au hashlock
+          const computedHashlock = ethers.keccak256(secret);
+          if (computedHashlock === hashlock) {
+            console.log('✅ Secret found in ETH events!');
+            return secret;
+          }
+        }
+      }
+
+      return null;
+    } catch (error) {
+      console.error('Failed to extract secret from ETH events:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Compléter le swap ETH
+   */
+  private async completeEthSwap(ethSwapId: string, secret: string): Promise<void> {
+    try {
+      console.log('⚙️ Completing ETH swap with secret...');
+      
+      const bridgeContract = new ethers.Contract(
+        this.ETH_BRIDGE_CONTRACT,
+        [
+          'function completeSwap(bytes32 swapId, bytes32 secret) external'
+        ],
+        this.resolverSigner
+      );
+
+      const tx = await bridgeContract.completeSwap(ethSwapId, secret, {
+        gasLimit: 200000
+      });
+
+      await tx.wait();
+      console.log('✅ ETH swap completed:', tx.hash);
+    } catch (error) {
+      console.error('❌ Failed to complete ETH swap:', error);
+    }
   }
 }
