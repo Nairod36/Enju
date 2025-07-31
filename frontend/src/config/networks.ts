@@ -13,14 +13,19 @@ export const FORK_MAINNET_CONFIG = {
 };
 
 export const BRIDGE_CONFIG = {
-  contractAddress: '0xFEE2d383Ee292283eC43bdf0fa360296BE1e1149',
+  // CrossChainResolver contract (deployed with partial fills)
+  contractAddress: '0x81fA25baDbe26BAbbD95A457a8d78c73C5B99db4',
   rpcUrl: 'http://vps-b11044fd.vps.ovh.net:8545/',
   listenerApi: 'http://localhost:3002',
   nearContract: 'matthias-dev.testnet',
+  
+  // Official 1inch contracts
   inchEscrowFactory: '0xa7bCb4EAc8964306F9e3764f67Db6A7af6DdF99A',
+  inchLimitOrderProtocol: '0x111111125421cA6dc452d289314280a0f8842A65',
+  
   tron: {
-    contractAddress: 'TA879tNjuFCd8w57V3BHNhsshehKn1Ks86', // À remplacer par votre vraie adresse
-    network: 'shasta', // Testnet TRON
+    contractAddress: 'TA879tNjuFCd8w57V3BHNhsshehKn1Ks86',
+    network: 'shasta',
     rpcUrl: 'https://api.shasta.trongrid.io',
     apiKey: '5e8b38e2-9828-4737-af16-11b935808aca'
   }

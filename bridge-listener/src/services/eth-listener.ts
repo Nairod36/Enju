@@ -9,13 +9,27 @@ export class EthereumListener extends EventEmitter {
   private isListening: boolean = false;
   private processedEvents = new Set<string>(); // 🔥 Cache pour éviter les doublons
 
-  // InchDirectBridge ABI (events only)
+  // CrossChainResolver ABI (following 1inch pattern)
   private readonly BRIDGE_ABI = [
+    // Events from CrossChainResolver
+    'event EscrowDeployedSrc(address indexed escrow, bytes32 indexed hashlock, uint8 indexed destinationChain, string destinationAccount, uint256 amount, uint256 safetyDeposit)',
+    'event EscrowDeployedDst(address indexed escrow, bytes32 indexed hashlock, address indexed recipient, uint256 amount)',
+    'event EscrowWithdrawn(address indexed escrow, bytes32 secret, address indexed recipient)',
+    'event EscrowCancelled(address indexed escrow, address indexed user)',
+    // Partial Fill events
+    'event PartialFillCreated(bytes32 indexed swapId, bytes32 indexed fillId, address indexed escrow, uint256 fillAmount, uint256 remainingAmount)',
+    'event PartialFillCompleted(bytes32 indexed fillId, bytes32 secret, address indexed recipient, uint256 amount)',
+    'event SwapFullyFilled(bytes32 indexed swapId, uint256 totalFilled, uint256 fillCount)',
+    // Legacy events for backward compatibility
     'event EscrowCreated(address indexed escrow, bytes32 indexed hashlock, uint8 indexed destinationChain, string destinationAccount, uint256 amount)',
     'event EscrowCreatedLegacy(address indexed escrow, bytes32 indexed hashlock, string nearAccount, uint256 amount)',
-    'event SwapCompleted(address indexed escrow, bytes32 secret, uint8 destinationChain)',
-    'function createETHToNEARBridge(bytes32 hashlock, string calldata nearAccount) external payable returns (bytes32 swapId)',
-    'function getSwap(bytes32 swapId) external view returns (address escrow, address user, uint256 amount, bytes32 hashlock, uint8 destinationChain, string memory destinationAccount, bool completed, uint256 createdAt)'
+    // Functions
+    'function deploySrc(bytes32 hashlock, uint8 destinationChain, string calldata destinationAccount, uint256 safetyDeposit) external payable returns (address escrow)',
+    'function deployDst(bytes32 hashlock, address recipient, uint256 amount) external payable returns (address escrow)',
+    'function withdraw(address escrowAddress, bytes32 secret) external',
+    'function cancel(address escrowAddress) external',
+    'function createETHToNEARBridge(bytes32 hashlock, string calldata nearAccount) external payable returns (address escrow)',
+    'function getSwap(bytes32 swapId) external view returns (address srcEscrow, address dstEscrow, address user, uint256 amount, bytes32 hashlock, uint8 destinationChain, string memory destinationAccount, bool completed, uint256 createdAt)'
   ];
 
   constructor(private config: ResolverConfig) {
@@ -53,15 +67,30 @@ export class EthereumListener extends EventEmitter {
     console.log(`🔧 RPC URL: ${this.config.ethRpcUrl}`);
     console.log(`🔧 Current block: ${this.lastProcessedBlock}`);
     
-    // Listen for new EscrowCreated events (ETH → NEAR) - both new and legacy
-    console.log('🎯 Setting up EscrowCreated event listener...');
+    // Listen for CrossChainResolver events
+    console.log('🎯 Setting up EscrowDeployedSrc event listener (1inch resolver pattern)...');
+    this.contract.on('EscrowDeployedSrc', this.handleEscrowDeployedSrc.bind(this));
+    
+    console.log('🎯 Setting up EscrowDeployedDst event listener...');
+    this.contract.on('EscrowDeployedDst', this.handleEscrowDeployedDst.bind(this));
+    
+    console.log('🎯 Setting up EscrowWithdrawn event listener...');
+    this.contract.on('EscrowWithdrawn', this.handleEscrowWithdrawn.bind(this));
+    
+    // Partial Fill event listeners
+    console.log('🎯 Setting up PartialFillCreated event listener...');
+    this.contract.on('PartialFillCreated', this.handlePartialFillCreated.bind(this));
+    
+    console.log('🎯 Setting up PartialFillCompleted event listener...');
+    this.contract.on('PartialFillCompleted', this.handlePartialFillCompleted.bind(this));
+    
+    console.log('🎯 Setting up SwapFullyFilled event listener...');
+    this.contract.on('SwapFullyFilled', this.handleSwapFullyFilled.bind(this));
+    
+    // Legacy events for backward compatibility
+    console.log('🎯 Setting up legacy EscrowCreated event listeners...');
     this.contract.on('EscrowCreated', this.handleNewEscrowCreated.bind(this));
-    
-    console.log('🎯 Setting up EscrowCreatedLegacy event listener...');
     this.contract.on('EscrowCreatedLegacy', this.handleLegacyEscrowCreated.bind(this));
-    
-    console.log('🎯 Setting up SwapCompleted event listener...');
-    this.contract.on('SwapCompleted', this.handleSwapCompleted.bind(this));
     
     console.log('✅ All event listeners set up successfully');
     
@@ -78,6 +107,201 @@ export class EthereumListener extends EventEmitter {
     this.isListening = false;
     this.contract.removeAllListeners();
     console.log('🛑 Ethereum listener stopped');
+  }
+
+  // New handlers for CrossChainResolver events (1inch pattern)
+  private async handleEscrowDeployedSrc(
+    escrow: string,
+    hashlock: string,
+    destinationChain: number,
+    destinationAccount: string,
+    amount: bigint,
+    safetyDeposit: bigint,
+    event: ethers.EventLog
+  ): Promise<void> {
+    const eventId = `${event.transactionHash}-${event.index}`;
+    
+    console.log(`🔥 NEW 1inch RESOLVER EVENT: EscrowDeployedSrc detected!`);
+    console.log(`📋 Resolver event details:`, {
+      eventId,
+      escrow,
+      hashlock,
+      destinationChain,
+      destinationAccount,
+      amount: ethers.formatEther(amount),
+      safetyDeposit: ethers.formatEther(safetyDeposit),
+      txHash: event.transactionHash,
+      block: event.blockNumber,
+      timestamp: new Date().toISOString()
+    });
+    
+    // Only process NEAR destinations (destinationChain = 0)
+    if (destinationChain !== 0) {
+      console.log(`⚠️ Skipping non-NEAR destination chain: ${destinationChain}`);
+      return;
+    }
+    
+    // Avoid duplicates
+    if (this.processedEvents.has(eventId)) {
+      console.log(`⚠️ Event ${eventId} already processed, skipping...`);
+      return;
+    }
+    this.processedEvents.add(eventId);
+
+    console.log(`✅ Processing 1inch resolver ETH → NEAR bridge:`, {
+      escrow,
+      hashlock,
+      nearAccount: destinationAccount,
+      amount: ethers.formatEther(amount),
+      safetyDeposit: ethers.formatEther(safetyDeposit),
+      txHash: event.transactionHash,
+      block: event.blockNumber
+    });
+
+    const bridgeEvent: EthEscrowCreatedEvent = {
+      escrow,
+      hashlock,
+      nearAccount: destinationAccount,
+      amount: amount.toString(),
+      blockNumber: event.blockNumber!,
+      txHash: event.transactionHash!
+    };
+
+    console.log(`🚀 Emitting 'escrowCreated' event to bridge-resolver:`, bridgeEvent);
+    this.emit('escrowCreated', bridgeEvent);
+    console.log(`✅ 1inch resolver event emitted successfully to bridge-resolver`);
+  }
+
+  private async handleEscrowDeployedDst(
+    escrow: string,
+    hashlock: string,
+    recipient: string,
+    amount: bigint,
+    event: ethers.EventLog
+  ): Promise<void> {
+    console.log(`🔥 1inch RESOLVER DST: EscrowDeployedDst detected!`, {
+      escrow,
+      hashlock,
+      recipient,
+      amount: ethers.formatEther(amount),
+      txHash: event.transactionHash,
+      block: event.blockNumber
+    });
+
+    // This is for NEAR → ETH direction
+    this.emit('dstEscrowCreated', {
+      escrow,
+      hashlock,
+      recipient,
+      amount: amount.toString(),
+      txHash: event.transactionHash,
+      blockNumber: event.blockNumber
+    });
+  }
+
+  private async handleEscrowWithdrawn(
+    escrow: string,
+    secret: string,
+    recipient: string,
+    event: ethers.EventLog
+  ): Promise<void> {
+    console.log(`✅ 1inch RESOLVER: EscrowWithdrawn detected!`, {
+      escrow,
+      secret: secret.substring(0, 14) + '...',
+      recipient,
+      txHash: event.transactionHash,
+      block: event.blockNumber
+    });
+
+    this.emit('escrowWithdrawn', {
+      escrow,
+      secret,
+      recipient,
+      txHash: event.transactionHash,
+      blockNumber: event.blockNumber
+    });
+  }
+
+  // Partial Fill handlers
+  private async handlePartialFillCreated(
+    swapId: string,
+    fillId: string,
+    escrow: string,
+    fillAmount: bigint,
+    remainingAmount: bigint,
+    event: ethers.EventLog
+  ): Promise<void> {
+    console.log(`🔥 PARTIAL FILL CREATED:`, {
+      swapId,
+      fillId,
+      escrow,
+      fillAmount: ethers.formatEther(fillAmount),
+      remainingAmount: ethers.formatEther(remainingAmount),
+      txHash: event.transactionHash,
+      block: event.blockNumber,
+      fillPercentage: remainingAmount > 0n 
+        ? Math.round(Number((fillAmount * 100n) / (fillAmount + remainingAmount)))
+        : 100
+    });
+
+    this.emit('partialFillCreated', {
+      swapId,
+      fillId,
+      escrow,
+      fillAmount: fillAmount.toString(),
+      remainingAmount: remainingAmount.toString(),
+      txHash: event.transactionHash,
+      blockNumber: event.blockNumber
+    });
+  }
+
+  private async handlePartialFillCompleted(
+    fillId: string,
+    secret: string,
+    recipient: string,
+    amount: bigint,
+    event: ethers.EventLog
+  ): Promise<void> {
+    console.log(`✅ PARTIAL FILL COMPLETED:`, {
+      fillId,
+      secret: secret.substring(0, 14) + '...',
+      recipient,
+      amount: ethers.formatEther(amount),
+      txHash: event.transactionHash,
+      block: event.blockNumber
+    });
+
+    this.emit('partialFillCompleted', {
+      fillId,
+      secret,
+      recipient,
+      amount: amount.toString(),
+      txHash: event.transactionHash,
+      blockNumber: event.blockNumber
+    });
+  }
+
+  private async handleSwapFullyFilled(
+    swapId: string,
+    totalFilled: bigint,
+    fillCount: bigint,
+    event: ethers.EventLog
+  ): Promise<void> {
+    console.log(`🎉 SWAP FULLY FILLED:`, {
+      swapId,
+      totalFilled: ethers.formatEther(totalFilled),
+      fillCount: fillCount.toString(),
+      txHash: event.transactionHash,
+      block: event.blockNumber
+    });
+
+    this.emit('swapFullyFilled', {
+      swapId,
+      totalFilled: totalFilled.toString(),
+      fillCount: fillCount.toString(),
+      txHash: event.transactionHash,
+      blockNumber: event.blockNumber
+    });
   }
 
 

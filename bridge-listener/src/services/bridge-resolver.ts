@@ -375,22 +375,27 @@ export class BridgeResolver extends EventEmitter {
     amount: string;
     timelock: number;
   }): Promise<any> {
-    // Use the bridge contract to create ETH escrow for NEAR → ETH direction
-    const bridgeContract = new ethers.Contract(
+    // Use new CrossChainResolver contract following 1inch pattern
+    const resolverContract = new ethers.Contract(
       this.config.ethBridgeContract,
       [
-        'function createNEARToETHBridge(bytes32 hashlock, address ethRecipient) external payable returns (bytes32 swapId)',
-        'event NEARToETHEscrowCreated(address indexed escrow, bytes32 indexed hashlock, address indexed ethRecipient, uint256 amount)'
+        // CrossChainResolver functions
+        'function deployDst(bytes32 hashlock, address recipient, uint256 amount) external payable returns (address escrow)',
+        'event EscrowDeployedDst(address indexed escrow, bytes32 indexed hashlock, address indexed recipient, uint256 amount)'
       ],
       this.resolverSigner
     );
 
+    console.log(`🔄 Using 1inch CrossChainResolver deployDst for NEAR → ETH...`);
+    
     // Ensure hashlock is properly formatted as bytes32
     const formattedHashlock = params.hashlock.startsWith('0x') ? params.hashlock : `0x${params.hashlock}`;
     
-    const tx = await bridgeContract.createNEARToETHBridge(
+    // Use deployDst function (1inch resolver pattern)
+    const tx = await resolverContract.deployDst(
       formattedHashlock,
       params.recipient, // ETH recipient address
+      params.amount, // Amount to lock in destination escrow
       {
         value: params.amount, // Bridge-listener pays the ETH
         gasLimit: 500000
@@ -399,47 +404,62 @@ export class BridgeResolver extends EventEmitter {
 
     const receipt = await tx.wait();
     
-    // Extract escrow address from NEARToETHEscrowCreated event
+    // Extract escrow address from EscrowDeployedDst event
     let escrowAddress = '';
-    console.log(`🔍 Transaction receipt:`, JSON.stringify(receipt, null, 2));
+    console.log(`🔍 1inch resolver transaction receipt:`, JSON.stringify(receipt, null, 2));
     
     if (receipt.logs) {
-      console.log(`🔍 Found ${receipt.logs.length} logs in ETH transaction`);
+      console.log(`🔍 Found ${receipt.logs.length} logs in 1inch resolver transaction`);
       
       for (let i = 0; i < receipt.logs.length; i++) {
         const log = receipt.logs[i];
-        console.log(`🔍 Processing ETH log ${i}:`, JSON.stringify(log, null, 2));
+        console.log(`🔍 Processing resolver log ${i}:`, JSON.stringify(log, null, 2));
         
         try {
-          const parsedLog = bridgeContract.interface.parseLog(log);
-          console.log(`🔍 Parsed ETH log ${i}:`, parsedLog);
+          const parsedLog = resolverContract.interface.parseLog(log);
+          console.log(`🔍 Parsed resolver log ${i}:`, parsedLog);
           
-          if (parsedLog && parsedLog.name === 'NEARToETHEscrowCreated') {
+          if (parsedLog && parsedLog.name === 'EscrowDeployedDst') {
             escrowAddress = parsedLog.args.escrow;
-            console.log(`✅ Created escrow at address: ${escrowAddress}`);
+            console.log(`✅ 1inch resolver created escrow at address: ${escrowAddress}`);
             break;
           }
         } catch (parseError) {
-          console.log(`❌ Failed to parse ETH log ${i}:`, parseError);
+          console.log(`❌ Failed to parse resolver log ${i}:`, parseError);
         }
       }
     } else {
-      console.log(`❌ No logs found in ETH transaction receipt`);
+      console.log(`❌ No logs found in 1inch resolver transaction receipt`);
     }
     
     return { tx, receipt, escrowAddress };
   }
 
   private async completeEthEscrow(escrowAddress: string, secret: string): Promise<any> {
-    // Use the resolver signer to complete the ETH escrow
-    const escrowContract = new ethers.Contract(
-      escrowAddress,
-      ['function completeSwap(bytes32 secret) external'],
+    // Use CrossChainResolver withdraw function (1inch pattern)
+    const resolverContract = new ethers.Contract(
+      this.config.ethBridgeContract,
+      [
+        'function withdraw(address escrowAddress, bytes32 secret) external',
+        'event EscrowWithdrawn(address indexed escrow, bytes32 secret, address indexed recipient)'
+      ],
       this.resolverSigner
     );
+
+    console.log(`🔄 Using 1inch CrossChainResolver withdraw for escrow completion...`);
+    console.log(`📋 Escrow: ${escrowAddress}`);
+    console.log(`📋 Secret: ${secret.substring(0, 14)}...`);
     
-    const tx = await escrowContract.completeSwap(secret);
+    // Use resolver withdraw function (1inch pattern)
+    const tx = await resolverContract.withdraw(escrowAddress, secret);
     const receipt = await tx.wait();
+    
+    console.log(`✅ 1inch resolver withdrawal completed:`, {
+      txHash: tx.hash,
+      escrow: escrowAddress,
+      gasUsed: receipt.gasUsed?.toString()
+    });
+    
     return receipt;
   }
 

@@ -274,18 +274,22 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
     const provider = new ethers.providers.Web3Provider(window.ethereum as any);
     const signer = provider.getSigner();
 
-    const bridgeContract = new ethers.Contract(
+    // Use new CrossChainResolver contract following 1inch pattern
+    const resolverContract = new ethers.Contract(
       BRIDGE_CONFIG.contractAddress,
       [
-        "function createETHToNEARBridge(bytes32 hashlock, string calldata nearAccount) external payable returns (bytes32 swapId)",
+        // CrossChainResolver ABI - following 1inch pattern
+        "function deploySrc(bytes32 hashlock, uint8 destinationChain, string calldata destinationAccount, uint256 safetyDeposit) external payable returns (address escrow)",
+        "function createETHToNEARBridge(bytes32 hashlock, string calldata nearAccount) external payable returns (address escrow)",
+        "event EscrowDeployedSrc(address indexed escrow, bytes32 indexed hashlock, uint8 indexed destinationChain, string destinationAccount, uint256 amount, uint256 safetyDeposit)",
         "event EscrowCreated(address indexed escrow, bytes32 indexed hashlock, uint8 indexed destinationChain, string destinationAccount, uint256 amount)",
-        "event EscrowCreatedLegacy(address indexed escrow, bytes32 indexed hashlock, string nearAccount, uint256 amount)",
-        "event SwapCompleted(address indexed escrow, bytes32 secret, uint8 destinationChain)"
+        "event EscrowCreatedLegacy(address indexed escrow, bytes32 indexed hashlock, string nearAccount, uint256 amount)"
       ],
       signer
     );
 
-    const tx = await bridgeContract.createETHToNEARBridge(
+    // Use legacy function for backward compatibility
+    const tx = await resolverContract.createETHToNEARBridge(
       hashlock,
       nearAccountId,
       {

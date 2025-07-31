@@ -197,7 +197,8 @@ contract InchDirectBridge is ReentrancyGuard {
             user: ethRecipient, // The ETH recipient is the user
             amount: msg.value,
             hashlock: hashlock,
-            nearAccount: "", // Empty for NEAR→ETH direction  
+            destinationChain: DestinationChain.NEAR, // NEAR→ETH direction
+            destinationAccount: "", // Empty for NEAR→ETH direction  
             completed: false,
             createdAt: block.timestamp
         });
