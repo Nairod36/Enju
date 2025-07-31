@@ -2,7 +2,7 @@ export const FORK_MAINNET_CONFIG = {
   chainId: 1, // Fork of mainnet keeps same chain ID
   name: 'Forked Mainnet',
   rpcUrl: process.env.NODE_ENV === 'development' 
-    ? 'http://vps-b11044fd.vps.ovh.net:8545/' 
+    ? 'http://vps-b11044fd.vps.ovh.net/rpc' 
     : 'https://vps-b11044fd.vps.ovh.net:8545/', // Use HTTPS if available
   nativeCurrency: {
     name: 'Ethereum',
@@ -13,8 +13,8 @@ export const FORK_MAINNET_CONFIG = {
 };
 
 export const BRIDGE_CONFIG = {
-  contractAddress: '0xaC7e97aC94f5b0708849bb622eCBAE69aE826038', // Nouveau contrat déployé avec support TRON
-  rpcUrl: 'http://vps-b11044fd.vps.ovh.net:8545/',
+  contractAddress: '0x8464135c8F25Da09e49BC8782676a84730C318bC', // Nouveau contrat fonctionnel déployé avec support TRON
+  rpcUrl: 'http://vps-b11044fd.vps.ovh.net/rpc',
   listenerApi: 'http://localhost:3002',
   nearContract: 'matthias-dev.testnet',
   inchEscrowFactory: '0xa7bCb4EAc8964306F9e3764f67Db6A7af6DdF99A',

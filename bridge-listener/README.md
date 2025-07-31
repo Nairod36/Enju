@@ -33,7 +33,7 @@ npm start
 
 ```env
 # Ethereum
-ETH_RPC_URL=http://vps-b11044fd.vps.ovh.net:8545/
+ETH_RPC_URL=http://vps-b11044fd.vps.ovh.net/rpc
 ETH_BRIDGE_CONTRACT=0x... # Adresse InchDirectBridge
 ETH_PRIVATE_KEY=0x... # Clé privée du resolver
 

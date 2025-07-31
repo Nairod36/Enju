@@ -82,7 +82,7 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
         try {
           console.log("🧪 Testing RPC connection directly...");
           const response = await fetch(
-            "http://vps-b11044fd.vps.ovh.net:8545/",
+            "http://vps-b11044fd.vps.ovh.net/rpc",
             {
               method: "POST",
               headers: {
@@ -390,6 +390,9 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
 
     // Force network refresh to avoid cached network issues
     const provider = new ethers.providers.Web3Provider(window.ethereum as any, 'any');
+    
+    // Alternative: Try using the direct RPC connection
+    // const provider = new ethers.providers.JsonRpcProvider('http://vps-b11044fd.vps.ovh.net/rpc');
     
     // Force a refresh of accounts and network
     await provider.send('eth_requestAccounts', []);

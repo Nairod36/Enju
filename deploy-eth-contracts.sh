@@ -38,7 +38,7 @@ check_ethereum_node() {
     echo -e "${BLUE}🔗 Checking Ethereum node...${NC}"
     
     # Use environment variable or default to your VPS
-    RPC_URL=${ETH_RPC_URL:-"http://vps-b11044fd.vps.ovh.net:8545/"}
+    RPC_URL=${ETH_RPC_URL:-"http://vps-b11044fd.vps.ovh.net/rpc"}
     echo -e "${BLUE}Using RPC: ${RPC_URL}${NC}"
     
     # Try curl first, then fallback to simple connection test
@@ -65,7 +65,7 @@ deploy_contracts() {
     
     # Deploy with private key from command line (Anvil test account)
     echo -e "${BLUE}Deploying InchDirectBridge...${NC}"
-    RPC_URL=${ETH_RPC_URL:-"http://vps-b11044fd.vps.ovh.net:8545/"}
+    RPC_URL=${ETH_RPC_URL:-"http://vps-b11044fd.vps.ovh.net/rpc"}
     forge script script/DeployInchDirectBridge.s.sol:DeployInchDirectBridge \
         --rpc-url "${RPC_URL}" \
         --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 \
