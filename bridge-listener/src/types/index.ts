@@ -1,7 +1,7 @@
 export interface BridgeEvent {
   id: string;
-  type: 'ETH_TO_NEAR' | 'NEAR_TO_ETH';
-  status: 'PENDING' | 'COMPLETED' | 'FAILED' | 'REFUNDED';
+  type: 'ETH_TO_NEAR' | 'NEAR_TO_ETH' | 'ETH_TO_TRON' | 'TRON_TO_ETH';
+  status: 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'REFUNDED';
   ethTxHash?: string;
   nearTxHash?: string;
   escrowAddress?: string;
@@ -49,7 +49,7 @@ export interface ResolverConfig {
 }
 
 export interface SwapRequest {
-  type: 'ETH_TO_NEAR' | 'NEAR_TO_ETH';
+  type: 'ETH_TO_NEAR' | 'NEAR_TO_ETH' | 'ETH_TO_TRON' | 'TRON_TO_ETH';
   amount: string;
   hashlock: string;
   timelock: number;

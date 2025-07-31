@@ -1,9 +1,9 @@
 export const FORK_MAINNET_CONFIG = {
-  chainId: 1, // Fork of mainnet keeps same chain ID
+  chainId: 1, // Mainnet fork chain ID
   name: 'Forked Mainnet',
   rpcUrl: process.env.NODE_ENV === 'development' 
     ? 'http://vps-b11044fd.vps.ovh.net/rpc' 
-    : 'https://vps-b11044fd.vps.ovh.net:8545/', // Use HTTPS if available
+    : 'http://vps-b11044fd.vps.ovh.net/rpc',
   nativeCurrency: {
     name: 'Ethereum',
     symbol: 'ETH',
@@ -13,7 +13,7 @@ export const FORK_MAINNET_CONFIG = {
 };
 
 export const BRIDGE_CONFIG = {
-  contractAddress: '0x8464135c8F25Da09e49BC8782676a84730C318bC', // Nouveau contrat fonctionnel déployé avec support TRON
+  contractAddress: '0xFEE2d383Ee292283eC43bdf0fa360296BE1e1149', // InchDirectBridge déployé sur fork local avec EscrowFactory
   rpcUrl: 'http://vps-b11044fd.vps.ovh.net/rpc',
   listenerApi: 'http://localhost:3002',
   nearContract: 'matthias-dev.testnet',
@@ -52,7 +52,7 @@ export const switchToForkNetwork = async () => {
   try {
     await window.ethereum.request({
       method: 'wallet_switchEthereumChain',
-      params: [{ chainId: `0x${FORK_MAINNET_CONFIG.chainId.toString(16)}` }],
+      params: [{ chainId: `0x${FORK_MAINNET_CONFIG.chainId.toString(16)}` }], // 0x7a69
     });
     
     console.log('✅ Successfully switched to Fork Mainnet');

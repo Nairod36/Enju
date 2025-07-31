@@ -20,7 +20,7 @@ export class BridgeResolver extends EventEmitter {
   private isRunning = false;
 
   // Contrats déployés
-  private readonly ETH_BRIDGE_CONTRACT = '0xaC7e97aC94f5b0708849bb622eCBAE69aE826038';
+  private readonly ETH_BRIDGE_CONTRACT = '0xFEE2d383Ee292283eC43bdf0fa360296BE1e1149';
   private readonly TRON_BRIDGE_CONTRACT = 'TA879tNjuFCd8w57V3BHNhsshehKn1Ks86';
 
   constructor(private config: ResolverConfig) {
@@ -607,62 +607,94 @@ export class BridgeResolver extends EventEmitter {
     try {
       // 1. Calculer l'équivalent TRX
       const ethAmountStr = ethers.formatEther(ethAmount);
+      console.log(`🔄 Processing ETH → TRON bridge for ${ethAmountStr} ETH`);
+      
       const trxAmount = await this.priceOracle.convertEthToTrx(ethAmountStr);
       console.log(`💱 Converting ${ethAmountStr} ETH → ${trxAmount} TRX`);
 
-      // 2. Envoyer directement les TRX à l'utilisateur (relayer automatique)
-      console.log(`💸 Sending ${trxAmount} TRX directly to ${tronAddress}...`);
+      // 2. SÉCURITÉ CRITIQUE: Vérifier le secret AVANT d'envoyer les TRX
+      console.log('🔑 [SECURITY] Verifying secret before sending TRX...');
+      const secret = await this.findSecretForHashlock(hashlock);
       
-      const tronResult = await this.tronClient.sendTRX(tronAddress, trxAmount);
-
-      if (!tronResult.success) {
-        throw new Error(`TRON transfer failed: ${tronResult.error}`);
+      if (!secret) {
+        console.error('❌ [SECURITY] No valid secret found for hashlock - BLOCKING TRX transfer');
+        console.error('❌ [SECURITY] This prevents unauthorized TRX transfers');
+        
+        // Créer bridge event en état FAILED
+        const bridgeId = this.generateBridgeId(hashlock, 'ETH_TO_TRON');
+        const bridgeEvent: BridgeEvent = {
+          id: bridgeId,
+          type: 'ETH_TO_TRON' as any,
+          status: 'FAILED',
+          ethTxHash: '',
+          escrowAddress,
+          hashlock,
+          amount: ethAmountStr,
+          ethRecipient: tronAddress,
+          nearAccount: '',
+          timelock: Date.now() + (24 * 60 * 60 * 1000),
+          createdAt: Date.now(),
+        };
+        this.activeBridges.set(bridgeId, bridgeEvent);
+        
+        throw new Error('Secret not found - bridge rejected for security');
       }
 
-      console.log('✅ TRX sent directly to user:', tronResult.txHash?.substring(0, 10) + '...');
+      console.log('✅ [SECURITY] Valid secret found, proceeding with TRX transfer');
 
       // 3. Créer un bridge event pour le tracking
       const bridgeId = this.generateBridgeId(hashlock, 'ETH_TO_TRON');
       const bridgeEvent: BridgeEvent = {
         id: bridgeId,
         type: 'ETH_TO_TRON' as any,
-        status: 'PENDING',
-        ethTxHash: '', // À remplir si nécessaire
+        status: 'PROCESSING',
+        ethTxHash: '',
         escrowAddress,
         hashlock,
         amount: ethAmountStr,
         ethRecipient: tronAddress,
-        nearAccount: '', // N/A pour TRON
+        nearAccount: '',
         timelock: Date.now() + (24 * 60 * 60 * 1000),
         createdAt: Date.now(),
+        secret: secret
       };
 
       this.activeBridges.set(bridgeId, bridgeEvent);
+      console.log(`📝 Bridge event created: ${bridgeId}`);
 
-      // 4. Générer le secret correspondant au hashlock et compléter ETH automatiquement
-      console.log('🔑 Relayer validating and completing ETH side...');
+      // 4. Envoyer les TRX à l'utilisateur (sécurisé par la vérification du secret)
+      console.log(`💸 [AUTHORIZED] Sending ${trxAmount} TRX to ${tronAddress}...`);
       
-      // Le relayer trouve le secret qui correspond au hashlock fourni
-      const secret = await this.findSecretForHashlock(hashlock);
-      
-      if (secret) {
-        console.log('🔓 Secret found, completing ETH swap...');
-        await this.completeEthSwap(escrowAddress, secret);
-        
-        // Marquer le bridge comme complété
-        bridgeEvent.status = 'COMPLETED';
-        bridgeEvent.secret = secret;
-        bridgeEvent.completedAt = Date.now();
-        
-        console.log('✅ ETH → TRON bridge completed by relayer!');
-        this.emit('bridgeCompleted', bridgeEvent);
-      } else {
-        console.error('❌ Relayer could not find secret for hashlock');
+      const tronResult = await this.tronClient.sendTRX(tronAddress, trxAmount);
+      console.log(`💸 [DEBUG] TRON send result:`, tronResult);
+
+      if (!tronResult.success) {
+        console.error(`❌ [CRITICAL] TRON transfer failed: ${tronResult.error}`);
         bridgeEvent.status = 'FAILED';
+        this.activeBridges.set(bridgeId, bridgeEvent);
+        throw new Error(`TRON transfer failed: ${tronResult.error}`);
       }
 
+      console.log('✅ [SUCCESS] TRX sent to user:', tronResult.txHash?.substring(0, 10) + '...');
+      console.log('🔗 [SUCCESS] TRON TX: https://shasta.tronscan.org/#/transaction/' + tronResult.txHash);
+
+      // 5. Compléter le côté ETH avec le secret vérifié
+      console.log('🔓 Completing ETH swap with verified secret...');
+      await this.completeEthSwap(escrowAddress, secret);
+
+      // 6. Marquer le bridge comme complété
+      bridgeEvent.status = 'COMPLETED';
+      bridgeEvent.completedAt = Date.now();
+      this.activeBridges.set(bridgeId, bridgeEvent);
+      
+      console.log('✅ [FINAL] ETH → TRON bridge completed securely!');
+      this.emit('bridgeCompleted', bridgeEvent);
+
     } catch (error) {
-      console.error('❌ ETH → TRON processing failed:', error);
+      console.error('❌ [ERROR] ETH → TRON processing failed:', error);
+      if (error instanceof Error) {
+        console.error('❌ [ERROR] Stack:', error.stack);
+      }
     }
   }
 
