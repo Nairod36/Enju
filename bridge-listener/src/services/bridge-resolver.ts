@@ -107,6 +107,23 @@ export class BridgeResolver extends EventEmitter {
       console.log(`   - amount: ${event.amount}`);
 
       console.log(`✅ ETH side ready, waiting for NEAR side: ${bridgeId}`);
+      
+      // Set up a monitoring timer to check status every 10 seconds
+      const monitoringInterval = setInterval(() => {
+        const currentBridge = this.activeBridges.get(bridgeId);
+        if (currentBridge) {
+          if (currentBridge.contractId) {
+            console.log(`🎯 NEAR HTLC detected for bridge ${bridgeId}! Contract: ${currentBridge.contractId}`);
+            clearInterval(monitoringInterval);
+          } else {
+            console.log(`⏳ Still waiting for NEAR HTLC for bridge ${bridgeId}... Time elapsed: ${Math.floor((Date.now() - currentBridge.createdAt) / 1000)}s`);
+          }
+        } else {
+          console.log(`⚠️ Bridge ${bridgeId} no longer found in active bridges`);
+          clearInterval(monitoringInterval);
+        }
+      }, 10000);
+
       this.emit('bridgeCreated', bridgeEvent);
 
     } catch (error) {
@@ -147,9 +164,30 @@ export class BridgeResolver extends EventEmitter {
 
   private async handleNearHTLCCreated(event: NearHTLCEvent): Promise<void> {
     console.log('📦 NEAR HTLC created:', event.contractId);
+    console.log('🔍 NEAR HTLC details:', {
+      contractId: event.contractId,
+      hashlock: event.hashlock,
+      ethAddress: event.ethAddress,
+      sender: event.sender,
+      amount: event.amount,
+      timelock: event.timelock
+    });
 
     // Check if this HTLC is part of an existing ETH→NEAR bridge
-    const existingBridge = Array.from(this.activeBridges.values())
+    console.log(`🔍 Searching for existing ETH→NEAR bridges...`);
+    const activeBridges = Array.from(this.activeBridges.values());
+    console.log(`🔍 Found ${activeBridges.length} active bridges`);
+    
+    for (const bridge of activeBridges) {
+      console.log(`🔍 Checking bridge ${bridge.id}:`, {
+        type: bridge.type,
+        hashlock: bridge.hashlock,
+        hasContractId: !!bridge.contractId,
+        status: bridge.status
+      });
+    }
+    
+    const existingBridge = activeBridges
       .find(b => b.type === 'ETH_TO_NEAR' && b.hashlock === event.hashlock && !b.contractId);
 
     if (existingBridge) {
@@ -158,8 +196,21 @@ export class BridgeResolver extends EventEmitter {
       this.activeBridges.set(existingBridge.id, existingBridge);
       console.log(`🎯 BRIDGE LINKED! ETH bridge ${existingBridge.id} now connected to NEAR HTLC ${event.contractId}`);
       console.log(`✅ Bridge ready for completion! Both ETH and NEAR HTLCs are active.`);
+      console.log(`📋 Complete bridge state:`, {
+        id: existingBridge.id,
+        type: existingBridge.type,
+        status: existingBridge.status,
+        ethTxHash: existingBridge.ethTxHash,
+        contractId: existingBridge.contractId,
+        hashlock: existingBridge.hashlock,
+        escrowAddress: existingBridge.escrowAddress
+      });
       return;
     }
+
+    console.log(`⚠️ No matching ETH→NEAR bridge found for NEAR HTLC ${event.contractId}`);
+    console.log(`🔍 Looking for hashlock: ${event.hashlock}`);
+    console.log(`🔍 Available ETH→NEAR bridges:`, activeBridges.filter(b => b.type === 'ETH_TO_NEAR').map(b => ({ id: b.id, hashlock: b.hashlock, hasContractId: !!b.contractId })));
 
     // For standalone NEAR → ETH bridges - Auto-create ETH escrow
     const bridgeId = this.generateBridgeId(event.hashlock, 'NEAR_TO_ETH');
