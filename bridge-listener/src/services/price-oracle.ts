@@ -170,7 +170,17 @@ export class PriceOracle {
   async convertNearToEth(nearAmount: string): Promise<string> {
     const prices = await this.getCurrentPrices();
     const nearAmountNum = parseFloat(nearAmount);
-    const ethAmount = nearAmountNum * prices.nearToEth;
+    
+    // Apply a slight conservative factor to avoid giving too much ETH
+    const CONSERVATIVE_FACTOR = 0.98; // Give 2% less ETH to be safe
+    const ethAmount = nearAmountNum * prices.nearToEth * CONSERVATIVE_FACTOR;
+    
+    console.log(`💱 NEAR → ETH Conversion Details:`);
+    console.log(`   Input: ${nearAmount} NEAR`);
+    console.log(`   Rate: ${prices.nearToEth.toFixed(8)} ETH per NEAR`);
+    console.log(`   Raw conversion: ${(nearAmountNum * prices.nearToEth).toFixed(8)} ETH`);
+    console.log(`   Conservative factor: ${CONSERVATIVE_FACTOR} (${((1-CONSERVATIVE_FACTOR)*100).toFixed(1)}% reduction)`);
+    console.log(`   Final amount: ${ethAmount.toFixed(8)} ETH`);
     
     return ethAmount.toFixed(18); // Return with 18 decimals for precision
   }

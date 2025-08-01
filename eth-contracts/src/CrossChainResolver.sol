@@ -89,6 +89,20 @@ contract CrossChainResolver is Ownable {
         uint256 amount
     );
     
+    // Additional events for better tracking
+    event ETHReleased(
+        address indexed recipient,
+        uint256 amount,
+        bytes32 indexed hashlock,
+        string reason
+    );
+    
+    event FundsRecovered(
+        address indexed to,
+        uint256 amount,
+        string reason
+    );
+    
     // Cross-chain swap tracking with partial fills support
     struct CrossChainSwap {
         address srcEscrow;
@@ -206,22 +220,28 @@ contract CrossChainResolver is Ownable {
         bytes32 hashlock,
         string calldata nearAccount
     ) external payable returns (address escrow) {
-        // Simplified implementation - just track the bridge without using 1inch factory for now
         require(msg.value > 0, "Amount must be greater than 0");
         require(hashlock != bytes32(0), "Invalid hashlock");
         require(bytes(nearAccount).length > 0, "NEAR account required");
         require(_isValidNearAccount(nearAccount), "Invalid NEAR account format");
         
-        // Use a simple escrow address based on the sender and hashlock
-        // This is temporary until we properly integrate with 1inch factory
-        escrow = address(uint160(uint256(keccak256(abi.encodePacked(
-            msg.sender,
-            hashlock,
-            block.timestamp
-        )))));
+        // Use 1inch factory to create source escrow for ETH → NEAR
+        IBaseEscrow.Immutables memory immutables = IBaseEscrow.Immutables({
+            orderHash: keccak256(abi.encodePacked(msg.sender, hashlock, block.timestamp)),
+            hashlock: hashlock,
+            maker: Address.wrap(uint160(msg.sender)), // User as maker
+            taker: Address.wrap(uint160(address(this))), // Resolver as taker
+            token: Address.wrap(uint160(address(0))), // ETH (zero address)
+            amount: msg.value,
+            safetyDeposit: 0, // No safety deposit for legacy function
+            timelocks: _createTimelocks()
+        });
         
-        // Store the funds in this contract for now (to be transferred to proper escrow later)
-        // In a real implementation, this would go to the 1inch escrow
+        // Use 1inch factory to create escrow for ETH → NEAR
+        ESCROW_FACTORY.createDstEscrow{value: msg.value}(immutables, 0);
+        
+        // Get the deterministic address of the created escrow
+        escrow = ESCROW_FACTORY.addressOfEscrowDst(immutables);
         
         // Create swap tracking
         bytes32 swapId = keccak256(abi.encodePacked(
@@ -477,6 +497,98 @@ contract CrossChainResolver is Ownable {
         }
     }
     
+    /**
+     * @dev Release ETH to a specific user (for bridge completion)
+     * @param recipient Address to receive the ETH
+     * @param amount Amount of ETH to send
+     * @param hashlock Associated hashlock for tracking
+     * @param reason Reason for the release (for transparency)
+     */
+    function releaseETHToUser(
+        address payable recipient,
+        uint256 amount,
+        bytes32 hashlock,
+        string calldata reason
+    ) external onlyOwner {
+        require(recipient != address(0), "Invalid recipient");
+        require(amount > 0, "Amount must be greater than 0");
+        require(amount <= address(this).balance, "Insufficient contract balance");
+        
+        // Transfer ETH to recipient
+        recipient.transfer(amount);
+        
+        emit ETHReleased(recipient, amount, hashlock, reason);
+    }
+    
+    /**
+     * @dev Withdraw from 1inch escrow and then release to user (NEAR → ETH completion)
+     * @param escrowAddress Address of the 1inch escrow contract
+     * @param secret The secret that generates the hashlock
+     * @param immutables The immutables required by 1inch escrow
+     * @param recipient Final recipient of the ETH
+     * @param reason Reason for the release
+     */
+    function withdrawFromEscrowAndRelease(
+        address escrowAddress,
+        bytes32 secret,
+        IBaseEscrow.Immutables calldata immutables,
+        address payable recipient,
+        string calldata reason
+    ) external onlyOwner {
+        require(recipient != address(0), "Invalid recipient");
+        
+        uint256 balanceBefore = address(this).balance;
+        
+        // First, withdraw from 1inch escrow (funds come to this contract)
+        IBaseEscrow escrow = IBaseEscrow(escrowAddress);
+        escrow.withdraw(secret, immutables);
+        
+        uint256 balanceAfter = address(this).balance;
+        uint256 withdrawnAmount = balanceAfter - balanceBefore;
+        
+        require(withdrawnAmount > 0, "No funds withdrawn from escrow");
+        
+        // Then, send to final recipient
+        recipient.transfer(withdrawnAmount);
+        
+        emit EscrowWithdrawn(escrowAddress, secret, address(this));
+        emit ETHReleased(recipient, withdrawnAmount, immutables.hashlock, reason);
+    }
+    
+    /**
+     * @dev Batch release ETH to multiple users
+     * @param recipients Array of recipient addresses
+     * @param amounts Array of amounts to send
+     * @param hashlocks Array of hashlocks for tracking
+     * @param reason Reason for the batch release
+     */
+    function batchReleaseETH(
+        address payable[] calldata recipients,
+        uint256[] calldata amounts,
+        bytes32[] calldata hashlocks,
+        string calldata reason
+    ) external onlyOwner {
+        require(
+            recipients.length == amounts.length && amounts.length == hashlocks.length,
+            "Arrays length mismatch"
+        );
+        
+        uint256 totalAmount = 0;
+        for (uint256 i = 0; i < amounts.length; i++) {
+            totalAmount += amounts[i];
+        }
+        
+        require(totalAmount <= address(this).balance, "Insufficient contract balance");
+        
+        for (uint256 i = 0; i < recipients.length; i++) {
+            require(recipients[i] != address(0), "Invalid recipient");
+            require(amounts[i] > 0, "Amount must be greater than 0");
+            
+            recipients[i].transfer(amounts[i]);
+            emit ETHReleased(recipients[i], amounts[i], hashlocks[i], reason);
+        }
+    }
+    
     
     /**
      * @dev Create timelocks for 1inch escrow
@@ -613,10 +725,51 @@ contract CrossChainResolver is Ownable {
     }
     
     /**
-     * @dev Emergency withdraw
+     * @dev Emergency withdraw with options
+     * @param recipient Optional recipient (if empty, sends to owner)
+     * @param amount Optional amount (if 0, sends all balance)
+     * @param reason Reason for emergency withdrawal
+     */
+    function emergencyWithdraw(
+        address payable recipient,
+        uint256 amount,
+        string calldata reason
+    ) external onlyOwner {
+        address payable target = recipient != address(0) ? recipient : payable(owner());
+        uint256 withdrawAmount = amount > 0 ? amount : address(this).balance;
+        
+        require(withdrawAmount <= address(this).balance, "Insufficient balance");
+        require(withdrawAmount > 0, "No funds to withdraw");
+        
+        target.transfer(withdrawAmount);
+        
+        emit FundsRecovered(target, withdrawAmount, reason);
+    }
+    
+    /**
+     * @dev Emergency withdraw (legacy - sends all to owner)
      */
     function emergencyWithdraw() external onlyOwner {
-        payable(owner()).transfer(address(this).balance);
+        uint256 balance = address(this).balance;
+        require(balance > 0, "No funds to withdraw");
+        
+        payable(owner()).transfer(balance);
+        
+        emit FundsRecovered(owner(), balance, "Emergency withdrawal");
+    }
+    
+    /**
+     * @dev Get contract balance
+     */
+    function getContractBalance() external view returns (uint256) {
+        return address(this).balance;
+    }
+    
+    /**
+     * @dev Check if swap exists
+     */
+    function swapExists(bytes32 swapId) external view returns (bool) {
+        return swaps[swapId].user != address(0);
     }
     
     // Receive ETH

@@ -49,6 +49,7 @@ export interface ResolverConfig {
   nearAccountId: string;
   nearPrivateKey: string;
   inchEscrowFactory: string;
+  crossChainResolverAddress: string; // Notre contrat déployé
 }
 
 export interface SwapRequest {

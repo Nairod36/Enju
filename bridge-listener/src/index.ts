@@ -19,7 +19,8 @@ async function main() {
     'NEAR_CONTRACT_ID',
     'NEAR_ACCOUNT_ID',
     'NEAR_PRIVATE_KEY',
-    'INCH_ESCROW_FACTORY'
+    'INCH_ESCROW_FACTORY',
+    'CROSS_CHAIN_RESOLVER_ADDRESS'
   ];
 
   const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
@@ -41,7 +42,8 @@ async function main() {
     nearContractId: process.env.NEAR_CONTRACT_ID!,
     nearAccountId: process.env.NEAR_ACCOUNT_ID!,
     nearPrivateKey: process.env.NEAR_PRIVATE_KEY!,
-    inchEscrowFactory: process.env.INCH_ESCROW_FACTORY!
+    inchEscrowFactory: process.env.INCH_ESCROW_FACTORY!,
+    crossChainResolverAddress: process.env.CROSS_CHAIN_RESOLVER_ADDRESS!
   };
 
   const port = parseInt(process.env.PORT || '3002');
