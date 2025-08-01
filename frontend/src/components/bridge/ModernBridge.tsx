@@ -10,7 +10,6 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { BridgeModal } from "./BridgeModal";
-import { PartialFillsPanel } from "./PartialFillsPanel";
 import { useAccount } from "wagmi";
 import { useCustomBalance } from "@/hooks/useCustomBalance";
 import { useWalletSelector } from "@near-wallet-selector/react-hook";
@@ -1491,9 +1490,6 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
           </CardContent>
         </Card>
       </div>
-
-      {/* Partial Fills Panel */}
-      <PartialFillsPanel swapId={currentSwapId} isVisible={true} />
 
       {/* Bridge Modal */}
       <BridgeModal

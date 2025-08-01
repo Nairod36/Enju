@@ -13,7 +13,7 @@ import {
   Clock,
   Zap,
 } from "lucide-react";
-import { useAccount, useBalance } from "wagmi";
+import { useAccount, useBalance, useChainId } from "wagmi";
 import { useBridge } from "../../hooks/useBridge";
 import { useBridgeHistory } from "../../hooks/useBridgeHistory";
 import { Canvas } from "@react-three/fiber";
@@ -25,10 +25,25 @@ import { WelcomeNewUser } from "../../components/welcome/WelcomeNewUser";
 
 import { useIslands } from "../../hooks/useIslands";
 import { useAuthContext } from "@/contexts/AuthContext";
+import { useMultiChainBalance } from "../../hooks/useMultiChainBalance";
 import { ethers } from "ethers";
 // import { useEscrowEventListener } from "../../hooks/useEscrowEventListener";
 
 export function AppDashboard() {
+  // Function to get network name
+  const getNetworkName = (chainId: number | undefined) => {
+    switch (chainId) {
+      case 1:
+        return "Ethereum Mainnet";
+      case 11155111:
+        return "Sepolia Testnet";
+      case 31337:
+        return "Fork Mainnet";
+      default:
+        return chainId ? `Network ${chainId}` : "Unknown Network";
+    }
+  };
+
   // Utility function to safely format amount
   const formatAmount = (amount: any): number => {
     if (!amount) return 0;
@@ -44,7 +59,13 @@ export function AppDashboard() {
   };
 
   const { address, isConnected } = useAccount();
+  const chainId = useChainId();
   const { data: balance } = useBalance({ address });
+  const {
+    balances,
+    isLoading: isLoadingBalances,
+    error: balanceError,
+  } = useMultiChainBalance();
   const {
     executeBridge,
     isLoading: isBridging,
@@ -228,7 +249,7 @@ export function AppDashboard() {
 
       {/* Header */}
       <div className="bg-white border-b border-gray-200">
-        <div className="max-w-full px-8 py-4">
+        <div className="max-w-full pr-8 py-4 pl-20">
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-2xl font-bold text-gray-900">Bridge</h1>
@@ -238,34 +259,70 @@ export function AppDashboard() {
             </div>
             {isConnected && (
               <div className="flex items-center space-x-6">
-                <MintEthButton />
+                <div className="flex items-center space-x-3">
+                  <MintEthButton />
+                  {/* Network indicator bubble */}
+                  <div className="flex items-center bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-medium border border-green-200">
+                    <div className="w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse"></div>
+                    {getNetworkName(chainId)}
+                  </div>
+                </div>
                 <div className="w-px h-8 bg-gray-200"></div>
 
                 {/* ETH Balance */}
                 <div className="text-right">
                   <div className="text-lg font-bold text-gray-900">
-                    {balance ? Number(balance.formatted).toFixed(4) : "0.0000"}{" "}
-                    ETH
+                    {isLoadingBalances ? (
+                      <span className="animate-pulse text-blue-500">
+                        ⟳ Loading...
+                      </span>
+                    ) : balanceError ? (
+                      <span className="text-red-500">Error</span>
+                    ) : balances.eth ? (
+                      `${balances.eth.formatted} ETH`
+                    ) : (
+                      "0.0000 ETH"
+                    )}
                   </div>
                   <div className="text-xs text-gray-500">Ethereum</div>
                 </div>
 
                 <div className="w-px h-8 bg-gray-200"></div>
 
-                {/* NEAR Balance - placeholder for now */}
+                {/* NEAR Balance */}
                 <div className="text-right">
                   <div className="text-lg font-bold text-gray-900">
-                    0.0000 NEAR
+                    {isLoadingBalances ? (
+                      <span className="animate-pulse text-blue-500">
+                        ⟳ Loading...
+                      </span>
+                    ) : balanceError ? (
+                      <span className="text-red-500">Error</span>
+                    ) : balances.near ? (
+                      `${balances.near.formatted} NEAR`
+                    ) : (
+                      "0.0000 NEAR"
+                    )}
                   </div>
                   <div className="text-xs text-gray-500">NEAR Protocol</div>
                 </div>
 
                 <div className="w-px h-8 bg-gray-200"></div>
 
-                {/* TRON Balance - placeholder for now */}
+                {/* TRON Balance */}
                 <div className="text-right">
                   <div className="text-lg font-bold text-gray-900">
-                    0.00 TRX
+                    {isLoadingBalances ? (
+                      <span className="animate-pulse text-blue-500">
+                        ⟳ Loading...
+                      </span>
+                    ) : balanceError ? (
+                      <span className="text-red-500">Error</span>
+                    ) : balances.tron ? (
+                      `${balances.tron.formatted} TRX`
+                    ) : (
+                      "0.00 TRX"
+                    )}
                   </div>
                   <div className="text-xs text-gray-500">TRON</div>
                 </div>
@@ -280,7 +337,7 @@ export function AppDashboard() {
         <div className="w-[40%] bg-white border-r border-gray-200 flex flex-col">
           {/* Island Viewer */}
           <div className="flex-1 flex flex-col">
-            <div className="px-8 py-6 border-b border-gray-200">
+            <div className="pr-8 py-4 pl-20 border-b border-gray-200">
               <h3 className="text-md font-semibold text-gray-900">
                 #{islandSeed || "..."} Island
               </h3>
@@ -336,7 +393,7 @@ export function AppDashboard() {
           </div>
 
           {/* Island Stats */}
-          <div className="bg-gray-50 border-t border-gray-200 px-8 py-6">
+          <div className="bg-gray-50 border-t border-gray-200 pr-8 py-6 pl-20">
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-gray-600">
