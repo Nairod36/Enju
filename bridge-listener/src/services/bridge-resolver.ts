@@ -2,6 +2,7 @@ import { EventEmitter } from 'events';
 import { EthereumListener } from './eth-listener';
 import { NearListener } from './near-listener';
 import { TronFusionClient, FusionImmutables } from './tron-fusion-client';
+import { TronEventListener, TronEscrowEvent } from './tron-event-listener';
 import { PriceOracle } from './price-oracle';
 import { BridgeEvent, EthEscrowCreatedEvent, NearHTLCEvent, ResolverConfig, SwapRequest } from '../types';
 import { ethers } from 'ethers';
@@ -10,6 +11,7 @@ export class BridgeResolver extends EventEmitter {
   private ethListener: EthereumListener;
   private nearListener: NearListener;
   private tronFusionClient?: TronFusionClient;
+  private tronEventListener?: TronEventListener;
   private priceOracle: PriceOracle;
   private activeBridges: Map<string, BridgeEvent> = new Map();
   private resolverSigner: ethers.Wallet;
@@ -44,7 +46,17 @@ export class BridgeResolver extends EventEmitter {
         chainId: process.env.TRON_CHAIN_ID || '2'
       };
       this.tronFusionClient = new TronFusionClient(tronConfig);
+      
+      // Initialize TRON Event Listener
+      const TronFusionBridgeAbi = require('../contracts/TronFusionBridge.abi.json');
+      this.tronEventListener = new TronEventListener(
+        process.env.TRON_FULL_HOST,
+        process.env.TRON_FUSION_BRIDGE_CONTRACT,
+        TronFusionBridgeAbi
+      );
+      
       console.log('✅ TRON Fusion+ client initialized in BridgeResolver');
+      console.log('✅ TRON Event Listener initialized in BridgeResolver');
     } else {
       console.log('⚠️ TRON Fusion+ configuration missing, ETH ↔ TRON bridges disabled');
       console.log('💡 Required: TRON_PRIVATE_KEY, TRON_FULL_HOST, TRON_FUSION_BRIDGE_CONTRACT');
@@ -58,6 +70,11 @@ export class BridgeResolver extends EventEmitter {
 
     await this.ethListener.initialize();
     await this.nearListener.initialize();
+    
+    // Initialize TRON event listener if available
+    if (this.tronEventListener) {
+      await this.tronEventListener.initialize();
+    }
 
     console.log('✅ Bridge Resolver initialized');
   }
@@ -71,11 +88,11 @@ export class BridgeResolver extends EventEmitter {
     await this.nearListener.startListening();
 
     // Démarrer les watchers TRON si disponible
-    if (this.tronFusionClient) {
+    if (this.tronFusionClient && this.tronEventListener) {
       console.log('🚀 Starting ETH ↔ TRON Fusion+ watchers...');
       await Promise.all([
         this.watchEthToTronSwaps(),
-        this.watchTronToEthSwaps()
+        this.tronEventListener.startListening()
       ]);
     }
 
@@ -86,6 +103,11 @@ export class BridgeResolver extends EventEmitter {
     this.isRunning = false;
     await this.ethListener.stopListening();
     await this.nearListener.stopListening();
+    
+    if (this.tronEventListener) {
+      await this.tronEventListener.stopListening();
+    }
+    
     console.log('🛑 Bridge Resolver stopped');
   }
 
@@ -95,6 +117,11 @@ export class BridgeResolver extends EventEmitter {
 
     // Handle ETH → TRON bridge initiation
     this.ethListener.on('ethToTronBridge', this.handleEthToTronBridge.bind(this));
+
+    // Handle TRON → ETH bridge initiation
+    if (this.tronEventListener) {
+      this.tronEventListener.on('tronEscrowCreated', this.handleTronToEthBridge.bind(this));
+    }
 
     // Handle ETH swap completion
     this.ethListener.on('swapCompleted', this.handleEthSwapCompleted.bind(this));
@@ -872,27 +899,46 @@ export class BridgeResolver extends EventEmitter {
   }
 
   /**
-   * Watcher TRON → ETH swaps
+   * Handle TRON → ETH bridge initiation
    */
-  private async watchTronToEthSwaps(): Promise<void> {
-    console.log('👀 Watching TRON → ETH swaps...');
-
-    if (!this.tronFusionClient) return;
-
-    // Utiliser le système d'événements TRON Fusion+
-    await this.tronFusionClient.watchFusionEvents(async (event) => {
-      if (!this.isRunning) return;
+  private async handleTronToEthBridge(event: TronEscrowEvent): Promise<void> {
+    console.log('🔄 Processing TRON → ETH bridge...');
+    
+    // Avoid duplicates
+    const dedupeKey = event.txHash;
+    if (this.processedTxHashes.has(dedupeKey)) {
+      console.log(`⚠️ Event ${dedupeKey} already processed, skipping...`);
+      return;
+    }
+    this.processedTxHashes.add(dedupeKey);
+    
+    try {
+      const bridgeId = this.generateBridgeId(event.hashlock, 'TRON_TO_ETH');
       
-      if (event.type === 'EscrowCreated') {
-        console.log('🔔 TRON → ETH swap detected:', event.data);
-        
-        try {
-          await this.processTronToEthSwap(event.data);
-        } catch (error) {
-          console.error('❌ Failed to process TRON → ETH swap:', error);
-        }
-      }
-    });
+      // Create bridge tracking entry
+      const bridgeEvent: BridgeEvent = {
+        id: bridgeId,
+        type: 'TRON_TO_ETH',
+        status: 'PENDING',
+        tronTxHash: event.txHash,
+        amount: event.amount,
+        hashlock: event.hashlock,
+        ethRecipient: event.ethTaker, // ETH address from TRON event
+        tronSender: event.tronMaker,  // TRON address from event
+        createdAt: Date.now()
+      };
+      
+      this.activeBridges.set(bridgeId, bridgeEvent);
+      this.emit('bridgeCreated', bridgeEvent);
+      
+      console.log(`✅ TRON → ETH bridge created: ${bridgeId}`);
+      
+      // Process the swap
+      await this.processTronToEthSwap(event);
+      
+    } catch (error) {
+      console.error('❌ TRON → ETH bridge handling failed:', error);
+    }
   }
 
   /**
@@ -1178,16 +1224,16 @@ export class BridgeResolver extends EventEmitter {
   /**
    * Traiter un swap TRON → ETH
    */
-  private async processTronToEthSwap(eventData: any): Promise<void> {
+  private async processTronToEthSwap(event: TronEscrowEvent): Promise<void> {
     console.log('⚙️ Processing TRON → ETH swap...');
 
     try {
-      // 1. Calculer l'équivalent ETH
-      const trxAmount = eventData.amount;
+      // 1. Convert TRX amount to ETH (amount is in SUN, convert to TRX first)
+      const trxAmount = (parseFloat(event.amount) / 1000000).toString(); // Convert SUN to TRX
       const ethAmount = await this.priceOracle.convertTrxToEth(trxAmount);
       console.log(`💱 Converting ${trxAmount} TRX → ${ethAmount} ETH`);
 
-      // 2. Créer l'escrow ETH de destination avec CrossChainResolver
+      // 2. Create ETH destination escrow with CrossChainResolver
       const resolverContract = new ethers.Contract(
         this.ETH_BRIDGE_CONTRACT,
         [
@@ -1197,9 +1243,11 @@ export class BridgeResolver extends EventEmitter {
       );
 
       const ethAmountWei = ethers.parseEther(ethAmount);
+      console.log(`🔄 Deploying ETH escrow with ${ethAmount} ETH for recipient ${event.ethTaker}`);
+      
       const tx = await resolverContract.deployDst(
-        eventData.hashlock,
-        eventData.targetAccount, // ETH recipient address
+        event.hashlock,
+        event.ethTaker, // ETH recipient address from TRON event
         ethAmountWei,
         {
           value: ethAmountWei, // ETH amount to lock
@@ -1207,14 +1255,33 @@ export class BridgeResolver extends EventEmitter {
         }
       );
 
-      await tx.wait();
-      console.log('✅ ETH bridge created:', tx.hash);
+      const receipt = await tx.wait();
+      console.log('✅ ETH escrow deployed successfully!');
+      console.log(`📋 ETH transaction hash: ${receipt.hash}`);
+      console.log(`💰 Amount locked: ${ethAmount} ETH`);
+      console.log(`🎯 Recipient: ${event.ethTaker}`);
+      console.log(`🔐 Hashlock: ${event.hashlock}`);
 
-      // 3. Monitorer la révélation du secret sur ETH
-      this.monitorEthSecretRevelation(eventData.hashlock, eventData.escrow);
+      // Update bridge status
+      const bridgeId = this.generateBridgeId(event.hashlock, 'TRON_TO_ETH');
+      const bridge = this.activeBridges.get(bridgeId);
+      if (bridge) {
+        bridge.status = 'COMPLETED';
+        bridge.ethTxHash = receipt.hash;
+        bridge.completedAt = Date.now();
+        this.emit('bridgeCompleted', bridge);
+      }
 
     } catch (error) {
       console.error('❌ TRON → ETH processing failed:', error);
+      
+      // Update bridge status to failed
+      const bridgeId = this.generateBridgeId(event.hashlock, 'TRON_TO_ETH');
+      const bridge = this.activeBridges.get(bridgeId);
+      if (bridge) {
+        bridge.status = 'FAILED';
+        bridge.error = error instanceof Error ? error.message : 'Unknown error';
+      }
     }
   }
 

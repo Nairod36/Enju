@@ -11,13 +11,15 @@ export interface BridgeEvent {
   hashlock: string;
   secret?: string;
   amount: string;
-  ethRecipient: string;
-  nearAccount: string;
+  ethRecipient?: string;
+  nearAccount?: string;
   tronAddress?: string; // TRON address for ETH<->TRON swaps
-  timelock: number;
+  tronSender?: string; // TRON sender address for TRON->ETH bridges
+  timelock?: number;
   createdAt: number;
   completedAt?: number;
   ethCompletionTxHash?: string;
+  error?: string; // Error message for failed bridges
 }
 
 export interface EthEscrowCreatedEvent {
