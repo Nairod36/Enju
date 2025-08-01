@@ -7,7 +7,7 @@ import { DualWalletButton } from "../DualWalletButton";
 export function AppHeader() {
   return (
     <header className="top-0 left-0 right-0 z-50 backdrop-blur">
-      <div className="max-w-full mx-auto py-2">
+      <div className="max-w-full mx-auto pt-2">
         <div className="px-14 flex items-center justify-between border-b">
           {/* Logo & Brand */}
           <Link

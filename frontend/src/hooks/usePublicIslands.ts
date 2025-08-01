@@ -26,14 +26,16 @@ export const usePublicIslands = () => {
     setError(null);
     try {
       const response = await islandsService.getPublicIslands(page, limit);
-      console.log('Public islands received:', response.islands); // Debug log
-      console.log('First island owner:', response.islands[0]?.owner); // Debug log
-      setIslands(response.islands as PublicIslandData[]);
+
+      if (response && response.islands) {
+        setIslands(response.islands as PublicIslandData[]);
+      } else {
+        setIslands([]);
+      }
       return response;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to load public islands';
       setError(errorMessage);
-      console.error('Error loading public islands:', err);
       return null;
     } finally {
       setLoading(false);

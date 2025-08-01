@@ -29,6 +29,7 @@ export interface EthEscrowCreatedEvent {
   amount: string;
   blockNumber: number;
   txHash: string;
+  from?: string; // Sender ETH address
 }
 
 export interface NearHTLCEvent {
@@ -46,6 +47,7 @@ export interface ResolverConfig {
   ethRpcUrl: string;
   ethBridgeContract: string;
   ethPrivateKey: string;
+  ethAdminPrivateKey?: string; // Admin key for minting ETH
   nearNetworkId: string;
   nearRpcUrl: string;
   nearContractId: string;
@@ -58,6 +60,7 @@ export interface ResolverConfig {
     bridgeContract: string;
     chainId: string;
   };
+  crossChainResolverAddress: string; // Notre contrat déployé
 }
 
 export interface SwapRequest {

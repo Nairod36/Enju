@@ -7,6 +7,7 @@ import { createAppKit } from "@reown/appkit/react";
 import { router } from "./router";
 import { projectId, metadata, networks, wagmiAdapter } from "./config";
 import { AuthProvider } from "./contexts/AuthContext";
+import { NotificationProvider } from "./components/notifications/NotificationProvider";
 import "./App.css";
 import "@near-wallet-selector/modal-ui/styles.css";
 import { setupMyNearWallet } from "@near-wallet-selector/my-near-wallet";
@@ -50,7 +51,9 @@ createRoot(document.getElementById("root")!).render(
       <WagmiProvider config={wagmiAdapter.wagmiConfig}>
         <QueryClientProvider client={queryClient}>
           <AuthProvider>
-            <RouterProvider router={router} />
+            <NotificationProvider>
+              <RouterProvider router={router} />
+            </NotificationProvider>
           </AuthProvider>
         </QueryClientProvider>
       </WagmiProvider>

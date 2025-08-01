@@ -1,43 +1,54 @@
 import { useState, useEffect, useRef } from "react";
-import { Card, CardContent } from "../../components/ui/card";
+import { ModernBridge } from "../../components/bridge/ModernBridge";
 import { Button } from "../../components/ui/button";
 import {
   ArrowRightLeft,
-  ChevronDown,
   Activity,
   CheckCircle,
   AlertCircle,
   ExternalLink,
+  MapPin,
+  TrendingUp,
+  Shield,
+  Clock,
+  Zap,
 } from "lucide-react";
-import { useAccount, useBalance } from "wagmi";
+import { useAccount, useBalance, useChainId } from "wagmi";
 import { useBridge } from "../../hooks/useBridge";
 import { useBridgeHistory } from "../../hooks/useBridgeHistory";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import { FloatingIsland, FloatingIslandRef } from "./island/island";
-import { ModernBridge } from "../../components/bridge/ModernBridge";
-import { TronBridgeTest } from "../../components/TronBridgeTest";
+
+import { MintEthButton } from "../../components/bridge/MintEthButton";
+import { WelcomeNewUser } from "../../components/welcome/WelcomeNewUser";
 
 import { useIslands } from "../../hooks/useIslands";
-import { generateIslandSeed } from "./island/island.generators";
 import { useAuthContext } from "@/contexts/AuthContext";
+import { useMultiChainBalance } from "../../hooks/useMultiChainBalance";
 import { ethers } from "ethers";
 // import { useEscrowEventListener } from "../../hooks/useEscrowEventListener";
 
 export function AppDashboard() {
+  // Function to get network name
+  const getNetworkName = (chainId: number | undefined) => {
+    switch (chainId) {
+      case 1:
+        return "Ethereum Fork Mainnet";
+      case 11155111:
+        return "Sepolia Testnet";
+      case 31337:
+        return "Fork Mainnet";
+      default:
+        return chainId ? `Network ${chainId}` : "Unknown Network";
+    }
+  };
+
   // Utility function to safely format amount
   const formatAmount = (amount: any): number => {
     if (!amount) return 0;
     try {
-      if (typeof amount === 'string' && amount.includes('.')) {
+      if (typeof amount === "string" && amount.includes(".")) {
         return parseFloat(amount);
       } else {
         return parseFloat(ethers.utils.formatEther(amount));
@@ -48,7 +59,13 @@ export function AppDashboard() {
   };
 
   const { address, isConnected } = useAccount();
+  const chainId = useChainId();
   const { data: balance } = useBalance({ address });
+  const {
+    balances,
+    isLoading: isLoadingBalances,
+    error: balanceError,
+  } = useMultiChainBalance();
   const {
     executeBridge,
     isLoading: isBridging,
@@ -79,6 +96,17 @@ export function AppDashboard() {
   >("idle");
   const [treeCount, setTreeCount] = useState(0);
   const [islandSeed, setIslandSeed] = useState<number | null>(null);
+  const [mintLoading, setMintLoading] = useState(false);
+  const [showWelcome, setShowWelcome] = useState(false);
+
+  // Bridge statistics
+  const [bridgeStats, setBridgeStats] = useState({
+    totalVolume: "0.00",
+    totalTransactions: 0,
+    avgTime: "45s",
+    successRate: "0.0",
+  });
+
   const { isAuthenticated } = useAuthContext();
   const {
     activeIsland,
@@ -89,8 +117,9 @@ export function AppDashboard() {
 
   useEffect(() => {
     const initializeUserIsland = async () => {
-      if (isAuthenticated && !isInitialized && !islandsLoading) {
+      if (isAuthenticated && isConnected && !isInitialized && !islandsLoading) {
         try {
+          // Check if this is a new user by looking at existing data first
           const userIsland = await ensureUserHasIsland();
           if (userIsland) {
             console.log("User island data:", userIsland);
@@ -100,6 +129,21 @@ export function AppDashboard() {
               "User trees length:",
               userIsland.userTrees?.length || 0
             );
+
+            // Check if this is a newly created island
+            const isNewUser =
+              !userIsland.islandData ||
+              !userIsland.islandData.landTiles ||
+              userIsland.islandData.landTiles.length === 0;
+
+            if (isNewUser) {
+              setShowWelcome(true);
+              // Auto-hide welcome message after 8 seconds
+              setTimeout(() => {
+                setShowWelcome(false);
+              }, 8000);
+            }
+
             setIslandSeed(parseInt(userIsland.seed));
             setTreeCount(userIsland.totalTrees || 0);
             setUserIslandData(userIsland);
@@ -128,12 +172,39 @@ export function AppDashboard() {
     initializeUserIsland();
   }, [isAuthenticated, isInitialized, islandsLoading]); // Retiré ensureUserHasIsland des deps
 
-  const handleSwapChains = () => {
-    setFromChain(toChain);
-    setToChain(fromChain);
-    setFromAmount(toAmount);
-    setToAmount(fromAmount);
-  };
+  // Load bridge statistics
+  useEffect(() => {
+    const loadBridgeStats = async () => {
+      try {
+        const response = await fetch("/api/bridges");
+        const result = await response.json();
+
+        if (result.success) {
+          const bridges = result.data;
+          const totalVol = bridges.reduce((sum: number, bridge: any) => {
+            return sum + parseFloat(bridge.amount || 0);
+          }, 0);
+
+          const completed = bridges.filter(
+            (b: any) => b.status === "COMPLETED"
+          );
+          const successRate =
+            bridges.length > 0 ? (completed.length / bridges.length) * 100 : 0;
+
+          setBridgeStats({
+            totalVolume: totalVol.toFixed(2),
+            totalTransactions: bridges.length,
+            avgTime: "45s",
+            successRate: successRate.toFixed(1),
+          });
+        }
+      } catch (error) {
+        console.error("Failed to load bridge stats:", error);
+      }
+    };
+
+    loadBridgeStats();
+  }, []);
 
   const handleBridge = async () => {
     if (!isConnected || !fromAmount) return;
@@ -168,347 +239,427 @@ export function AppDashboard() {
   };
 
   return (
-    <div className="max-w-[1600px] mx-auto px-4 py-8">
-      <div className="w-full px-10 pb-12">
-        <div className="mx-0 lg:mx-10 h-fulll">
-          <div className=" flex flex-wrap gap-5 h-full">
-            <div className="container mx-auto px-4 h-full pt-5">
-              {/* <Breadcrumb/> */}
-              <div className="mt-10 flex flex-row gap-x-5 h-full w-full">
-                {/* Left */}
-                <div className="w-3/5">
-                  <div className=" w-full flex flex-col gap-y-5 p-2">
-                    <div className="h-full w-full">
-                      <div className="w-full h-64 rounded-lg flex items-center justify-center backdrop-blur-sm pr-24 border-0">
-                        {islandsLoading ||
-                        !isInitialized ||
-                        islandSeed === null ? (
-                          <div className="flex items-center justify-center h-64">
-                            <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-emerald-500"></div>
-                          </div>
-                        ) : (
-                          <Canvas
-                            shadows
-                            camera={{ position: [15, 5, 10], fov: 40 }}
-                          >
-                            <OrbitControls
-                              enablePan={true}
-                              minDistance={5}
-                              maxDistance={100}
-                              maxPolarAngle={Math.PI}
-                              autoRotate={true}
-                              autoRotateSpeed={0.5}
-                            />
+    <div className="min-h-screen bg-gray-50">
+      {/* Welcome overlay for new users */}
+      {showWelcome && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <WelcomeNewUser onDismiss={() => setShowWelcome(false)} />
+        </div>
+      )}
 
-                            <ambientLight intensity={0.4} />
-                            <directionalLight
-                              position={[15, 20, 8]}
-                              intensity={1.2}
-                              castShadow
-                              shadow-mapSize={[2048, 2048]}
-                              shadow-camera-far={80}
-                              shadow-camera-left={-25}
-                              shadow-camera-right={25}
-                              shadow-camera-top={25}
-                              shadow-camera-bottom={-25}
-                            />
-                            <pointLight
-                              position={[-15, 15, -15]}
-                              intensity={0.3}
-                              color="#fff5ee"
-                            />
+      {/* Header */}
+      <div className="bg-gray-50 border-b border-gray-200">
+        <div className="max-w-full pr-8 py-4 pl-20">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">Bridge</h1>
+              <p className="text-sm text-gray-500 mt-1">
+                Cross-chain asset transfers
+              </p>
+            </div>
+            {isConnected && (
+              <div className="flex items-center space-x-6">
+                <div className="flex items-center space-x-3">
+                  <MintEthButton />
+                  {/* Network indicator bubble */}
+                  <div className="flex items-center bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-medium border border-green-200">
+                    <div className="w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse"></div>
+                    {getNetworkName(chainId)}
+                  </div>
+                  {/* Explorer Link */}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 px-3 text-xs font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 border border-gray-200 rounded-full"
+                    onClick={() =>
+                      window.open("http://vps-b11044fd.vps.ovh.net/", "_blank")
+                    }
+                  >
+                    <ExternalLink className="w-3 h-3 mr-1.5" />
+                    Explorer
+                  </Button>
+                </div>
+                <div className="w-px h-8 bg-gray-200"></div>
 
-                            <FloatingIsland seed={islandSeed} ref={islandRef} />
+                {/* ETH Balance */}
+                <div className="text-right">
+                  <div className="text-lg font-bold text-gray-900">
+                    {isLoadingBalances ? (
+                      <span className="animate-pulse text-blue-500">
+                        ⟳ Loading...
+                      </span>
+                    ) : balanceError ? (
+                      <span className="text-red-500">Error</span>
+                    ) : balances.eth ? (
+                      `${balances.eth.formatted} ETH`
+                    ) : (
+                      "0.0000 ETH"
+                    )}
+                  </div>
+                  <div className="text-xs text-gray-500">Ethereum</div>
+                </div>
 
-                            <fog attach="fog" args={["#87CEEB", 40, 80]} />
-                          </Canvas>
-                        )}
-                      </div>
+                <div className="w-px h-8 bg-gray-200"></div>
+
+                {/* NEAR Balance */}
+                <div className="text-right">
+                  <div className="text-lg font-bold text-gray-900">
+                    {isLoadingBalances ? (
+                      <span className="animate-pulse text-blue-500">
+                        ⟳ Loading...
+                      </span>
+                    ) : balanceError ? (
+                      <span className="text-red-500">Error</span>
+                    ) : balances.near ? (
+                      `${balances.near.formatted} NEAR`
+                    ) : (
+                      "0.0000 NEAR"
+                    )}
+                  </div>
+                  <div className="text-xs text-gray-500">NEAR Protocol</div>
+                </div>
+
+                <div className="w-px h-8 bg-gray-200"></div>
+
+                {/* TRON Balance */}
+                <div className="text-right">
+                  <div className="text-lg font-bold text-gray-900">
+                    {isLoadingBalances ? (
+                      <span className="animate-pulse text-blue-500">
+                        ⟳ Loading...
+                      </span>
+                    ) : balanceError ? (
+                      <span className="text-red-500">Error</span>
+                    ) : balances.tron ? (
+                      `${balances.tron.formatted} TRX`
+                    ) : (
+                      "0.00 TRX"
+                    )}
+                  </div>
+                  <div className="text-xs text-gray-500">TRON</div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="flex h-[calc(85vh-80px)]">
+        {/* Left Sidebar - Island Viewer */}
+        <div className="w-[40%] bg-white border-r border-gray-200 flex flex-col">
+          {/* Island Viewer */}
+          <div className="flex-1 flex flex-col">
+            <div className="pr-8 py-4 pl-20 border-b border-gray-200">
+              <h3 className="text-md font-semibold text-gray-900">
+                #{islandSeed || "..."} Island
+              </h3>
+            </div>
+
+            <div className="flex-1">
+              {!isConnected ? (
+                <div className="h-full flex items-center justify-center p-8">
+                  <div className="text-center">
+                    <div className="w-12 h-12 bg-gray-100 rounded-xl mx-auto mb-4 flex items-center justify-center">
+                      <MapPin className="w-6 h-6 text-gray-400" />
                     </div>
-
-                    <div className="h-full w-full mt-5 pr-24">
-                      <div className="flex gap-4">
-                        <Card className="flex-1 bg-white/80 shadow border-0 ">
-                          <CardContent className="px-4 flex flex-col items-center relative h-[20px]">
-                            <span className="text-sm text-slate-500 mb-1 flex items-center gap-2">
-                              Trees planted
-                              <span className="ml-1">
-                                <span className="group relative">
-                                  <svg
-                                    className="w-4 h-4 text-emerald-600 cursor-pointer"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    strokeWidth={2}
-                                    viewBox="0 0 24 24"
-                                  >
-                                    <circle
-                                      cx="12"
-                                      cy="12"
-                                      r="10"
-                                      stroke="currentColor"
-                                      strokeWidth="2"
-                                      fill="#d1fae5"
-                                    />
-                                    <text
-                                      x="12"
-                                      y="16"
-                                      textAnchor="middle"
-                                      fontSize="12"
-                                      fill="#059669"
-                                      fontWeight=""
-                                    >
-                                      i
-                                    </text>
-                                  </svg>
-                                  <span className="absolute left-1/2 -translate-x-1/2 mt-2 w-56 bg-emerald-100 text-emerald-900 text-xs rounded-lg px-3 py-2 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity z-20 pointer-events-none">
-                                    The more you use the bridge, the more trees
-                                    are planted on your island 🌱
-                                  </span>
-                                </span>
-                              </span>
-                            </span>
-                            <span className="text-2xl font-bold text-emerald-700">
-                              {userIslandData?.totalTrees ?? 0}
-                            </span>
-                          </CardContent>
-                        </Card>
-                        <Card className="flex-1 bg-white/80 shadow border-0">
-                          <CardContent className="px-4 flex flex-col items-center">
-                            <span className="text-sm text-slate-500 mb-1">
-                              Island Seed
-                            </span>
-                            <span className="font-mono text-lg">
-                              {islandSeed !== null ? islandSeed : "Loading..."}
-                            </span>
-                          </CardContent>
-                        </Card>
-                      </div>
-                    </div>
-                    <div className="h-full w-full">
-                      <div className="flex items-center justify-between mt-7 mb-7 pr-24">
-                        <h3 className="text-2xl font-medium text-neutral">
-                          Bridge History
-                        </h3>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={refreshHistory}
-                          disabled={isLoadingHistory}
-                        >
-                          {isLoadingHistory ? "Loading..." : "Refresh"}
-                        </Button>
-                      </div>
-                      <div
-                        className="overflow-x-auto overflow-y-auto w-5/6"
-                        style={{ maxHeight: "300px" }}
-                      >
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead>Status</TableHead>
-                              <TableHead>Date/Time</TableHead>
-                              <TableHead>From → To</TableHead>
-                              <TableHead>Amount</TableHead>
-                              <TableHead>Actions</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {isLoadingHistory ? (
-                              <TableRow>
-                                <TableCell
-                                  colSpan={5}
-                                  className="text-center py-8"
-                                >
-                                  <div className="flex items-center justify-center">
-                                    <div className="w-6 h-6 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin mr-2"></div>
-                                    Loading bridge history...
-                                  </div>
-                                </TableCell>
-                              </TableRow>
-                            ) : bridgeHistory.length === 0 ? (
-                              <TableRow>
-                                <TableCell
-                                  colSpan={5}
-                                  className="text-center py-8 text-gray-500"
-                                >
-                                  {!isConnected
-                                    ? "Connect your wallet to view bridge history"
-                                    : "No bridge transactions found"}
-                                </TableCell>
-                              </TableRow>
-                            ) : (
-                              bridgeHistory.map((bridge) => (
-                                <TableRow key={bridge.id}>
-                                  <TableCell>
-                                    <div className="flex items-center gap-2">
-                                      {bridge.status === "COMPLETED" && (
-                                        <CheckCircle className="w-4 h-4 text-green-500" />
-                                      )}
-                                      {bridge.status === "PENDING" && (
-                                        <Activity className="w-4 h-4 text-yellow-500 animate-pulse" />
-                                      )}
-                                      {bridge.status === "FAILED" && (
-                                        <AlertCircle className="w-4 h-4 text-red-500" />
-                                      )}
-                                      <span
-                                        className={`text-xs font-semibold px-2 py-1 rounded ${
-                                          bridge.status === "COMPLETED"
-                                            ? "bg-green-100 text-green-700"
-                                            : bridge.status === "PENDING"
-                                            ? "bg-yellow-100 text-yellow-700"
-                                            : "bg-red-100 text-red-700"
-                                        }`}
-                                      >
-                                        {bridge.status}
-                                      </span>
-                                    </div>
-                                  </TableCell>
-                                  <TableCell>
-                                    <div className="text-sm">
-                                      {new Date(
-                                        bridge.createdAt
-                                      ).toLocaleString()}
-                                    </div>
-                                  </TableCell>
-                                  <TableCell>
-                                    <div className="flex items-center gap-2">
-                                      <span className="text-xs bg-gray-100 px-2 py-1 rounded">
-                                        {bridge.fromChain === "ethereum"
-                                          ? "🔷 ETH"
-                                          : "🔺 NEAR"}
-                                      </span>
-                                      <ArrowRightLeft className="w-3 h-3 text-gray-400" />
-                                      <span className="text-xs bg-gray-100 px-2 py-1 rounded">
-                                        {bridge.toChain === "ethereum"
-                                          ? "🔷 ETH"
-                                          : "🔺 NEAR"}
-                                      </span>
-                                    </div>
-                                  </TableCell>
-                                  <TableCell>
-                                    <div>
-                                      <span className="font-medium">
-                                        {formatAmount(bridge.amount).toFixed(4)}{" "}
-                                        {bridge.fromChain === "ethereum"
-                                          ? "ETH"
-                                          : "NEAR"}
-                                      </span>
-                                      <div className="text-xs text-gray-500">
-                                        ≈ $
-                                        {(formatAmount(bridge.amount) * 2500).toFixed(2)}
-                                      </div>
-                                    </div>
-                                  </TableCell>
-                                  <TableCell>
-                                    <div className="flex gap-1">
-                                      {bridge.ethTxHash && (
-                                        <Button
-                                          variant="ghost"
-                                          size="sm"
-                                          className="h-6 w-6 p-0"
-                                          onClick={() =>
-                                            window.open(
-                                              `https://etherscan.io/tx/${bridge.ethTxHash}`,
-                                              "_blank"
-                                            )
-                                          }
-                                        >
-                                          <ExternalLink className="w-3 h-3" />
-                                        </Button>
-                                      )}
-                                      {bridge.nearTxHash && (
-                                        <Button
-                                          variant="ghost"
-                                          size="sm"
-                                          className="h-6 w-6 p-0"
-                                          onClick={() =>
-                                            window.open(
-                                              `https://testnet.nearblocks.io/txns/${bridge.nearTxHash}`,
-                                              "_blank"
-                                            )
-                                          }
-                                        >
-                                          <ExternalLink className="w-3 h-3" />
-                                        </Button>
-                                      )}
-                                    </div>
-                                  </TableCell>
-                                </TableRow>
-                              ))
-                            )}
-                          </TableBody>
-                        </Table>
-                      </div>
-                    </div>
-
-                    <div className="h-full w-full">
-                      <h3 className="text-2xl font-medium text-neutral my-5">
-                        Profil Details
-                      </h3>
-                      <div className="w-full"></div>
-                      <div className="w-2/2">
-                        <div className="flex items-center my-2 space-x-4">
-                          <div className="">
-                            Account created on :{" "}
-                            {userIslandData?.createdAt
-                              ? new Date(
-                                  userIslandData.createdAt
-                                ).toLocaleString()
-                              : "N/A"}
-                          </div>
-                        </div>
-                        <div className="flex items-center my-2 space-x-4">
-                          <a
-                            href={`https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTmhZrL1E23KqqeL7bT24fbLqASfw81VGpj2PpUdzF9MA&s`}
-                            className="font-medium"
-                          >
-                            {" "}
-                            View on Etherscan{" "}
-                          </a>
-                          <svg
-                            className="w-3 h-3"
-                            viewBox="0 0 10 10"
-                            fill="none"
-                            width="10"
-                            height="10"
-                            xmlns="http://www.w3.org/2000/svg"
-                          >
-                            <path
-                              fillRule="evenodd"
-                              clipRule="evenodd"
-                              d="M9 0.250061H1C0.585786 0.250061 0.25 0.585847 0.25 1.00006C0.25 1.41427 0.585786 1.75006 1 1.75006H7.18934L0.46967 8.46973C0.176777 8.76262 0.176777 9.2375 0.46967 9.53039C0.762563 9.82328 1.23744 9.82328 1.53033 9.53039L8.25 2.81072V9.00006C8.25 9.41428 8.58579 9.75006 9 9.75006C9.41421 9.75006 9.75 9.41428 9.75 9.00006V1.00006C9.75 0.808119 9.67678 0.616178 9.53033 0.469731C9.45842 0.397824 9.37555 0.34357 9.28709 0.30697C9.19866 0.2703 9.10169 0.250061 9 0.250061Z"
-                              fill="currentColor"
-                            ></path>
-                          </svg>
-                        </div>
-                      </div>
-                    </div>
+                    <p className="text-sm text-gray-500">
+                      Connect wallet to view your island
+                    </p>
                   </div>
                 </div>
-                {/* Right */}
-                <div className="h-154 w-2/5 p-2">
-                  {/* Bridge Section */}
-                  <div className="sticky top-20 z-19 w-full space-y-4">
-                    <ModernBridge
-                      onBridgeSuccess={(bridgeData) => {
-                        // Increment tree count on successful bridge
-                        setTreeCount((prev) => prev + 1);
-                        // Trigger island update if needed
-                        if (islandRef.current) {
-                          // Island ref available for future use
-                          console.log('Island ref available for tree update');
+              ) : islandsLoading || !isInitialized || islandSeed === null ? (
+                <div className="h-full flex items-center justify-center">
+                  <div className="text-center">
+                    <div className="animate-spin rounded-full h-12 w-12 border-2 border-indigo-500 border-t-transparent mx-auto mb-4"></div>
+                    <p className="text-gray-600 text-sm">Loading island...</p>
+                  </div>
+                </div>
+              ) : (
+                <Canvas shadows camera={{ position: [15, 5, 10], fov: 40 }}>
+                  <OrbitControls
+                    enablePan={true}
+                    minDistance={5}
+                    maxDistance={100}
+                    maxPolarAngle={Math.PI}
+                    autoRotate={true}
+                    autoRotateSpeed={0.5}
+                  />
+                  <ambientLight intensity={0.4} />
+                  <directionalLight
+                    position={[15, 20, 8]}
+                    intensity={1.2}
+                    castShadow
+                    shadow-mapSize={[2048, 2048]}
+                    shadow-camera-far={80}
+                    shadow-camera-left={-25}
+                    shadow-camera-right={25}
+                    shadow-camera-top={25}
+                    shadow-camera-bottom={-25}
+                  />
+                  <fog attach="fog" args={["#e6f3ff", 40, 90]} />
+
+                  <FloatingIsland ref={islandRef} seed={islandSeed} />
+                </Canvas>
+              )}
+            </div>
+          </div>
+
+          {/* Island Stats */}
+          <div className="bg-gray-50 border-t border-gray-200 pr-8 py-6 pl-20">
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-gray-600">
+                  Island Seed
+                </span>
+                <span className="font-mono text-sm font-bold text-gray-900">
+                  #{islandSeed || "..."}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-gray-600">
+                  Trees Planted
+                </span>
+                <span className="text-sm font-bold text-emerald-600">
+                  {userIslandData?.totalTrees || 0}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-gray-600">
+                  Bridges Completed
+                </span>
+                <span className="text-sm font-bold text-blue-600">
+                  {bridgeHistory.filter((b) => b.status === "COMPLETED").length}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-gray-600">
+                  Member Since
+                </span>
+                <span className="text-sm text-gray-900">
+                  {userIslandData?.createdAt
+                    ? new Date(userIslandData.createdAt).toLocaleDateString(
+                        "en-US",
+                        {
+                          month: "short",
+                          year: "numeric",
                         }
-                        // Refresh bridge history to show the new transaction
-                        setTimeout(() => {
-                          refreshHistory();
-                        }, 5000); // Wait 5 seconds then refresh
-                      }}
-                    />
-                    
-                    {/* TRON Bridge Test Component */}
-                    <TronBridgeTest />
+                      )
+                    : "Aug 2025"}
+                </span>
+              </div>
+              {address && (
+                <div className="flex items-center justify-between pt-2 border-t border-gray-200">
+                  <span className="text-sm font-medium text-gray-600">
+                    Wallet
+                  </span>
+                  <div className="flex items-center space-x-2">
+                    <span className="font-mono text-sm font-bold text-gray-900 pt-1">
+                      {address.slice(0, 4)}...{address.slice(-4)}
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 w-8 p-0 hover:bg-gray-200"
+                      onClick={() =>
+                        window.open(
+                          `https://etherscan.io/address/${address}`,
+                          "_blank"
+                        )
+                      }
+                    >
+                      <ExternalLink className="w-2 h-2" />
+                    </Button>
                   </div>
                 </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Main Content - Bridge & Activity */}
+        <div className="flex-1 bg-white flex flex-col">
+          {/* Bridge Section - Sticky */}
+          <div className="sticky top-0 z-10 bg-white border-b border-gray-200 shadow-sm">
+            <div className="px-8 py-8">
+              {!isConnected ? (
+                <div className="text-center py-16">
+                  <div className="w-16 h-16 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl mx-auto mb-6 flex items-center justify-center shadow-lg">
+                    <MapPin className="w-8 h-8 text-white" />
+                  </div>
+                  <h2 className="text-2xl font-bold text-gray-900 mb-3">
+                    Connect Your Wallet
+                  </h2>
+                  <p className="text-gray-500 mb-6">
+                    Connect to start bridging assets across chains
+                  </p>
+                  <w3m-button />
+                </div>
+              ) : (
+                <ModernBridge
+                  onBridgeSuccess={() => {
+                    setTreeCount((prev) => prev + 1);
+                    setTimeout(() => {
+                      refreshHistory();
+                    }, 5000);
+                  }}
+                />
+              )}
+            </div>
+          </div>
+
+          {/* Recent Activity */}
+          <div className="flex-1 flex flex-col overflow-hidden">
+            <div className="px-8 py-6 border-b border-gray-200 bg-gray-50">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-gray-900">
+                  Recent Activity
+                </h3>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={refreshHistory}
+                  disabled={isLoadingHistory}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  {isLoadingHistory ? "Loading..." : "Refresh"}
+                </Button>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto bg-white">
+              <div className="px-8 py-4">
+                {isLoadingHistory ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="flex items-center">
+                      <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mr-3"></div>
+                      <span className="text-gray-600">Loading...</span>
+                    </div>
+                  </div>
+                ) : bridgeHistory.length === 0 ? (
+                  <div className="text-center py-12">
+                    <div className="w-12 h-12 bg-gray-100 rounded-xl mx-auto mb-4 flex items-center justify-center">
+                      <ArrowRightLeft className="w-6 h-6 text-gray-400" />
+                    </div>
+                    <h4 className="text-sm font-medium text-gray-900 mb-2">
+                      No transactions yet
+                    </h4>
+                    <p className="text-xs text-gray-500">
+                      {!isConnected
+                        ? "Connect your wallet to view transactions"
+                        : "Start bridging to see your activity here"}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {bridgeHistory.map((bridge) => (
+                      <div
+                        key={bridge.id}
+                        className="bg-white border border-gray-200 rounded-xl p-4 hover:shadow-md transition-all duration-200 hover:border-gray-300"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-4">
+                            <div
+                              className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-sm ${
+                                bridge.status === "COMPLETED"
+                                  ? "bg-emerald-50 border border-emerald-200"
+                                  : bridge.status === "PENDING"
+                                  ? "bg-amber-50 border border-amber-200"
+                                  : "bg-red-50 border border-red-200"
+                              }`}
+                            >
+                              {bridge.status === "COMPLETED" && (
+                                <CheckCircle className="w-5 h-5 text-emerald-600" />
+                              )}
+                              {bridge.status === "PENDING" && (
+                                <Activity className="w-5 h-5 text-amber-600 animate-pulse" />
+                              )}
+                              {bridge.status === "FAILED" && (
+                                <AlertCircle className="w-5 h-5 text-red-600" />
+                              )}
+                            </div>
+                            <div>
+                              <div className="flex items-center space-x-2">
+                                <span className="text-sm font-semibold text-gray-900">
+                                  {formatAmount(bridge.amount).toFixed(4)}{" "}
+                                  {bridge.fromChain === "ethereum"
+                                    ? "ETH"
+                                    : "NEAR"}
+                                </span>
+                                <div
+                                  className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                    bridge.status === "COMPLETED"
+                                      ? "bg-emerald-100 text-emerald-800"
+                                      : bridge.status === "PENDING"
+                                      ? "bg-amber-100 text-amber-800"
+                                      : "bg-red-100 text-red-800"
+                                  }`}
+                                >
+                                  {bridge.status === "COMPLETED" &&
+                                    "✓ Complete"}
+                                  {bridge.status === "PENDING" && "⏳ Pending"}
+                                  {bridge.status === "FAILED" && "✗ Failed"}
+                                </div>
+                              </div>
+                              <div className="flex items-center space-x-2 mt-1">
+                                <span className="text-xs text-gray-500">
+                                  {bridge.fromChain === "ethereum"
+                                    ? "🔷 Ethereum"
+                                    : "🔺 NEAR"}{" "}
+                                  →{" "}
+                                  {bridge.toChain === "ethereum"
+                                    ? "🔷 Ethereum"
+                                    : "🔺 NEAR"}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-sm font-semibold text-gray-900">
+                              $
+                              {(
+                                formatAmount(bridge.amount) * 2500
+                              ).toLocaleString("en-US", {
+                                maximumFractionDigits: 0,
+                              })}
+                            </div>
+                            <div className="flex items-center space-x-1 mt-1 justify-end">
+                              {bridge.ethTxHash && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 w-6 p-0 hover:bg-gray-100"
+                                  onClick={() =>
+                                    window.open(
+                                      `https://etherscan.io/tx/${bridge.ethTxHash}`,
+                                      "_blank"
+                                    )
+                                  }
+                                >
+                                  <ExternalLink className="w-3 h-3 text-gray-400" />
+                                </Button>
+                              )}
+                              {bridge.nearTxHash && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 w-6 p-0 hover:bg-gray-100"
+                                  onClick={() =>
+                                    window.open(
+                                      `https://testnet.nearblocks.io/txns/${bridge.nearTxHash}`,
+                                      "_blank"
+                                    )
+                                  }
+                                >
+                                  <ExternalLink className="w-3 h-3 text-gray-400" />
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           </div>
