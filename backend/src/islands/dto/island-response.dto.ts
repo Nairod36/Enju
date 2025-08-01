@@ -86,4 +86,12 @@ export class IslandResponseDto {
     description: 'Used tiles keys'
   })
   usedTiles?: string[];
+
+  @ApiPropertyOptional({
+    description: 'Island owner information'
+  })
+  owner?: {
+    username: string;
+    walletAddress: string;
+  };
 }

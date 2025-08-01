@@ -148,6 +148,22 @@ class IslandsService {
     return response.json();
   }
 
+  async getPublicIslands(page: number = 1, limit: number = 20): Promise<{
+    islands: IslandResponse[];
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  }> {
+    const response = await fetch(`${API_BASE_URL}/islands/public?page=${page}&limit=${limit}`);
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch public islands');
+    }
+
+    return response.json();
+  }
+
   async autoSaveIsland(id: string, updateData: UpdateIslandRequest): Promise<IslandResponse> {
     const response = await fetch(`${API_BASE_URL}/islands/${id}/auto-save`, {
       method: 'PUT',

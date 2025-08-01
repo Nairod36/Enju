@@ -17,12 +17,29 @@ import { CreateIslandDto, UpdateIslandDto, IslandResponseDto } from './dto';
 
 @ApiTags('islands')
 @Controller('islands')
-@ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
 export class IslandsController {
   constructor(private readonly islandsService: IslandsService) {}
 
+  @Get('public')
+  @ApiOperation({
+    summary: 'Get all public islands',
+    description: 'Get paginated list of all public islands for exploration (no auth required)'
+  })
+  @ApiQuery({ name: 'page', required: false, description: 'Page number (default: 1)' })
+  @ApiQuery({ name: 'limit', required: false, description: 'Items per page (default: 20)' })
+  @ApiResponse({ status: 200, description: 'Public islands retrieved successfully' })
+  async getPublicIslands(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string
+  ) {
+    const pageNum = parseInt(page) || 1;
+    const limitNum = parseInt(limit) || 20;
+    return this.islandsService.getAllPublicIslands(pageNum, limitNum);
+  }
+
   @Post()
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
   @ApiOperation({
     summary: 'Create a new island',
     description: 'Create a new island for the authenticated user'
@@ -33,6 +50,8 @@ export class IslandsController {
   }
 
   @Get('my')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
   @ApiOperation({
     summary: 'Get my islands',
     description: 'Get all islands belonging to the authenticated user'
@@ -43,6 +62,8 @@ export class IslandsController {
   }
 
   @Get('active')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
   @ApiOperation({
     summary: 'Get active island',
     description: 'Get the currently active island for the authenticated user'
@@ -53,6 +74,8 @@ export class IslandsController {
   }
 
   @Get('ensure')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
   @ApiOperation({
     summary: 'Ensure user has an island',
     description: 'Get user island or create one if none exists'
@@ -74,6 +97,8 @@ export class IslandsController {
   }
 
   @Get(':id')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
   @ApiOperation({
     summary: 'Get island by ID',
     description: 'Get a specific island by its ID (must belong to authenticated user)'
@@ -85,6 +110,8 @@ export class IslandsController {
   }
 
   @Put(':id')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
   @ApiOperation({
     summary: 'Update island',
     description: 'Update an existing island'
@@ -100,6 +127,8 @@ export class IslandsController {
   }
 
   @Put(':id/activate')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
   @ApiOperation({
     summary: 'Set active island',
     description: 'Set an island as the active one for the user'
@@ -111,6 +140,8 @@ export class IslandsController {
   }
 
   @Put(':id/auto-save')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
   @ApiOperation({
     summary: 'Auto-save island changes',
     description: 'Automatically save island modifications with timestamp updates'
@@ -126,6 +157,8 @@ export class IslandsController {
   }
 
   @Delete(':id')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
   @ApiOperation({
     summary: 'Delete island',
     description: 'Delete an island (cannot delete active island)'

@@ -17,6 +17,8 @@ import { IslandStorageService } from "./island.storage";
 
 interface FloatingIslandProps {
   seed: number;
+  initialTreeCount?: number;
+  preloadedIslandData?: any; // Preloaded island data from database
 }
 
 export interface FloatingIslandRef {
@@ -39,7 +41,7 @@ export interface FloatingIslandRef {
 export const FloatingIsland = React.forwardRef<
   FloatingIslandRef,
   FloatingIslandProps
->(({ seed }, ref) => {
+>(({ seed, initialTreeCount = 0, preloadedIslandData }, ref) => {
   const groupRef = useRef<THREE.Group>(null);
   const [animatedTiles, setAnimatedTiles] = useState(0);
   const [showDecorations, setShowDecorations] = useState(false);
@@ -116,7 +118,8 @@ export const FloatingIsland = React.forwardRef<
 
   // Génération initiale - utiliser le système original COMPLET
   useEffect(() => {
-    const island = generateIsland(seed);
+    // Use preloaded island data if available, otherwise generate new
+    const island = preloadedIslandData || generateIsland(seed);
     setIslandData(island);
 
     // Créer le personnage GenericMale au centre de l'île
@@ -136,7 +139,17 @@ export const FloatingIsland = React.forwardRef<
       };
       setCharacter(characterData);
     }
-  }, [seed]);
+  }, [seed, preloadedIslandData]);
+
+  // Génération automatique des arbres après la création de l'île
+  useEffect(() => {
+    if (islandData && initialTreeCount > 0) {
+      // Attendre un peu que l'île soit bien initialisée
+      setTimeout(() => {
+        createMissingTrees(initialTreeCount);
+      }, 100);
+    }
+  }, [islandData, initialTreeCount]);
 
   // Données actuelles à utiliser
   const currentIslandData = islandData || { landTiles: [], waterTiles: [], rocks: [], houses: [], totalTiles: 0, waterColor: "#1e88e5" };

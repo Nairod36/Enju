@@ -38,10 +38,10 @@ export function AppHeader() {
               Rewards
             </Link>
             <Link
-              to="/app"
+              to="/app/explorer"
               className="text-slate-700 hover:text-slate-900 transition-colors px-3 py-2 rounded-lg hover:bg-emerald-50"
             >
-              Marketplace
+              Island Explorer
             </Link>
           </nav>
 
