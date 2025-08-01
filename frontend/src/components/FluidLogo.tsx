@@ -9,7 +9,7 @@ export const FluidLogo: FC = () => {
 
       {/* Blob animé façon goutte de sève */}
       <div
-        className="absolute top-1/4 left-1/4 w-10 h-10 bg-gradient-to-br from-lime-400 to-emerald-600
+        className="absolute top-1/4 left-1/4 w-8 h-8 bg-gradient-to-br from-lime-400 to-emerald-600
                  rounded-full animate-[leafblob_5s_ease-in-out_infinite]"
       />
 
