@@ -32,6 +32,12 @@ interface BridgeModalProps {
     toChain: string;
     nearAccount?: string;
     txHash?: string;
+    logs?: string[];
+    status?: 'pending' | 'success' | 'error';
+    hashlock?: string;
+    secret?: string;
+    escrow?: string;
+    contractId?: string;
   } | null;
 }
 
@@ -91,6 +97,7 @@ export function BridgeModal({ isOpen, onClose, bridgeData }: BridgeModalProps) {
   const [bridgeId, setBridgeId] = useState<string | null>(null);
   const [secret, setSecret] = useState<string | null>(null);
   const [hashlock, setHashlock] = useState<string | null>(null);
+  const [monitoringInterval, setMonitoringInterval] = useState<NodeJS.Timeout | null>(null);
   const logsEndRef = useRef<HTMLDivElement>(null);
 
   const direction = bridgeData
@@ -100,17 +107,56 @@ export function BridgeModal({ isOpen, onClose, bridgeData }: BridgeModalProps) {
 
   useEffect(() => {
     if (isOpen && bridgeData) {
-      // Reset state
-      setLogs([]);
-      setCurrentStep(0);
-      setStatus("pending");
-      setBridgeId(null);
-      setSecret(null);
-      setHashlock(null);
-
-      // Start bridge process simulation
-      startBridgeProcess();
+      // Only initialize if logs are empty (first time opening)
+      if (logs.length === 0) {
+        const initialLogs = bridgeData.logs || [];
+        const convertedLogs = initialLogs.map((logString: string) => {
+          const timestampMatch = logString.match(/\[(\d+:\d+:\d+)\](.*)/);
+          if (timestampMatch) {
+            return {
+              timestamp: timestampMatch[1],
+              message: timestampMatch[2].trim(),
+              type: logString.includes('❌') ? 'error' as const :
+                     logString.includes('✅') ? 'success' as const :
+                     logString.includes('⚠️') ? 'warning' as const :
+                     'info' as const
+            };
+          }
+          return {
+            timestamp: new Date().toLocaleTimeString(),
+            message: logString,
+            type: 'info' as const
+          };
+        });
+        
+        setLogs(convertedLogs);
+      }
+      
+      // Always update status and metadata
+      setStatus(bridgeData.status || "pending");
+      setSecret(bridgeData.secret || null);
+      setHashlock(bridgeData.hashlock || null);
+      
+      // Set step based on status
+      if (bridgeData.status === 'success') {
+        setCurrentStep(4);
+      } else if (bridgeData.txHash) {
+        setCurrentStep(2);
+      } else {
+        setCurrentStep(1);
+      }
+      
+      // Start monitoring bridge status if still pending
+      if (bridgeData.status === 'pending' || !bridgeData.status) {
+        startBridgeMonitoring();
+      }
     }
+    
+    return () => {
+      if (monitoringInterval) {
+        clearInterval(monitoringInterval);
+      }
+    };
   }, [isOpen, bridgeData]);
 
   useEffect(() => {
@@ -122,76 +168,59 @@ export function BridgeModal({ isOpen, onClose, bridgeData }: BridgeModalProps) {
     setLogs((prev) => [...prev, { timestamp, message, type }]);
   };
 
-  const startBridgeProcess = async () => {
+  const startBridgeMonitoring = async () => {
     if (!bridgeData) return;
-
-    try {
-      // Step 1: Generate secret and hashlock
-      addLog("🔑 Generating secret and hashlock...", "info");
-
-      // Simulate secret generation (in real app, this would come from the actual bridge)
-      const mockSecret = "0x" + Math.random().toString(16).substring(2, 66);
-      const mockHashlock = "0x" + Math.random().toString(16).substring(2, 66);
-      setSecret(mockSecret);
-      setHashlock(mockHashlock);
-
-      addLog(`🔒 Generated hashlock: ${mockHashlock}`, "success");
-      setCurrentStep(1);
-
-      // Step 2: Initiate bridge
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      addLog(
-        `🚀 Initiating ${bridgeData.fromChain.toUpperCase()} → ${bridgeData.toChain.toUpperCase()} bridge...`,
-        "info"
-      );
-      addLog(
-        `💰 Amount: ${
-          bridgeData.fromAmount
-        } ${bridgeData.fromChain.toUpperCase()}`,
-        "info"
-      );
-
-      if (bridgeData.nearAccount) {
-        addLog(`📧 NEAR Account: ${bridgeData.nearAccount}`, "info");
-      }
-
-      // Step 3: Transaction confirmation
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-      const mockTxHash = "0x" + Math.random().toString(16).substring(2, 66);
-      addLog(`📝 Transaction sent: ${mockTxHash}`, "info");
-      addLog("⏳ Waiting for confirmation...", "info");
-      setCurrentStep(2);
-
-      // Step 4: Create HTLC/Escrow
-      await new Promise((resolve) => setTimeout(resolve, 3000));
-      addLog("✅ Transaction confirmed!", "success");
-      addLog("🔄 Creating cross-chain contract...", "info");
-      setCurrentStep(3);
-
-      // Step 5: Complete bridge
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-      const mockBridgeId = `bridge_${Math.random()
-        .toString(16)
-        .substring(2, 10)}`;
-      setBridgeId(mockBridgeId);
-      addLog(`📦 Bridge created: ${mockBridgeId}`, "success");
-      addLog("🚀 Auto-completing bridge...", "info");
-
-      await new Promise((resolve) => setTimeout(resolve, 3000));
-      addLog("🎯 Bridge completed successfully!", "success");
-      addLog(
-        `✅ ${
-          bridgeData.fromAmount
-        } ${bridgeData.fromChain.toUpperCase()} → ${bridgeData.toChain.toUpperCase()} transfer complete`,
-        "success"
-      );
-
-      setCurrentStep(4);
-      setStatus("success");
-    } catch (error) {
-      addLog(`❌ Bridge failed: ${error}`, "error");
-      setStatus("error");
+    
+    // Clear any existing interval
+    if (monitoringInterval) {
+      clearInterval(monitoringInterval);
     }
+    
+    // Monitor bridge status every 5 seconds
+    const interval = setInterval(async () => {
+      try {
+        const response = await fetch(`${BRIDGE_CONFIG.listenerApi}/bridges`);
+        const result = await response.json();
+        
+        let bridges = [];
+        if (Array.isArray(result)) {
+          bridges = result;
+        } else if (result.bridges && Array.isArray(result.bridges)) {
+          bridges = result.bridges;
+        } else if (result.data && Array.isArray(result.data)) {
+          bridges = result.data;
+        }
+        
+        // Find bridge by hashlock or tx hash
+        const currentBridge = bridges.find((bridge: any) => 
+          (bridgeData.hashlock && bridge.hashlock === bridgeData.hashlock) ||
+          (bridgeData.txHash && bridge.ethTxHash === bridgeData.txHash)
+        );
+        
+        if (currentBridge) {
+          // Update progress based on bridge status
+          if (currentBridge.status === 'COMPLETED') {
+            addLog('✅ Bridge completed successfully!', 'success');
+            setCurrentStep(4);
+            setStatus('success');
+            setBridgeId(currentBridge.id);
+            
+            // Clear monitoring
+            clearInterval(interval);
+          } else if (currentBridge.contractId && currentStep < 3) {
+            addLog('🔄 Cross-chain contract created', 'info');
+            setCurrentStep(3);
+          } else if (currentBridge.ethTxHash && currentStep < 2) {
+            addLog('✅ Transaction confirmed!', 'success');
+            setCurrentStep(2);
+          }
+        }
+      } catch (error) {
+        console.error('Error monitoring bridge:', error);
+      }
+    }, 5000);
+    
+    setMonitoringInterval(interval);
   };
 
   const copyToClipboard = (text: string) => {
@@ -279,28 +308,108 @@ export function BridgeModal({ isOpen, onClose, bridgeData }: BridgeModalProps) {
             />
           )}
 
-          {/* Logs Section */}
+          {/* Bridge Status */}
           <div className="space-y-3">
-            <h4 className="font-medium text-gray-900 text-sm">Bridge Logs</h4>
-            <div className="bg-black text-green-400 p-4 rounded-lg h-48 overflow-y-auto font-mono text-xs space-y-1">
-              {logs.length === 0 ? (
-                <p className="text-gray-500">Ready to bridge... 🌉</p>
-              ) : (
-                logs.map((log, index) => (
-                  <div
-                    key={index}
-                    className={`
-                    ${log.type === "error" ? "text-red-400" : ""}
-                    ${log.type === "success" ? "text-green-400" : ""}
-                    ${log.type === "warning" ? "text-yellow-400" : ""}
-                    ${log.type === "info" ? "text-blue-300" : ""}
-                  `}
-                  >
-                    [{log.timestamp}] {log.message}
+            <h4 className="font-medium text-gray-900 text-sm">Bridge Status</h4>
+            <div className="bg-gradient-to-br from-slate-50 to-slate-100 border border-slate-200 p-4 rounded-lg space-y-3">
+              
+              {/* Transaction Hash */}
+              {bridgeData?.txHash && (
+                <div className="flex items-center justify-between p-2 bg-white rounded border">
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                    <span className="text-xs font-medium text-gray-700">Transaction</span>
                   </div>
-                ))
+                  <div className="flex items-center gap-2">
+                    <code className="text-xs bg-blue-50 px-2 py-1 rounded text-blue-700">
+                      {bridgeData.txHash.substring(0, 8)}...{bridgeData.txHash.substring(-4)}
+                    </code>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => copyToClipboard(bridgeData.txHash!)}
+                      className="h-6 w-6 p-0"
+                    >
+                      <Copy className="w-3 h-3" />
+                    </Button>
+                  </div>
+                </div>
               )}
-              <div ref={logsEndRef} />
+
+              {/* Bridge ID */}
+              {bridgeId && (
+                <div className="flex items-center justify-between p-2 bg-white rounded border">
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
+                    <span className="text-xs font-medium text-gray-700">Bridge ID</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <code className="text-xs bg-purple-50 px-2 py-1 rounded text-purple-700">
+                      {bridgeId.substring(0, 12)}...
+                    </code>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => copyToClipboard(bridgeId)}
+                      className="h-6 w-6 p-0"
+                    >
+                      <Copy className="w-3 h-3" />
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* Amount Info */}
+              <div className="flex items-center justify-between p-2 bg-white rounded border">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-emerald-500 rounded-full"></div>
+                  <span className="text-xs font-medium text-gray-700">Amount</span>
+                </div>
+                <span className="text-xs font-mono text-gray-900">
+                  {bridgeData?.fromAmount} {bridgeData?.fromChain?.toUpperCase()}
+                </span>
+              </div>
+
+              {/* Status Indicator */}
+              <div className="flex items-center justify-between p-2 bg-white rounded border">
+                <div className="flex items-center gap-2">
+                  <div className={`w-2 h-2 rounded-full ${
+                    status === 'success' ? 'bg-green-500' :
+                    status === 'error' ? 'bg-red-500' : 'bg-yellow-500 animate-pulse'
+                  }`}></div>
+                  <span className="text-xs font-medium text-gray-700">Status</span>
+                </div>
+                <span className={`text-xs font-medium ${
+                  status === 'success' ? 'text-green-700' :
+                  status === 'error' ? 'text-red-700' : 'text-yellow-700'
+                }`}>
+                  {status === 'pending' ? 'Processing...' :
+                   status === 'success' ? 'Completed' : 'Failed'}
+                </span>
+              </div>
+
+              {/* Live Activity Feed */}
+              {logs.length > 0 && (
+                <div className="pt-2 border-t">
+                  <div className="text-xs font-medium text-gray-700 mb-2">Recent Activity</div>
+                  <div className="space-y-1 max-h-32 overflow-y-auto">
+                    {logs.slice(-3).map((log, index) => (
+                      <div key={index} className="flex items-start gap-2 text-xs">
+                        <div className={`w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0 ${
+                          log.type === "error" ? "bg-red-400" :
+                          log.type === "success" ? "bg-green-400" :
+                          log.type === "warning" ? "bg-yellow-400" : "bg-blue-400"
+                        }`}></div>
+                        <div className="flex-1">
+                          <span className="text-gray-500">{log.timestamp}</span>
+                          <p className="text-gray-700">{log.message}</p>
+                        </div>
+                      </div>
+                    ))}
+                    <div ref={logsEndRef} />
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 

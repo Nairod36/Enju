@@ -23,7 +23,7 @@ export function AppHeader() {
               to="/app"
               className="text-slate-700 hover:text-slate-900 transition-colors px-3 py-2 rounded-lg hover:bg-emerald-50"
             >
-              Forest
+              Bridge
             </Link>
             <Link
               to="/app/game"

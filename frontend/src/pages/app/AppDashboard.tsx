@@ -33,6 +33,20 @@ import { ethers } from "ethers";
 // import { useEscrowEventListener } from "../../hooks/useEscrowEventListener";
 
 export function AppDashboard() {
+  // Utility function to safely format amount
+  const formatAmount = (amount: any): number => {
+    if (!amount) return 0;
+    try {
+      if (typeof amount === 'string' && amount.includes('.')) {
+        return parseFloat(amount);
+      } else {
+        return parseFloat(ethers.utils.formatEther(amount));
+      }
+    } catch (error) {
+      return parseFloat(amount.toString()) || 0;
+    }
+  };
+
   const { address, isConnected } = useAccount();
   const { data: balance } = useBalance({ address });
   const {
@@ -374,22 +388,14 @@ export function AppDashboard() {
                                   <TableCell>
                                     <div>
                                       <span className="font-medium">
-                                        {ethers.utils.formatEther(
-                                          bridge.amount
-                                        )}{" "}
+                                        {formatAmount(bridge.amount).toFixed(4)}{" "}
                                         {bridge.fromChain === "ethereum"
                                           ? "ETH"
                                           : "NEAR"}
                                       </span>
                                       <div className="text-xs text-gray-500">
                                         ≈ $
-                                        {(
-                                          parseFloat(
-                                            ethers.utils.formatEther(
-                                              bridge.amount
-                                            )
-                                          ) * 2500
-                                        ).toFixed(2)}
+                                        {(formatAmount(bridge.amount) * 2500).toFixed(2)}
                                       </div>
                                     </div>
                                   </TableCell>

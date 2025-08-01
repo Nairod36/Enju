@@ -217,7 +217,8 @@ export class BridgeResolver extends EventEmitter {
       console.log(`✅ Bridge ready for completion! Both ETH and NEAR HTLCs are active.`);
       
       // 🔥 AUTO-COMPLETE ETH→NEAR: Bridge resolver completes NEAR HTLC automatically
-      if (existingBridge.secret) {
+      // Only auto-complete for ETH→NEAR bridges, not NEAR→ETH
+      if (existingBridge.type === 'ETH_TO_NEAR' && existingBridge.secret) {
         console.log(`🔓 Auto-completing NEAR HTLC for ETH→NEAR bridge with secret...`);
         try {
           await this.nearListener.completeHTLC(event.contractId, existingBridge.secret);
@@ -231,8 +232,10 @@ export class BridgeResolver extends EventEmitter {
         } catch (error) {
           console.error('❌ Failed to auto-complete NEAR HTLC:', error);
         }
-      } else {
+      } else if (existingBridge.type === 'ETH_TO_NEAR') {
         console.log('⚠️ No secret available yet - waiting for ETH escrow completion to get secret');
+      } else if (existingBridge.type === 'NEAR_TO_ETH') {
+        console.log('✅ NEAR→ETH bridge ready - waiting for user to complete NEAR HTLC manually');
       }
       
       console.log(`📋 Complete bridge state:`, {
@@ -506,17 +509,45 @@ export class BridgeResolver extends EventEmitter {
     this.activeBridges.set(bridgeId, bridgeEvent);
 
     if (request.type === 'NEAR_TO_ETH') {
-      // Create NEAR HTLC first
-      const contractId = await this.nearListener.createCrossChainHTLC({
-        receiver: request.nearAccount,
-        hashlock: request.hashlock,
-        timelock: request.timelock,
-        ethAddress: request.ethRecipient,
-        amount: request.amount
-      });
+      // User has already created NEAR HTLC with their wallet
+      // We just need to create the ETH escrow
+      console.log(`🔄 Creating ETH escrow for NEAR → ETH bridge: ${bridgeId}`);
+      
+      // Set the contract ID from the request (provided by frontend)
+      if (request.contractId) {
+        bridgeEvent.contractId = request.contractId;
+      }
+      
+      try {
+        // Parse NEAR amount and convert to ETH
+        const nearAmount = parseFloat(request.amount);
+        console.log(`💱 Converting ${nearAmount} NEAR to ETH...`);
+        const ethAmount = await this.priceOracle.convertNearToEth(nearAmount.toString());
+        const ethAmountWei = ethers.parseEther(ethAmount);
+        
+        console.log(`💰 Conversion: ${nearAmount} NEAR → ${ethAmount} ETH (${ethAmountWei.toString()} wei)`);
 
-      bridgeEvent.contractId = contractId;
-      this.activeBridges.set(bridgeId, bridgeEvent);
+        // Create ETH escrow
+        console.log('🔄 Creating ETH escrow...');
+        const escrowResult = await this.createEthEscrow({
+          hashlock: request.hashlock,
+          recipient: request.ethRecipient,
+          amount: ethAmountWei.toString(),
+          timelock: request.timelock
+        });
+        
+        console.log('✅ ETH escrow creation completed:', escrowResult);
+        
+        // Update bridge with ETH escrow details
+        bridgeEvent.ethTxHash = escrowResult.tx.hash;
+        bridgeEvent.escrowAddress = escrowResult.escrowAddress;
+        this.activeBridges.set(bridgeId, bridgeEvent);
+        
+        console.log(`✅ Bridge ready! User can now complete NEAR HTLC to receive ETH`);
+        
+      } catch (error) {
+        console.error('❌ Failed to create ETH escrow for NEAR → ETH bridge:', error);
+      }
     }
 
     this.emit('bridgeCreated', bridgeEvent);

@@ -57,4 +57,5 @@ export interface SwapRequest {
   ethRecipient: string;
   nearAccount: string;
   secret?: string;
+  contractId?: string; // For NEAR_TO_ETH bridges
 }

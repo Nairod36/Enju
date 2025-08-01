@@ -327,20 +327,34 @@ export class NearListener extends EventEmitter {
       eth_address: params.ethAddress
     };
 
-    // Convert ETH wei to NEAR yoctoNEAR using real market rates
-    // ETH: 1 ETH = 10^18 wei
-    // NEAR: 1 NEAR = 10^24 yoctoNEAR
+    // Handle both ETH→NEAR and NEAR→ETH cases
+    let nearAmount: string;
+    let nearYocto: bigint;
     
-    const ethWei = BigInt(params.amount);
-    const ethAmount = Number(ethWei) / 1e18; // Convert wei to ETH
+    console.log(`🔍 Debug amount conversion - params.amount:`, params.amount, `type:`, typeof params.amount);
     
-    console.log(`💱 Converting ${ethAmount} ETH to NEAR using market rates...`);
-    
-    // Get real market conversion rate
-    const nearAmount = await this.priceOracle.convertEthToNear(ethAmount.toString());
-    const nearYocto = BigInt(Math.floor(parseFloat(nearAmount) * 1e24)); // Convert to yoctoNEAR
-    
-    console.log(`💰 Conversion: ${ethAmount} ETH → ${nearAmount} NEAR (${nearYocto.toString()} yoctoNEAR)`);
+    // Check if amount is already in NEAR format (for NEAR→ETH bridges)
+    if (typeof params.amount === 'string' && (params.amount.includes('.') || parseFloat(params.amount) < 1000)) {
+      // Already in NEAR format - use directly
+      nearAmount = params.amount;
+      const nearFloat = parseFloat(nearAmount);
+      nearYocto = BigInt(Math.floor(nearFloat * 1e24));
+      console.log(`💰 Using NEAR amount directly: ${nearAmount} NEAR`);
+      console.log(`🔍 nearFloat: ${nearFloat}, nearYocto: ${nearYocto.toString()}`);
+      
+      if (nearYocto <= 0n) {
+        throw new Error(`Invalid NEAR amount: ${nearAmount} resulted in ${nearYocto.toString()} yoctoNEAR`);
+      }
+    } else {
+      // ETH wei amount - convert to NEAR using market rates
+      const ethWei = BigInt(params.amount);
+      const ethAmount = Number(ethWei) / 1e18; // Convert wei to ETH
+      
+      console.log(`💱 Converting ${ethAmount} ETH to NEAR using market rates...`);
+      nearAmount = await this.priceOracle.convertEthToNear(ethAmount.toString());
+      nearYocto = BigInt(Math.floor(parseFloat(nearAmount) * 1e24)); // Convert to yoctoNEAR
+      console.log(`💰 Conversion: ${ethAmount} ETH → ${nearAmount} NEAR (${nearYocto.toString()} yoctoNEAR)`);
+    }
 
     // 🔥 AUTO-DETECT: Determine if partial fills are enabled
     // For now, we default to partial fills mode since the contract is updated
@@ -354,6 +368,13 @@ export class NearListener extends EventEmitter {
       console.log(`⚠️ User will sign for: ${nearAmount} NEAR`);
     }
       
+    console.log(`🚀 About to call NEAR smart contract with:`);
+    console.log(`   contractId: ${this.config.nearContractId}`);
+    console.log(`   methodName: create_cross_chain_htlc`);
+    console.log(`   args:`, JSON.stringify(args, null, 2));
+    console.log(`   attachedDeposit: ${nearYocto.toString()} yoctoNEAR`);
+    console.log(`   gas: 100000000000000`);
+
     // Use the updated cross-chain HTLC method (which now uses exact amounts)
     const result = await this.account.functionCall({
       contractId: this.config.nearContractId,
