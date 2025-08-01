@@ -6,11 +6,12 @@ import { Address, AddressLib } from "../lib/cross-chain-swap/lib/solidity-utils/
 import "../lib/cross-chain-swap/contracts/interfaces/IEscrowFactory.sol";
 import "../lib/cross-chain-swap/contracts/interfaces/IBaseEscrow.sol";
 import { Timelocks, TimelocksLib } from "../lib/cross-chain-swap/contracts/libraries/TimelocksLib.sol";
+import "./EnuToken.sol";
 
 /**
- * @title CrossChainResolver - 1inch Cross-Chain Bridge Resolver
- * @dev Following official 1inch cross-chain resolver pattern
- * @notice Resolves cross-chain swaps between ETH ↔ NEAR ↔ TRON using 1inch protocol
+ * @title CrossChainResolver - 1inch Cross-Chain Bridge Resolver with ENU Token Rewards
+ * @dev Following official 1inch cross-chain resolver pattern with integrated token rewards
+ * @notice Resolves cross-chain swaps between ETH ↔ NEAR ↔ TRON using 1inch protocol and mints ENU tokens
  */
 contract CrossChainResolver is Ownable {
     using AddressLib for Address;
@@ -19,6 +20,9 @@ contract CrossChainResolver is Ownable {
     // Official 1inch contracts on Ethereum mainnet
     IEscrowFactory public immutable ESCROW_FACTORY;
     address public immutable LIMIT_ORDER_PROTOCOL;
+    
+    // ENU Token for rewards
+    EnuToken public enuToken;
     
     // Chain identifiers for cross-chain operations
     enum DestinationChain { NEAR, TRON }
@@ -124,6 +128,15 @@ contract CrossChainResolver is Ownable {
     ) Ownable(msg.sender) {
         ESCROW_FACTORY = IEscrowFactory(_escrowFactory);
         LIMIT_ORDER_PROTOCOL = _limitOrderProtocol;
+    }
+    
+    /**
+     * @dev Set the ENU token contract address (owner only)
+     * @param _enuToken Address of the ENU token contract
+     */
+    function setEnuToken(address _enuToken) external onlyOwner {
+        require(_enuToken != address(0), "CrossChainResolver: ENU token address cannot be zero");
+        enuToken = EnuToken(_enuToken);
     }
     
     /**
@@ -305,6 +318,37 @@ contract CrossChainResolver is Ownable {
         escrow.withdraw(secret, immutables);
         
         emit EscrowWithdrawn(escrowAddress, secret, msg.sender);
+    }
+    
+    /**
+     * @dev Complete cross-chain swap and mint ENU token rewards
+     * @param escrowAddress Address of the escrow contract
+     * @param secret The secret that generates the hashlock
+     * @param immutables The immutables required by 1inch escrow
+     * @param recipient Address to receive ENU token rewards
+     * @param swapAmount Amount of the swap for reward calculation
+     */
+    function withdrawWithRewards(
+        address escrowAddress,
+        bytes32 secret,
+        IBaseEscrow.Immutables calldata immutables,
+        address recipient,
+        uint256 swapAmount
+    ) external onlyOwner {
+        require(recipient != address(0), "CrossChainResolver: recipient cannot be zero address");
+        require(swapAmount > 0, "CrossChainResolver: swap amount must be positive");
+        
+        IBaseEscrow escrow = IBaseEscrow(escrowAddress);
+        
+        // Withdraw from escrow using the secret and immutables (1inch pattern)
+        escrow.withdraw(secret, immutables);
+        
+        // Mint ENU token rewards for cross-chain bridge (2.5% rate)
+        if (address(enuToken) != address(0)) {
+            enuToken.mintSwapReward(recipient, swapAmount, true); // true = cross-chain bridge
+        }
+        
+        emit EscrowWithdrawn(escrowAddress, secret, recipient);
     }
     
     /**
