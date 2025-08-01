@@ -1,54 +1,248 @@
-# UniteDeFi Bridge - 1inch Fusion+ Multi-Chain Extension
+# 🏝️ Enju - Dynamic 3D Island DeFi Platform
 
-## 🎯 Project Overview
+Welcome to **Enju**, where you build and upgrade your **3D Dynamic Island** by performing swaps and cross-chain bridges! Your island grows with every transaction as you earn platform tokens.
 
-**UniteDeFi Bridge** extends the 1inch Fusion+ protocol to support **ETH ↔ NEAR ↔ TRON** atomic swaps with automatic price conversion using real-time market rates.
+## 🎮 What is Enju?
 
-### Key Features
-- ✅ **Multi-Chain Support**: ETH, NEAR, and TRON integration
-- ✅ **Real-Time Price Oracle**: Automatic conversions using CoinGecko/Binance APIs
-- ✅ **1inch Infrastructure**: Built on official EscrowFactory (`0xa7bcb4eac8964306f9e3764f67db6a7af6ddf99a`)
-- ✅ **Atomic Swaps**: HTLC-based with SHA256 hashlock + timelock
-- ✅ **Production Ready**: Deployed contracts and working frontend
+Enju is a **gamified DeFi platform** where users:
+- 🏝️ **Own 3D Dynamic Islands** that evolve with your activity
+- 🎯 **Earn Platform Tokens** by performing Classic Swaps and Cross-Chain Bridges
+- 🌉 **Bridge between ETH, NEAR, and TRON** to unlock island upgrades
+- 🎨 **Customize Island Features** using earned tokens (coming soon)
 
-## 🏗️ Architecture
+## 🌟 **Platform Architecture & Token Economy**
 
-```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   ETHEREUM      │    │      NEAR       │    │      TRON       │
-│                 │    │                 │    │                 │
-│ InchDirectBridge│◄──►│  htlc-near.rs   │    │TronDirectBridge │
-│ EscrowFactory   │    │  Cross-chain    │    │ HTLC + Events   │
-│ 1inch Fusion+   │    │  HTLC Support   │    │ TRX Handling    │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-         ▲                       ▲                       ▲
-         │                       │                       │
-         └───────────────────────┼───────────────────────┘
-                                 ▼
-                    ┌─────────────────────────┐
-                    │    Price Oracle         │
-                    │  - CoinGecko API        │
-                    │  - Binance Backup       │
-                    │  - 30s Cache            │
-                    │  - Auto Conversions     │
-                    └─────────────────────────┘
-```
+### 1. **Island Progression System**
 
-## 🚀 Quick Start
+Your island evolves through platform activity:
+- **Classic Swaps:** Earn base improvement tokens
+- **Cross-Chain Bridges:** Unlock premium features and rare upgrades  
+- **Transaction Volume:** Higher volume = better rewards
+- **Multi-Chain Activity:** Bridge across ETH/NEAR/TRON for maximum tokens
 
-### 1. Clone and Install
+### 2. **Smart Contract Features**
+
+#### **TokenRewardSystem.sol** - Token Minting
+- **Automatic Minting:** Tokens created on successful swaps/bridges
+- **Tiered Rewards:** Bigger transactions = more tokens
+- **Cross-Chain Bonuses:** Extra rewards for multi-chain activity
+- **Island Upgrades:** Spend tokens to improve your 3D island
+
+#### **Multi-Chain Bridge Contracts:**
+- **ETH ↔ NEAR:** Full bidirectional atomic swaps
+- **ETH ↔ TRON:** Enterprise-grade bridge functionality  
+- **NEAR ↔ TRON:** Cross-non-EVM chain swapping
+- **Atomic Guarantees:** Hash Time-Lock Contracts (HTLCs) ensure safety
+
+### 3. **3D Island Features** (Frontend)
+- **Real-time Rendering:** Island updates immediately after transactions
+- **Customizable Elements:** Use earned tokens to add features
+- **Progress Visualization:** See your platform activity reflected in island growth
+- **Social Features:** Compare islands with other users (coming soon)
+
+## 🚀 **Quick Start**
+
+### 1. **Development Setup**
 ```bash
 git clone <repository>
-cd UniteDeFi-Mokuen
-pnpm install  # Install all dependencies
+cd Enju
+npm install  # Install all dependencies
 ```
 
-### 2. Environment Setup
+### 2. **Start Local Environment**
 ```bash
-# Backend (.env)
-cp backend/.env.example backend/.env
+# Start local Ethereum fork with test accounts
+./start-mainnet-fork.sh
 
-# Add your configuration:
+# Start the development server
+npm run dev
+```
+
+### 3. **Connect & Test**
+- Import Test Account #0 to MetaMask (see LOCAL_FORK_SETUP.md)
+- Connect to your Enju platform
+- Start building your 3D island!
+
+## 🧪 **Island Building Test Flow**
+
+1. **Connect** your wallet to the Enju platform
+2. **Navigate** to your 3D Island dashboard
+3. **Perform a Classic Swap:** 0.1 ETH → WETH (earn base tokens)
+4. **Watch your island update** in real-time  
+5. **Try a Cross-Chain Bridge:** ETH → NEAR (earn premium tokens)
+6. **Use earned tokens** to upgrade island features
+
+### **Multi-Chain Token Earning:**
+- **ETH → NEAR Bridge:** Unlock island water features
+- **ETH → TRON Bridge:** Unlock island vegetation upgrades
+- **NEAR → TRON Bridge:** Unlock rare island structures
+
+## 🚀 **Enju Platform Features**
+
+### **1. Token-Driven Island Progression**
+- Earn platform tokens through swaps and bridges
+- Spend tokens to upgrade your 3D island with custom features
+- Higher transaction volumes = better token rewards
+- Cross-chain activity unlocks premium island upgrades
+
+### **2. Multi-Chain Bridge Network**  
+- **ETH ↔ NEAR:** Unlock water and coastal features
+- **ETH ↔ TRON:** Unlock vegetation and landscape upgrades  
+- **NEAR ↔ TRON:** Unlock rare structures and premium features
+- **Atomic Swaps:** Safe cross-chain transfers with automatic token rewards
+
+### **3. Gamified DeFi Experience**
+- Visual island progression based on platform activity
+- Token economy that rewards consistent platform usage
+- Social features to compare islands with other users
+- Future token utility for advanced customization options
+
+## 📈 **Enju Platform Flow Diagrams**
+
+### **🏝️ Island Token Earning - Swap Sequence**
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Island3D
+    participant SwapInterface
+    participant TokenContract
+    participant LocalFork
+    participant IslandRenderer
+
+    User->>Island3D: 1. View Current Island State
+    Island3D-->>User: 2. Display 3D Island + Token Balance
+    
+    User->>SwapInterface: 3. Initiate Token Swap (ETH→WETH)
+    SwapInterface->>LocalFork: 4. Execute Swap Transaction
+    LocalFork-->>SwapInterface: 5. Transaction Confirmed
+    
+    SwapInterface->>TokenContract: 6. Mint Reward Tokens
+    Note over TokenContract: Calculate tokens based on swap volume
+    TokenContract->>TokenContract: 7. mint(userAddress, rewardAmount)
+    TokenContract-->>SwapInterface: 8. Tokens Minted Successfully
+    
+    SwapInterface->>IslandRenderer: 9. Trigger Island Update
+    IslandRenderer->>Island3D: 10. Add New Features Based on Tokens
+    Island3D->>Island3D: 11. Render New 3D Elements
+    
+    Island3D-->>User: 12. Updated Island with New Features
+    
+    Note over User,IslandRenderer: Real-time island evolution
+    Note over TokenContract: Reward Formula: swapAmount * 0.1% = tokens
+```
+
+### **🌉 Cross-Chain Bridge Token Bonus Sequence**
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant BridgeUI
+    participant EthContract
+    participant BridgeListener
+    participant NearContract
+    participant TokenContract
+    participant Island3D
+
+    User->>BridgeUI: 1. Initiate ETH→NEAR Bridge (5 ETH)
+    BridgeUI->>EthContract: 2. Lock ETH in Bridge Contract
+    EthContract-->>BridgeListener: 3. Emit CrossChainInitiated Event
+    
+    BridgeListener->>NearContract: 4. Create NEAR-side HTLC
+    NearContract-->>BridgeListener: 5. HTLC Created Successfully
+    
+    User->>NearContract: 6. Claim NEAR Tokens (Reveal Secret)
+    NearContract->>BridgeListener: 7. Secret Revealed, Transfer Complete
+    BridgeListener->>EthContract: 8. Complete ETH-side Bridge
+    
+    BridgeListener->>TokenContract: 9. Mint Cross-Chain Bonus Tokens
+    Note over TokenContract: Cross-chain multiplier: 2.5x base rate
+    TokenContract->>TokenContract: 10. mint(user, bridgeAmount * 2.5%)
+    
+    TokenContract->>Island3D: 11. Trigger Premium Island Upgrade
+    Island3D->>Island3D: 12. Unlock Water Features & Coastal Elements
+    
+    Island3D-->>User: 13. Island Now Has Premium Features
+    
+    Note over BridgeListener,TokenContract: Cross-chain = Higher Rewards
+    Note over Island3D: Premium features unlocked by bridge activity
+```
+
+### **🎮 Island Progression & Token Spending Flowchart**
+
+```mermaid
+flowchart TD
+    A[User Connects to Enju Platform] --> B[Create Initial 3D Island]
+    
+    B --> C{Choose Activity}
+    
+    C -->|Classic Swap| D[ETH ↔ Token Swap]
+    C -->|Cross-Chain Bridge| E[ETH ↔ NEAR/TRON Bridge]
+    C -->|Spend Tokens| F[Island Upgrade Menu]
+    
+    D --> G[Calculate Base Tokens<br/>swapAmount × 0.1%]
+    E --> H[Calculate Bonus Tokens<br/>bridgeAmount × 2.5%]
+    
+    G --> I[Mint Tokens to User Wallet]
+    H --> I
+    
+    I --> J[Update Island Based on Activity Type]
+    
+    J --> K{Activity Type?}
+    K -->|Swap| L[Add Basic Features<br/>Trees, Rocks, Paths]
+    K -->|ETH→NEAR| M[Add Water Features<br/>Lakes, Rivers, Beaches]
+    K -->|ETH→TRON| N[Add Vegetation<br/>Forests, Gardens, Wildlife]
+    K -->|NEAR→TRON| O[Add Premium Structures<br/>Buildings, Bridges, Art]
+    
+    L --> P[Render Updated 3D Island]
+    M --> P
+    N --> P
+    O --> P
+    
+    F --> Q{Sufficient Tokens?}
+    Q -->|No| R[Show Required Token Amount<br/>Suggest More Activity]
+    Q -->|Yes| S[Select Island Upgrade]
+    
+    S --> T[Spend Tokens & Apply Upgrade]
+    T --> P
+    
+    P --> U[Display Beautiful 3D Island]
+    U --> V{Continue Platform Activity?}
+    
+    V -->|Yes| C
+    V -->|No| W[Island Saved<br/>Progress Maintained]
+    
+    R --> C
+    
+    style A fill:#e1f5fe
+    style B fill:#e8f5e8
+    style I fill:#fff3e0
+    style P fill:#e8f5e8
+    style U fill:#e8f5e8
+    style W fill:#e8f5e8
+```
+
+## 📞 **Documentation & Support**
+
+- **🔗 Local Development Setup:** `LOCAL_FORK_SETUP.md` - Complete setup guide
+- **📋 Demo Scenarios:** `DEMO_GUIDE.md` - Platform testing scenarios  
+- **🛠️ Developer Guide:** `DEVELOPER_GUIDE.md` - Technical implementation
+- **🏗️ Architecture:** `ENHANCED_ARCHITECTURE.md` - System architecture
+- **🌉 Bridge Details:** `BRIDGE_README.md` - Cross-chain bridge documentation
+
+## 🎯 **Getting Started**
+
+1. **✅ Set up your development environment** → See `LOCAL_FORK_SETUP.md`
+2. **🏝️ Create your first island** → Connect wallet and start with basic 3D island
+3. **🔄 Test token swaps** → ETH ↔ WETH to earn your first tokens  
+4. **🌉 Try cross-chain bridges** → ETH → NEAR/TRON for premium rewards
+5. **🎨 Upgrade your island** → Spend tokens on 3D features and customization
+
+---
+
+**🏝️ Welcome to Enju - Where Your Island Grows With Every Transaction!**
+
+Start building your dynamic 3D island today by performing swaps and cross-chain bridges. Watch as your island evolves with each platform interaction!
 TRON_PRIVATE_KEY=your_tron_private_key
 TRON_API_KEY=your_trongrid_api_key
 TRON_BRIDGE_CONTRACT=deployed_contract_address
