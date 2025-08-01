@@ -42,6 +42,12 @@ export const FloatingIsland = React.forwardRef<
   FloatingIslandRef,
   FloatingIslandProps
 >(({ seed, initialTreeCount = 0, preloadedIslandData }, ref) => {
+  console.log('🏝️ FloatingIsland component rendering with:', { 
+    seed, 
+    initialTreeCount, 
+    preloadedIslandData: !!preloadedIslandData 
+  });
+  
   const groupRef = useRef<THREE.Group>(null);
   const [animatedTiles, setAnimatedTiles] = useState(0);
   const [showDecorations, setShowDecorations] = useState(false);
@@ -118,8 +124,21 @@ export const FloatingIsland = React.forwardRef<
 
   // Génération initiale - utiliser le système original COMPLET
   useEffect(() => {
-    // Use preloaded island data if available, otherwise generate new
-    const island = preloadedIslandData || generateIsland(seed);
+    console.log('🔄 Generating island with seed:', seed, 'preloadedIslandData:', !!preloadedIslandData);
+    
+    // Validate preloaded data - it should have landTiles and waterTiles
+    const isValidPreloadedData = preloadedIslandData && 
+                                preloadedIslandData.landTiles && 
+                                preloadedIslandData.landTiles.length > 0;
+    
+    console.log('🔍 Is preloaded data valid?', isValidPreloadedData);
+    
+    // Use preloaded island data if valid, otherwise generate new
+    const island = isValidPreloadedData ? preloadedIslandData : generateIsland(seed);
+    console.log('🏝️ Using island data from:', isValidPreloadedData ? 'database' : 'generator');
+    console.log('🏝️ Final island data:', island);
+    console.log('🏝️ Island landTiles length:', island?.landTiles?.length || 0);
+    console.log('🏝️ Island waterTiles length:', island?.waterTiles?.length || 0);
     setIslandData(island);
 
     // Créer le personnage GenericMale au centre de l'île
