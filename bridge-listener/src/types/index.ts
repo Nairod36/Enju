@@ -50,6 +50,12 @@ export interface ResolverConfig {
   nearAccountId: string;
   nearPrivateKey: string;
   inchEscrowFactory: string;
+  tronConfig?: {
+    privateKey: string;
+    fullHost: string;
+    bridgeContract: string;
+    chainId: string;
+  };
 }
 
 export interface SwapRequest {

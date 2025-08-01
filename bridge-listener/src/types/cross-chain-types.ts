@@ -107,3 +107,22 @@ export namespace InchFusionTypes {
     crossChainResolver: string;
   }
 }
+
+// Bridge Event Types
+export interface BridgeEvent {
+  id: string;
+  type: 'ETH_TO_NEAR' | 'ETH_TO_TRON' | 'NEAR_TO_ETH' | 'TRON_TO_ETH';
+  status: 'PENDING' | 'PROCESSING' | 'LOCKED' | 'COMPLETED' | 'FAILED' | 'REFUNDED';
+  ethTxHash?: string;
+  nearTxHash?: string;
+  tronTxHash?: string;
+  escrowAddress: string;
+  hashlock: string;
+  amount: string;
+  ethRecipient: string;
+  nearAccount: string;
+  tronAddress?: string;
+  timelock: number;
+  createdAt: number;
+  completedAt?: number;
+}

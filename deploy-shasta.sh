@@ -6,7 +6,10 @@
 # Load environment variables from .env file
 if [ -f .env ]; then
     echo "📄 Loading environment variables from .env..."
-    export $(cat .env | grep -v '^#' | grep -v '^$' | xargs)
+    # Fix: Proper env loading that handles special characters
+    set -a
+    source .env
+    set +a
 else
     echo "⚠️ No .env file found, using system environment variables"
 fi
@@ -42,10 +45,15 @@ module.exports = {
   networks: {
     shasta: {
       privateKey: process.env.TRON_PRIVATE_KEY,
-      userFeePercentage: 25,        // Reduced fee percentage for deployment
-      feeLimit: 1000 * 1e6,         // 1000 TRX limit for complex contract
+      userFeePercentage: 100,       // Max percentage for deployment
+      feeLimit: 15000 * 1e6,        // 15000 TRX limit!! (EXTREME MAX)
       fullHost: "https://api.shasta.trongrid.io",
-      network_id: "2"
+      network_id: "2",
+      consume_user_resource_percent: 100,  // Use max user resources
+      name: 'shasta',
+      originEnergyLimit: 100000000,  // 100M energy limit (EXTREME MAX)
+      deployOriginEnergyLimit: 100000000,
+      createAccountFee: 100000
     },
     development: {
       privateKey: process.env.TRON_PRIVATE_KEY,
@@ -61,7 +69,20 @@ module.exports = {
       version: "0.8.6",
       optimizer: {
         enabled: true,
-        runs: 1                     // Aggressive optimization for smaller bytecode
+        runs: 1,                    // Most aggressive optimization for smaller bytecode
+        details: {
+          yul: true,                // Enable Yul optimizer
+          yulDetails: {
+            stackAllocation: true,
+            optimizerSteps: "dhfoDgvulfnTUtnIf"
+          }
+        }
+      },
+      settings: {
+        optimizer: {
+          enabled: true,
+          runs: 1
+        }
       }
     }
   }
@@ -94,9 +115,13 @@ const tronWeb = new TronWeb({
     const trxBalance = tronWeb.fromSun(balance);
     console.log('📊 Current TRX balance:', trxBalance, 'TRX');
     
-    if (parseFloat(trxBalance) < 1000) {
-      console.log('⚠️ Low TRX balance. You might need more TRX for deployment.');
-      console.log('💰 Get TRX from faucet: https://shasta.tronex.io/');
+    if (parseFloat(trxBalance) < 15000) {
+      console.log('❌ INSUFFICIENT TRX balance for complex contract!');
+      console.log('💰 Current balance:', trxBalance, 'TRX');
+      console.log('💰 Required minimum: 15000 TRX');
+      console.log('💰 Get more TRX from faucet: https://shasta.tronex.io/');
+      console.log('💰 You may need to request multiple times from faucet');
+      console.log('⚠️ Deployment will likely FAIL with insufficient TRX!');
     } else {
       console.log('✅ Sufficient TRX balance for deployment');
     }
@@ -108,14 +133,24 @@ const tronWeb = new TronWeb({
 
 echo ""
 echo "🚀 Deploying TronFusionBridge to Shasta..."
-tronbox migrate --reset --network shasta
 
-if [ $? -ne 0 ]; then
+# Run deployment with verbose output
+tronbox migrate --reset --network shasta --verbose
+
+DEPLOY_RESULT=$?
+
+if [ $DEPLOY_RESULT -ne 0 ]; then
     echo "❌ Contract deployment failed"
     echo "💡 Common issues:"
-    echo "   - Insufficient TRX balance (need >1000 TRX)"
+    echo "   - Insufficient TRX balance (need >1500 TRX for complex contract)"
+    echo "   - Insufficient energy/bandwidth"
     echo "   - Network connectivity issues"
-    echo "   - Invalid private key"
+    echo "   - Contract too large"
+    echo ""
+    echo "🔧 Try getting more resources:"
+    echo "   1. Get more TRX from faucet: https://shasta.tronex.io/"
+    echo "   2. Freeze TRX for energy: Use TronLink or TronScan"
+    echo "   3. Simplify contract or optimize"
     exit 1
 fi
 
@@ -129,7 +164,7 @@ if [ -f "build/contracts/TronFusionBridge.json" ]; then
         const networks = contract.networks;
         const networkId = '2'; // Shasta chain ID
         networks[networkId] ? networks[networkId].address : 'Not found';
-    " 2>/dev/null || echo "TDRxnuwadXXJLuPeravN7E4EbpJsAKa59x")
+    " 2>/dev/null || echo "TA879tNjuFCd8w57V3BHNhsshehKn1Ks86")
     
     if [ "$FUSION_ADDRESS" != "Not found" ] && [ -n "$FUSION_ADDRESS" ]; then
         echo "🎉 TronFusionBridge deployed successfully!"

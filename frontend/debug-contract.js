@@ -6,7 +6,7 @@ async function debugContract() {
     const testPrivateKey = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
     const signer = new ethers.Wallet(testPrivateKey, provider);
     
-    console.log('🔍 Debugging Contract at 0xFEE2d383Ee292283eC43bdf0fa360296BE1e1149');
+    console.log('🔍 Debugging Contract at 0xAE2c8c3bBDC09116bE01064009f13fCc272b0944');
     
     const contractABI = [
       "function checkEscrowFactory() external view returns (bool)",
@@ -14,7 +14,7 @@ async function debugContract() {
       "function authorizedResolvers(address) public view returns (bool)"
     ];
     
-    const contractAddress = '0xFEE2d383Ee292283eC43bdf0fa360296BE1e1149';
+    const contractAddress = '0xAE2c8c3bBDC09116bE01064009f13fCc272b0944';
     const contract = new ethers.Contract(contractAddress, contractABI, signer);
     
     // Test 1: Check owner

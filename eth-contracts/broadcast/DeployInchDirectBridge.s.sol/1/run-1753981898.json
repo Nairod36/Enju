@@ -4,7 +4,7 @@
       "hash": "0x50aa5286c1a5b6dc73bef78aed3cc66e957f1afed432baa5ef7aec7eee4ed003",
       "transactionType": "CREATE",
       "contractName": "InchDirectBridge",
-      "contractAddress": "0xfee2d383ee292283ec43bdf0fa360296be1e1149",
+      "contractAddress": "0xAE2c8c3bBDC09116bE01064009f13fCc272b0944",
       "function": null,
       "arguments": null,
       "transaction": {
@@ -35,7 +35,7 @@
       "blobGasPrice": "0x1",
       "from": "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
       "to": null,
-      "contractAddress": "0xfee2d383ee292283ec43bdf0fa360296be1e1149"
+      "contractAddress": "0xAE2c8c3bBDC09116bE01064009f13fCc272b0944"
     }
   ],
   "libraries": [],

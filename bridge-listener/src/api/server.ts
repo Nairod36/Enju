@@ -10,6 +10,16 @@ export class BridgeAPI {
   private priceOracle: PriceOracle;
   private server: any;
 
+  // Helper function to safely serialize data with BigInt values
+  private safeBigIntStringify(obj: any): any {
+    return JSON.parse(JSON.stringify(obj, (key, value) => {
+      if (typeof value === 'bigint') {
+        return value.toString();
+      }
+      return value;
+    }));
+  }
+
   constructor(private config: ResolverConfig, private port: number) {
     this.app = express();
     this.resolver = new BridgeResolver(config);
@@ -22,6 +32,14 @@ export class BridgeAPI {
   private setupMiddleware(): void {
     this.app.use(cors());
     this.app.use(express.json());
+    
+    // Custom JSON serialization to handle BigInt values
+    this.app.set('json replacer', (key: string, value: any) => {
+      if (typeof value === 'bigint') {
+        return value.toString();
+      }
+      return value;
+    });
     
     // Request logging
     this.app.use((req, res, next) => {
@@ -44,12 +62,14 @@ export class BridgeAPI {
     this.app.get('/bridges', (req, res) => {
       try {
         const bridges = this.resolver.getAllBridges();
+        const safeBridges = this.safeBigIntStringify(bridges);
         res.json({
           success: true,
-          data: bridges,
-          count: bridges.length
+          data: safeBridges,
+          count: safeBridges.length
         });
       } catch (error) {
+        console.error('Error in /bridges endpoint:', error);
         res.status(500).json({
           success: false,
           error: error instanceof Error ? error.message : 'Unknown error'
@@ -61,12 +81,14 @@ export class BridgeAPI {
     this.app.get('/bridges/active', (req, res) => {
       try {
         const bridges = this.resolver.getActiveBridges();
+        const safeBridges = this.safeBigIntStringify(bridges);
         res.json({
           success: true,
-          data: bridges,
-          count: bridges.length
+          data: safeBridges,
+          count: safeBridges.length
         });
       } catch (error) {
+        console.error('Error in /bridges/active endpoint:', error);
         res.status(500).json({
           success: false,
           error: error instanceof Error ? error.message : 'Unknown error'
@@ -85,11 +107,13 @@ export class BridgeAPI {
           });
         }
         
+        const safeBridge = this.safeBigIntStringify(bridge);
         res.json({
           success: true,
-          data: bridge
+          data: safeBridge
         });
       } catch (error) {
+        console.error('Error in /bridges/:bridgeId endpoint:', error);
         res.status(500).json({
           success: false,
           error: error instanceof Error ? error.message : 'Unknown error'
@@ -238,7 +262,8 @@ export class BridgeAPI {
 
         // Verify that the secret matches the hashlock
         const ethers = require('ethers');
-        const computedHashlock = ethers.keccak256(secret);
+        // Use SHA256 to match frontend (NEAR compatibility)
+        const computedHashlock = ethers.sha256(secret);
         
         if (computedHashlock.toLowerCase() !== hashlock.toLowerCase()) {
           return res.status(400).json({
@@ -355,11 +380,13 @@ export class BridgeAPI {
 
       // Set up event listeners
       const onBridgeCreated = (bridge: any) => {
-        res.write(`data: ${JSON.stringify({ type: 'bridgeCreated', data: bridge })}\\n\\n`);
+        const safeBridge = this.safeBigIntStringify(bridge);
+        res.write(`data: ${JSON.stringify({ type: 'bridgeCreated', data: safeBridge })}\\n\\n`);
       };
 
       const onBridgeCompleted = (bridge: any) => {
-        res.write(`data: ${JSON.stringify({ type: 'bridgeCompleted', data: bridge })}\\n\\n`);
+        const safeBridge = this.safeBigIntStringify(bridge);
+        res.write(`data: ${JSON.stringify({ type: 'bridgeCompleted', data: safeBridge })}\\n\\n`);
       };
 
       this.resolver.on('bridgeCreated', onBridgeCreated);

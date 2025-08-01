@@ -14,7 +14,7 @@ export const FORK_MAINNET_CONFIG = {
 
 export const BRIDGE_CONFIG = {
   // CrossChainResolver contract (deployed with partial fills - fixed version)
-  contractAddress: '0x49C1A0c3cbd229118dEC660EBE7728Edce1CDc54',
+  contractAddress: '0xAE2c8c3bBDC09116bE01064009f13fCc272b0944',
   rpcUrl: 'http://vps-b11044fd.vps.ovh.net:8545/',
   listenerApi: 'http://localhost:3002',
   nearContract: 'sharknadok.testnet',

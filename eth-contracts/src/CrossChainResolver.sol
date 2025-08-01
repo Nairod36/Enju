@@ -198,6 +198,60 @@ contract CrossChainResolver is Ownable {
     }
     
     /**
+     * @dev Legacy function - Create ETH to TRON bridge (backward compatibility)
+     * @param hashlock The hash of the secret for HTLC
+     * @param tronAddress TRON address to receive tokens
+     */
+    function createETHToTRONBridge(
+        bytes32 hashlock,
+        string calldata tronAddress
+    ) external payable returns (address escrow) {
+        // Simplified implementation - just track the bridge without using 1inch factory for now
+        require(msg.value > 0, "Amount must be greater than 0");
+        require(hashlock != bytes32(0), "Invalid hashlock");
+        require(bytes(tronAddress).length > 0, "TRON address required");
+        require(_isValidTronAddress(tronAddress), "Invalid TRON address format");
+        
+        // Use a simple escrow address based on the sender and hashlock
+        // This is temporary until we properly integrate with 1inch factory
+        escrow = address(uint160(uint256(keccak256(abi.encodePacked(
+            msg.sender,
+            hashlock,
+            block.timestamp
+        )))));
+        
+        // Store the funds in this contract for now (to be transferred to proper escrow later)
+        // In a real implementation, this would go to the 1inch escrow
+        
+        // Create swap tracking
+        bytes32 swapId = keccak256(abi.encodePacked(
+            escrow,
+            hashlock,
+            uint256(DestinationChain.TRON),
+            tronAddress,
+            block.timestamp
+        ));
+        
+        swaps[swapId] = CrossChainSwap({
+            srcEscrow: escrow,
+            dstEscrow: address(0),
+            user: msg.sender,
+            totalAmount: msg.value,
+            filledAmount: 0,
+            remainingAmount: msg.value,
+            hashlock: hashlock,
+            destinationChain: DestinationChain.TRON,
+            destinationAccount: tronAddress,
+            completed: false,
+            createdAt: block.timestamp,
+            fillCount: 0
+        });
+        
+        // Emit events for backward compatibility
+        emit EscrowCreated(escrow, hashlock, DestinationChain.TRON, tronAddress, msg.value);
+    }
+    
+    /**
      * @dev Legacy function - Create ETH to NEAR bridge (backward compatibility)
      * @param hashlock The hash of the secret for HTLC
      * @param nearAccount NEAR account to receive tokens
@@ -568,21 +622,30 @@ contract CrossChainResolver is Ownable {
     }
     
     /**
-     * @dev Validate TRON address format
+     * @dev Validate TRON address format (Base58 encoding, 34 chars, starts with T)
      */
     function _isValidTronAddress(string memory tronAddress) internal pure returns (bool) {
         bytes memory addr = bytes(tronAddress);
         
-        if (addr.length != 34 || addr[0] != 'T') {
+        // TRON addresses can be 34 or 35 characters and must start with 'T'
+        if ((addr.length != 34 && addr.length != 35) || addr[0] != 'T') {
             return false;
         }
         
+        // Base58 includes: 123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz
+        // Excludes: 0 (zero), O (capital o), I (capital i), l (lowercase L)
         for (uint i = 1; i < addr.length; i++) {
             bytes1 char = addr[i];
-            if (!(char >= '1' && char <= '9') && 
-                !(char >= 'A' && char <= 'Z') && 
-                !(char >= 'a' && char <= 'z') && 
-                char != '0' && char != 'O' && char != 'I' && char != 'l') {
+            
+            // Check if character is NOT in Base58 character set
+            if (char == '0' || char == 'O' || char == 'I' || char == 'l') {
+                return false;
+            }
+            
+            // Check if character IS in valid Base58 range
+            if (!((char >= '1' && char <= '9') || 
+                  (char >= 'A' && char <= 'Z') || 
+                  (char >= 'a' && char <= 'z'))) {
                 return false;
             }
         }

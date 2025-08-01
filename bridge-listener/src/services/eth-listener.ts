@@ -122,9 +122,9 @@ export class EthereumListener extends EventEmitter {
       timestamp: new Date().toISOString()
     });
     
-    // Only process NEAR destinations (destinationChain = 0)
-    if (destinationChain !== 0) {
-      console.log(`⚠️ Skipping non-NEAR destination chain: ${destinationChain}`);
+    // Process NEAR (0) and TRON (1) destinations
+    if (destinationChain !== 0 && destinationChain !== 1) {
+      console.log(`⚠️ Skipping unsupported destination chain: ${destinationChain}`);
       return;
     }
     
@@ -135,28 +135,52 @@ export class EthereumListener extends EventEmitter {
     }
     this.processedEvents.add(eventId);
 
-    console.log(`✅ Processing 1inch resolver ETH → NEAR bridge:`, {
+    console.log(`✅ Processing 1inch resolver ETH → ${destinationChain === 0 ? 'NEAR' : 'TRON'} bridge:`, {
       escrow,
       hashlock,
-      nearAccount: destinationAccount,
+      destinationAccount,
+      destinationChain,
       amount: ethers.formatEther(amount),
       safetyDeposit: ethers.formatEther(safetyDeposit),
       txHash: event.transactionHash,
       block: event.blockNumber
     });
 
-    const bridgeEvent: EthEscrowCreatedEvent = {
-      escrow,
-      hashlock,
-      nearAccount: destinationAccount,
-      amount: amount.toString(),
-      blockNumber: event.blockNumber!,
-      txHash: event.transactionHash!
-    };
+    if (destinationChain === 0) {
+      // ETH → NEAR bridge
+      const bridgeEvent: EthEscrowCreatedEvent = {
+        escrow,
+        hashlock,
+        nearAccount: destinationAccount,
+        amount: amount.toString(),
+        blockNumber: event.blockNumber!,
+        txHash: event.transactionHash!
+      };
 
-    console.log(`🚀 Emitting 'escrowCreated' event to bridge-resolver:`, bridgeEvent);
-    this.emit('escrowCreated', bridgeEvent);
-    console.log(`✅ 1inch resolver event emitted successfully to bridge-resolver`);
+      console.log(`🚀 Emitting 'escrowCreated' event to bridge-resolver:`, bridgeEvent);
+      this.emit('escrowCreated', bridgeEvent);
+      console.log(`✅ 1inch resolver event emitted successfully to bridge-resolver`);
+    } else if (destinationChain === 1) {
+      // ETH → TRON bridge
+      console.log(`🔥 ETH → TRON bridge detected, emitting 'ethToTronBridge' event:`, {
+        escrow,
+        hashlock,
+        tronAddress: destinationAccount,
+        amount: amount.toString(),
+        blockNumber: event.blockNumber!,
+        txHash: event.transactionHash!
+      });
+
+      this.emit('ethToTronBridge', {
+        escrow,
+        hashlock,
+        tronAddress: destinationAccount,
+        amount: amount.toString(),
+        blockNumber: event.blockNumber!,
+        txHash: event.transactionHash!
+      });
+      console.log(`✅ ETH → TRON event emitted successfully to bridge-resolver`);
+    }
   }
 
   private async handleEscrowDeployedDst(
@@ -366,9 +390,9 @@ export class EthereumListener extends EventEmitter {
       timestamp: new Date().toISOString()
     });
     
-    // Only process NEAR destinations (destinationChain = 0)
-    if (destinationChain !== 0) {
-      console.log(`⚠️ Skipping non-NEAR destination chain: ${destinationChain}`);
+    // Process NEAR (0) and TRON (1) destinations
+    if (destinationChain !== 0 && destinationChain !== 1) {
+      console.log(`⚠️ Skipping unsupported destination chain: ${destinationChain}`);
       return;
     }
     
@@ -379,27 +403,50 @@ export class EthereumListener extends EventEmitter {
     }
     this.processedEvents.add(eventId);
 
-    console.log(`✅ Processing new ETH → NEAR bridge:`, {
+    console.log(`✅ Processing new ETH → ${destinationChain === 0 ? 'NEAR' : 'TRON'} bridge:`, {
       escrow,
       hashlock,
-      nearAccount: destinationAccount,
+      destinationAccount,
       amount: ethers.formatEther(amount),
       txHash: event.transactionHash,
       block: event.blockNumber
     });
 
-    const bridgeEvent: EthEscrowCreatedEvent = {
-      escrow,
-      hashlock,
-      nearAccount: destinationAccount,
-      amount: amount.toString(),
-      blockNumber: event.blockNumber!,
-      txHash: event.transactionHash!
-    };
+    if (destinationChain === 0) {
+      // ETH → NEAR bridge
+      const bridgeEvent: EthEscrowCreatedEvent = {
+        escrow,
+        hashlock,
+        nearAccount: destinationAccount,
+        amount: amount.toString(),
+        blockNumber: event.blockNumber!,
+        txHash: event.transactionHash!
+      };
 
-    console.log(`🚀 Emitting 'escrowCreated' event to bridge-resolver:`, bridgeEvent);
-    this.emit('escrowCreated', bridgeEvent);
-    console.log(`✅ Event emitted successfully to bridge-resolver`);
+      console.log(`🚀 Emitting 'escrowCreated' event to bridge-resolver:`, bridgeEvent);
+      this.emit('escrowCreated', bridgeEvent);
+      console.log(`✅ Event emitted successfully to bridge-resolver`);
+    } else if (destinationChain === 1) {
+      // ETH → TRON bridge
+      console.log(`🔥 ETH → TRON bridge detected, emitting 'ethToTronBridge' event:`, {
+        escrow,
+        hashlock,
+        tronAddress: destinationAccount,
+        amount: amount.toString(),
+        blockNumber: event.blockNumber!,
+        txHash: event.transactionHash!
+      });
+
+      this.emit('ethToTronBridge', {
+        escrow,
+        hashlock,
+        tronAddress: destinationAccount,
+        amount: amount.toString(),
+        blockNumber: event.blockNumber!,
+        txHash: event.transactionHash!
+      });
+      console.log(`✅ ETH → TRON event emitted successfully to bridge-resolver`);
+    }
   }
 
   private async handleSwapCompleted(

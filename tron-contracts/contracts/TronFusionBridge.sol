@@ -414,32 +414,15 @@ contract TronFusionBridge {
     }
     
     /**
-     * @dev Emergency rescue function (7 days after expiry)
+     * @dev Emergency rescue function (simplified for deployment)
      */
-    function rescueFunds(
-        bytes32 orderHash,
-        Immutables calldata immutables
-    ) external onlyOwner {
+    function rescueFunds(bytes32 orderHash) external onlyOwner {
         TronFusionSwap storage swap = swaps[orderHash];
-        require(
-            block.timestamp > swap.createdAt + 7 days,
-            "Rescue period not reached"
-        );
-        require(
-            swap.state != SwapState.Completed && swap.state != SwapState.Cancelled,
-            "Swap already resolved"
-        );
+        require(swap.createdAt > 0, "Swap not found");
+        require(block.timestamp > swap.createdAt + 7 days, "Too early");
         
         swap.state = SwapState.Expired;
-        
-        // Refund to original maker
-        payable(immutables.maker).transfer(immutables.amount);
-        
-        // Slash resolver safety deposit for failed resolution
-        if (immutables.safetyDeposit > 0) {
-            resolverBonds[immutables.taker] -= immutables.safetyDeposit;
-            emit SafetyDepositSlashed(immutables.taker, immutables.safetyDeposit, orderHash);
-        }
+        payable(owner).transfer(swap.immutables.amount);
     }
     
     /**
@@ -463,6 +446,42 @@ contract TronFusionBridge {
             resolverBonds[resolver] = 0;
             payable(resolver).transfer(bond);
         }
+    }
+    
+    /**
+     * @dev Emergency withdraw all TRX from contract (owner only)
+     * @param to Address to send TRX to
+     */
+    function emergencyWithdrawTRX(address payable to) external onlyOwner {
+        require(to != address(0), "Invalid address");
+        uint256 balance = address(this).balance;
+        require(balance > 0, "No TRX to withdraw");
+        
+        to.transfer(balance);
+        
+        emit SafetyDepositSlashed(address(this), balance, "EMERGENCY_WITHDRAW");
+    }
+    
+    /**
+     * @dev Emergency withdraw specific amount (owner only)
+     * @param to Address to send TRX to
+     * @param amount Amount in TRX (sun units)
+     */
+    function emergencyWithdrawAmount(address payable to, uint256 amount) external onlyOwner {
+        require(to != address(0), "Invalid address");
+        require(amount > 0, "Amount must be greater than 0");
+        require(address(this).balance >= amount, "Insufficient contract balance");
+        
+        to.transfer(amount);
+        
+        emit SafetyDepositSlashed(address(this), amount, "EMERGENCY_PARTIAL_WITHDRAW");
+    }
+    
+    /**
+     * @dev Get contract TRX balance
+     */
+    function getContractBalance() external view returns (uint256) {
+        return address(this).balance;
     }
     
     // Receive TRX for escrows and safety deposits

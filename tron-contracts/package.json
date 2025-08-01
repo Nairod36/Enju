@@ -10,7 +10,7 @@
     "test": "tronbox test"
   },
   "dependencies": {
-    "tronweb": "^5.3.2"
+    "tronweb": "^5.3.4"
   },
   "devDependencies": {
     "tronbox": "^2.7.24"

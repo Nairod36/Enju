@@ -463,14 +463,23 @@ export class TronFusionClient {
     try {
       console.log(`📤 Sending ${amount} TRX to ${toAddress}...`);
       
-      const amountInSun = this.tronWeb.toSun(amount);
-      const transaction = await this.tronWeb.trx.sendTransaction(toAddress, amountInSun);
+      // Validate TRON address format
+      if (!toAddress.startsWith('T') || toAddress.length !== 34) {
+        throw new Error(`Invalid TRON address format: ${toAddress}`);
+      }
       
-      console.log(`✅ TRX transaction sent: ${transaction.txid}`);
+      // Convert amount to SUN (1 TRX = 1,000,000 SUN)
+      const amountInSun = this.tronWeb.toSun(amount);
+      console.log(`💰 Converting ${amount} TRX to ${amountInSun} SUN`);
+      
+      // Use the correct TronWeb method for sending TRX
+      const transaction = await this.tronWeb.trx.sendTrx(toAddress, amountInSun);
+      
+      console.log(`✅ TRX transaction sent: ${transaction.txid || transaction.transaction?.txID}`);
       
       return {
         success: true,
-        txHash: transaction.txid
+        txHash: transaction.txid || transaction.transaction?.txID
       };
     } catch (error) {
       console.error('❌ TRX transfer failed:', error);
