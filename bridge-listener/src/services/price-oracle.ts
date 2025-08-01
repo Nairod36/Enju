@@ -6,17 +6,42 @@ export interface PriceData {
   nearToEth: number;
   ethToNear: number;
   timestamp: number;
-  source: 'coingecko' | 'binance' | 'cache';
+  source: '1inch' | 'coingecko' | 'binance' | 'cache';
+}
+
+export interface InchSpotPriceResponse {
+  dstAmount: string;
+  srcToken: {
+    address: string;
+    symbol: string;
+    name: string;
+    decimals: number;
+  };
+  dstToken: {
+    address: string;
+    symbol: string;
+    name: string;
+    decimals: number;
+  };
 }
 
 export class PriceOracle {
   private cache: Map<string, { data: PriceData; expiry: number }> = new Map();
   private readonly CACHE_DURATION = 30 * 1000; // 30 seconds
+  private readonly INCH_API = 'https://api.1inch.dev';
   private readonly COINGECKO_API = 'https://api.coingecko.com/api/v3';
   private readonly BINANCE_API = 'https://api.binance.com/api/v3';
+  
+  // Token addresses for 1inch API (mainnet)
+  private readonly TOKENS = {
+    ETH: '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE', // ETH
+    USDC: '0xA0b86a33E6417ea11037c5F37fE7dc5F7f80e0a5', // USDC
+    TRX: '0x50327c6c5a14DCaDE707ABad2E27eB517df87AB5', // TRX on Ethereum
+    NEAR: '0x85F17Cf997934a597031b2E18a9aB6ebD4B9f6a4' // NEAR on Ethereum
+  };
 
   /**
-   * Get current TRX/ETH/NEAR exchange rates
+   * Get current TRX/ETH/NEAR exchange rates using 1inch Spot Price API
    */
   async getCurrentPrices(): Promise<PriceData> {
     const cacheKey = 'crypto-prices';
@@ -28,8 +53,8 @@ export class PriceOracle {
     }
 
     try {
-      // Try CoinGecko first (more reliable)
-      const priceData = await this.fetchFromCoinGecko();
+      // Try 1inch API first (most accurate for DeFi)
+      const priceData = await this.fetchFrom1inch();
       
       // Cache the result
       this.cache.set(cacheKey, {
@@ -39,10 +64,10 @@ export class PriceOracle {
       
       return priceData;
     } catch (error) {
-      console.warn('❌ CoinGecko failed, trying Binance:', error);
+      console.warn('❌ 1inch API failed, trying CoinGecko:', error);
       
       try {
-        const priceData = await this.fetchFromBinance();
+        const priceData = await this.fetchFromCoinGecko();
         
         // Cache the result
         this.cache.set(cacheKey, {
@@ -51,18 +76,84 @@ export class PriceOracle {
         });
         
         return priceData;
-      } catch (binanceError) {
-        console.error('❌ Both price sources failed:', binanceError);
+      } catch (coinGeckoError) {
+        console.warn('❌ CoinGecko failed, trying Binance:', coinGeckoError);
         
-        // Return cached data if available, even if expired
-        if (cached) {
-          console.log('⚠️ Using expired cached data');
-          return { ...cached.data, source: 'cache' };
+        try {
+          const priceData = await this.fetchFromBinance();
+          
+          // Cache the result
+          this.cache.set(cacheKey, {
+            data: priceData,
+            expiry: Date.now() + this.CACHE_DURATION
+          });
+          
+          return priceData;
+        } catch (binanceError) {
+          console.error('❌ All price sources failed:', binanceError);
+          
+          // Return cached data if available, even if expired
+          if (cached) {
+            console.log('⚠️ Using expired cached data');
+            return { ...cached.data, source: 'cache' };
+          }
+          
+          throw new Error('Unable to fetch price data from any source');
         }
-        
-        throw new Error('Unable to fetch price data from any source');
       }
     }
+  }
+
+  /**
+   * Fetch prices from 1inch Spot Price API
+   */
+  private async fetchFrom1inch(): Promise<PriceData> {
+    const chainId = 1; // Ethereum mainnet
+    const amount = '1000000000000000000'; // 1 ETH in wei
+
+    // Get TRX/ETH rate
+    const trxResponse = await axios.get(`${this.INCH_API}/price/v1.1/${chainId}/${this.TOKENS.TRX}/${this.TOKENS.ETH}`, {
+      params: { amount },
+      timeout: 5000,
+      headers: {
+        'Authorization': `Bearer ${process.env.INCH_API_KEY || ''}`,
+        'Accept': 'application/json'
+      }
+    });
+
+    // Get NEAR/ETH rate
+    const nearResponse = await axios.get(`${this.INCH_API}/price/v1.1/${chainId}/${this.TOKENS.NEAR}/${this.TOKENS.ETH}`, {
+      params: { amount },
+      timeout: 5000,
+      headers: {
+        'Authorization': `Bearer ${process.env.INCH_API_KEY || ''}`,
+        'Accept': 'application/json'
+      }
+    });
+
+    // Convert responses
+    const trxToEthData = trxResponse.data as InchSpotPriceResponse;
+    const nearToEthData = nearResponse.data as InchSpotPriceResponse;
+
+    // Parse amounts (1inch returns string values)
+    const trxToEthAmount = parseFloat(trxToEthData.dstAmount) / Math.pow(10, trxToEthData.dstToken.decimals);
+    const nearToEthAmount = parseFloat(nearToEthData.dstAmount) / Math.pow(10, nearToEthData.dstToken.decimals);
+
+    const trxToEth = trxToEthAmount;
+    const ethToTrx = 1 / trxToEthAmount;
+    const nearToEth = nearToEthAmount;
+    const ethToNear = 1 / nearToEthAmount;
+
+    console.log(`📊 1inch prices: TRX/ETH=${trxToEth.toFixed(8)}, NEAR/ETH=${nearToEth.toFixed(8)}`);
+
+    return {
+      trxToEth,
+      ethToTrx,
+      nearToEth,
+      ethToNear,
+      timestamp: Date.now(),
+      source: '1inch'
+    };
   }
 
   /**
