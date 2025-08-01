@@ -17,7 +17,7 @@ export const BRIDGE_CONFIG = {
   contractAddress: '0x49C1A0c3cbd229118dEC660EBE7728Edce1CDc54',
   rpcUrl: 'http://vps-b11044fd.vps.ovh.net:8545/',
   listenerApi: 'http://localhost:3002',
-  nearContract: 'matthias-dev.testnet',
+  nearContract: 'sharknadok.testnet',
   
   // Official 1inch contracts
   inchEscrowFactory: '0xa7bCb4EAc8964306F9e3764f67Db6A7af6DdF99A',

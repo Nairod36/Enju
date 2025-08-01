@@ -440,9 +440,21 @@ export class EthereumListener extends EventEmitter {
           currentBlock
         );
 
-        // Process legacy events
-        for (const event of legacyEvents) {
+        // Process all events, but avoid duplicates from both legacy and new events
+        const allEvents = [...legacyEvents, ...newEvents];
+        const processedInThisPoll = new Set<string>();
+
+        for (const event of allEvents) {
           const eventLog = event as ethers.EventLog;
+          const eventId = `${eventLog.transactionHash}-${eventLog.index}`;
+          
+          // Skip if already processed in this poll (prevents duplicate processing of same tx)
+          if (processedInThisPoll.has(eventId)) {
+            console.log(`⚠️ Event ${eventId} already processed in this poll, skipping...`);
+            continue;
+          }
+          processedInThisPoll.add(eventId);
+          
           if (eventLog.fragment && eventLog.fragment.name === 'EscrowCreatedLegacy') {
             await this.handleLegacyEscrowCreated(
               eventLog.args[0], // escrow
@@ -451,13 +463,7 @@ export class EthereumListener extends EventEmitter {
               eventLog.args[3], // amount
               eventLog
             );
-          }
-        }
-
-        // Process new multi-chain events
-        for (const event of newEvents) {
-          const eventLog = event as ethers.EventLog;
-          if (eventLog.fragment && eventLog.fragment.name === 'EscrowCreated') {
+          } else if (eventLog.fragment && eventLog.fragment.name === 'EscrowCreated') {
             await this.handleNewEscrowCreated(
               eventLog.args[0], // escrow
               eventLog.args[1], // hashlock

@@ -274,7 +274,8 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
 
     // Generate secret and hashlock
     const secret = ethers.utils.hexlify(ethers.utils.randomBytes(32));
-    const hashlock = ethers.utils.keccak256(secret);
+    // Use SHA256 for NEAR compatibility (NEAR contract uses sha2::Sha256)
+    const hashlock = ethers.utils.sha256(secret);
 
     bridgeData.secret = secret;
     bridgeData.hashlock = hashlock;
@@ -345,6 +346,50 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
     console.log("🔍 Found EscrowCreated event:", escrowCreatedEvent);
     updateBridgeLog(`🔍 EscrowCreated event found: ${!!escrowCreatedEvent}`);
 
+    // Process the EscrowCreated event if found
+    if (escrowCreatedEvent) {
+      const { escrow, amount: eventAmount } = escrowCreatedEvent.args;
+      const hashlock = escrowCreatedEvent.args[1];
+      const nearAccount = escrowCreatedEvent.args[2] || escrowCreatedEvent.args[3]; // Handle both event types
+      
+      updateBridgeLog(`📦 ETH HTLC created: ${escrow.substring(0, 14)}...`);
+      updateBridgeLog(`🔄 Bridge resolver will automatically create NEAR HTLC...`);
+      updateBridgeLog(`✅ Bridge ready! ETH side locked, NEAR side being created automatically.`);
+      updateBridgeLog(`⏳ Bridge-listener will monitor and auto-complete...`);
+
+      // Generate swapId for partial fills tracking
+      const swapId = ethers.utils.keccak256(
+        ethers.utils.solidityPack(
+          ['address', 'bytes32', 'uint256', 'string', 'uint256'],
+          [escrow, hashlock, 0, nearAccount, receipt.blockNumber || block.timestamp]
+        )
+      );
+      
+      updateBridgeLog(`🔍 Swap ID for tracking: ${swapId.substring(0, 14)}...`);
+      setCurrentSwapId(swapId);
+      setShowPartialFills(true);
+
+      setBridgeData((prev: any) => ({ 
+        ...prev, 
+        status: "success",
+        swapId: swapId,
+        escrow: escrow,
+        partialFillsEnabled: true
+      }));
+      setIsLoading(false);
+
+      onBridgeSuccess?.(bridgeData);
+      loadBridgeStats();
+      
+      // 🔄 AUTO-COMPLETE ETH→NEAR: Monitor for NEAR HTLC creation and auto-complete
+      if (fromChain === 'ethereum' && toChain === 'near' && bridgeData.secret) {
+        updateBridgeLog(`🔍 Monitoring for NEAR HTLC creation to auto-complete...`);
+        monitorAndCompleteNearHTLC(bridgeData.secret, hashlock);
+      }
+      
+      return; // Exit early since we found the event
+    }
+
     // Try to parse logs manually if events are empty
     if (!escrowCreatedEvent && receipt.logs && receipt.logs.length > 0) {
       console.log("🔍 Trying to parse logs manually...");
@@ -374,84 +419,113 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
           const nearAccount = manualEscrowEvent.args[2];
           
           updateBridgeLog(`📦 ETH HTLC created: ${escrow.substring(0, 14)}...`);
-          updateBridgeLog(`🔄 Creating NEAR HTLC with your wallet...`);
+          updateBridgeLog(`🔄 Bridge resolver will automatically create NEAR HTLC...`);
+          updateBridgeLog(`✅ Bridge ready! ETH side locked, NEAR side being created automatically.`);
+          updateBridgeLog(`⏳ Bridge-listener will monitor and auto-complete...`);
 
-          const nearAmountForHTLC = bridgeData.convertedAmount || fromAmount;
+          // Generate swapId for partial fills tracking
+          const swapId = ethers.utils.keccak256(
+            ethers.utils.solidityPack(
+              ['address', 'bytes32', 'uint256', 'string', 'uint256'],
+              [escrow, hashlock, 0, nearAccount, receipt.blockNumber || block.timestamp]
+            )
+          );
           
-          try {
-            await createNearHTLC(escrow, hashlock, nearAmountForHTLC);
-            
-            updateBridgeLog(`✅ Bridge ready! Both ETH and NEAR HTLCs created.`);
-            updateBridgeLog(`⏳ Bridge-listener will monitor and auto-complete...`);
+          updateBridgeLog(`🔍 Swap ID for tracking: ${swapId.substring(0, 14)}...`);
+          setCurrentSwapId(swapId);
+          setShowPartialFills(true);
 
-            // Generate swapId for partial fills tracking
-            const swapId = ethers.utils.keccak256(
-              ethers.utils.solidityPack(
-                ['address', 'bytes32', 'uint256', 'string', 'uint256'],
-                [escrow, hashlock, 0, nearAccount, receipt.blockNumber || block.timestamp]
-              )
-            );
-            
-            updateBridgeLog(`🔍 Swap ID for tracking: ${swapId.substring(0, 14)}...`);
-            setCurrentSwapId(swapId);
-            setShowPartialFills(true);
+          setBridgeData((prev: any) => ({ 
+            ...prev, 
+            status: "success",
+            swapId: swapId,
+            escrow: escrow,
+            partialFillsEnabled: true
+          }));
+          setIsLoading(false);
 
-            setBridgeData((prev: any) => ({ 
-              ...prev, 
-              status: "success",
-              swapId: swapId,
-              escrow: escrow,
-              partialFillsEnabled: true
-            }));
-            setIsLoading(false);
-
-            onBridgeSuccess?.(bridgeData);
-            loadBridgeStats();
-            return; // Exit early since we found the event
-          } catch (error) {
-            updateBridgeLog(`❌ Failed to create NEAR HTLC: ${error}`);
-            setBridgeData((prev: any) => ({ ...prev, status: "error" }));
-            setIsLoading(false);
-            throw error;
-          }
+          onBridgeSuccess?.(bridgeData);
+          loadBridgeStats();
+          return; // Exit early since we found the event
         }
       } catch (parseError) {
         console.log("❌ Failed to parse logs manually:", parseError);
       }
     }
 
-    if (escrowCreatedEvent) {
-      const { escrow, amount: eventAmount } = escrowCreatedEvent.args;
-      updateBridgeLog(`📦 ETH HTLC created: ${escrow.substring(0, 14)}...`);
-      updateBridgeLog(`🔄 Creating NEAR HTLC with your wallet...`);
+    // If we reach here, no EscrowCreated event was found
+    updateBridgeLog(`❌ No EscrowCreated event found in transaction!`);
+    updateBridgeLog(`❌ Bridge creation failed - please check the transaction`);
+    setBridgeData((prev: any) => ({ ...prev, status: "error" }));
+    setIsLoading(false);
+    console.error("❌ No EscrowCreated event found in receipt");
+  };
 
-      // Create NEAR HTLC - use converted amount for NEAR
-      const nearAmountForHTLC = bridgeData.convertedAmount || fromAmount;
+  // Monitor for NEAR HTLC creation and auto-complete for ETH→NEAR bridges
+  const monitorAndCompleteNearHTLC = async (secret: string, hashlock: string) => {
+    const maxAttempts = 30; // Monitor for 30 attempts (5 minutes)
+    let attempts = 0;
+    
+    const checkInterval = setInterval(async () => {
+      attempts++;
       
       try {
-        await createNearHTLC(escrow, hashlock, nearAmountForHTLC);
+        // Check bridge-listener API for bridges with our hashlock
+        const response = await fetch(`${BRIDGE_CONFIG.listenerApi}/bridges`);
+        const result = await response.json();
         
-        updateBridgeLog(`✅ Bridge ready! Both ETH and NEAR HTLCs created.`);
-        updateBridgeLog(`⏳ Bridge-listener will monitor and auto-complete...`);
-
-        setBridgeData((prev: any) => ({ ...prev, status: "success" }));
-        setIsLoading(false);
-
-        onBridgeSuccess?.(bridgeData);
-        loadBridgeStats();
+        console.log('🔍 Bridge API response:', result);
+        
+        // Handle different response formats
+        let bridges = [];
+        if (Array.isArray(result)) {
+          bridges = result;
+        } else if (result.bridges && Array.isArray(result.bridges)) {
+          bridges = result.bridges;
+        } else if (result.data && Array.isArray(result.data)) {
+          bridges = result.data;
+        } else {
+          console.warn('⚠️ Unexpected bridge API response format:', result);
+          return;
+        }
+        
+        // Find our ETH→NEAR bridge that has a NEAR contract ID
+        const ourBridge = bridges.find((bridge: any) => 
+          bridge.type === 'ETH_TO_NEAR' && 
+          bridge.hashlock === hashlock && 
+          bridge.contractId && 
+          bridge.status === 'PENDING'
+        );
+        
+        if (ourBridge) {
+          console.log(`🎯 Found NEAR HTLC ready for completion:`, ourBridge);
+          console.log(`🎯 Contract ID to complete:`, ourBridge.contractId);
+          updateBridgeLog(`🎯 NEAR HTLC detected! Auto-completing with secret...`);
+          
+          try {
+            // Complete the NEAR HTLC with our secret
+            await completeNearHTLC(ourBridge.contractId, secret, hashlock);
+            updateBridgeLog(`✅ Bridge completed! You should receive your NEAR now.`);
+            
+            clearInterval(checkInterval);
+            return;
+            
+          } catch (completionError) {
+            console.error('❌ Failed to complete NEAR HTLC:', completionError);
+            updateBridgeLog(`❌ Failed to complete NEAR HTLC: ${completionError}`);
+          }
+        }
+        
+        if (attempts >= maxAttempts) {
+          console.log('⏰ Timeout waiting for NEAR HTLC creation');
+          updateBridgeLog(`⏰ Timeout waiting for NEAR HTLC - you may need to complete manually`);
+          clearInterval(checkInterval);
+        }
+        
       } catch (error) {
-        updateBridgeLog(`❌ Failed to create NEAR HTLC: ${error}`);
-        setBridgeData((prev: any) => ({ ...prev, status: "error" }));
-        setIsLoading(false);
-        throw error;
+        console.error('❌ Error monitoring NEAR HTLC:', error);
       }
-    } else {
-      updateBridgeLog(`❌ No EscrowCreated event found in transaction!`);
-      updateBridgeLog(`❌ Bridge creation failed - please check the transaction`);
-      setBridgeData((prev: any) => ({ ...prev, status: "error" }));
-      setIsLoading(false);
-      console.error("❌ No EscrowCreated event found in receipt");
-    }
+    }, 10000); // Check every 10 seconds
   };
 
   const handleNearToEthBridge = async (bridgeData: any) => {
@@ -742,7 +816,7 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
     );
 
     console.log("🔧 NEAR HTLC call params:", {
-      contractId: "sharknadok.testnet",
+      contractId: BRIDGE_CONFIG.nearContract,
       method: "create_cross_chain_htlc",
       args,
       deposit: nearYocto.toString(),
@@ -756,7 +830,7 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
     );
 
     console.log("🔧 About to call NEAR function with:", {
-      contractId: "sharknadok.testnet",
+      contractId: BRIDGE_CONFIG.nearContract,
       method: "create_cross_chain_htlc",
       args,
       deposit: nearYocto.toString(),
@@ -772,7 +846,7 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
       console.log("🧪 Testing NEAR wallet with minimal call...");
       
       const result = await callFunction({
-        contractId: "sharknadok.testnet",
+        contractId: BRIDGE_CONFIG.nearContract,
         method: "create_cross_chain_htlc",
         args,
         deposit: nearYocto.toString(),
@@ -848,7 +922,10 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
       updateBridgeLog(`✅ Secret/hashlock verification passed!`);
     }
 
-    const preimageBase64 = Buffer.from(secretHex, "hex").toString("base64");
+    // Convert secret to base64 using ethers utilities (browser-compatible)
+    const secretBytesForCompletion = ethers.utils.arrayify("0x" + secretHex);
+    const preimageBase64 = btoa(String.fromCharCode(...Array.from(secretBytesForCompletion)));
+    console.log("🔧 Secret bytes array:", Array.from(secretBytesForCompletion));
     console.log("🔧 Preimage base64:", preimageBase64);
 
     const args = {
@@ -859,8 +936,24 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
 
     console.log("🔧 NEAR completion args:", args);
 
+    // Extract the actual contract address from the HTLC contractId
+    // Format: cc-{contract_address}-{receiver}-{amount}-{timestamp}
+    let actualContractId = BRIDGE_CONFIG.nearContract; // fallback
+    
+    if (contractId.startsWith('cc-')) {
+      const parts = contractId.split('-');
+      if (parts.length >= 3) {
+        // Extract contract address (parts[1]) - already includes .testnet
+        actualContractId = parts[1];
+        console.log(`🔧 Extracted contract address from HTLC ID: ${actualContractId}`);
+      }
+    }
+    
+    console.log(`🔧 Calling contract: ${actualContractId}`);
+    console.log(`🔧 With HTLC ID: ${contractId}`);
+
     const result = await callFunction({
-      contractId: "sharknadok.testnet",
+      contractId: actualContractId,
       method: "complete_cross_chain_swap",
       args,
       deposit: "0",
@@ -875,7 +968,8 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
 
     // Generate secret and hashlock
     const secret = ethers.utils.hexlify(ethers.utils.randomBytes(32));
-    const hashlock = ethers.utils.keccak256(secret);
+    // Use SHA256 for NEAR compatibility (NEAR contract uses sha2::Sha256)
+    const hashlock = ethers.utils.sha256(secret);
 
     bridgeData.secret = secret;
     bridgeData.hashlock = hashlock;
@@ -944,7 +1038,8 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
 
     // Generate secret and hashlock
     const secret = ethers.utils.hexlify(ethers.utils.randomBytes(32));
-    const hashlock = ethers.utils.keccak256(secret);
+    // Use SHA256 for NEAR compatibility (NEAR contract uses sha2::Sha256)
+    const hashlock = ethers.utils.sha256(secret);
 
     bridgeData.secret = secret;
     bridgeData.hashlock = hashlock;
