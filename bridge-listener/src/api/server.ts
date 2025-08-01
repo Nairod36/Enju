@@ -101,16 +101,27 @@ export class BridgeAPI {
     this.app.post('/bridges/initiate', async (req, res) => {
       try {
         const request: SwapRequest = req.body;
+        console.log('🚀 Bridge initiate request:', JSON.stringify(request, null, 2));
         
         // Validate request
-        if (!request.type || !request.amount || !request.hashlock || !request.timelock) {
+        if (!request.type || !request.amount || !request.hashlock || !request.timelock || !request.ethRecipient || !request.nearAccount) {
+          console.log('❌ Validation failed - missing fields:', {
+            type: !!request.type,
+            amount: !!request.amount,
+            hashlock: !!request.hashlock,
+            timelock: !!request.timelock,
+            ethRecipient: !!request.ethRecipient,
+            nearAccount: !!request.nearAccount
+          });
           return res.status(400).json({
             success: false,
-            error: 'Missing required fields: type, amount, hashlock, timelock'
+            error: 'Missing required fields: type, amount, hashlock, timelock, ethRecipient, nearAccount'
           });
         }
 
+        console.log('✅ Validation passed, initiating bridge...');
         const bridgeId = await this.resolver.initiateBridge(request);
+        console.log('✅ Bridge initiated successfully:', bridgeId);
         
         res.json({
           success: true,
@@ -120,6 +131,8 @@ export class BridgeAPI {
           }
         });
       } catch (error) {
+        console.error('❌ Bridge initiate error:', error);
+        console.error('❌ Error stack:', error instanceof Error ? error.stack : 'No stack');
         res.status(500).json({
           success: false,
           error: error instanceof Error ? error.message : 'Unknown error'
@@ -198,6 +211,16 @@ export class BridgeAPI {
       res.json({
         success: true,
         data: this.resolver.getStatus()
+      });
+    });
+
+    // Test endpoint for debugging
+    this.app.post('/test-bridge', (req, res) => {
+      console.log('🧪 Test bridge request:', JSON.stringify(req.body, null, 2));
+      res.json({
+        success: true,
+        message: 'Test successful',
+        received: req.body
       });
     });
 

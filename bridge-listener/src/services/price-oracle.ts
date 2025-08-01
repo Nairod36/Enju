@@ -24,7 +24,6 @@ export class PriceOracle {
     
     // Return cached data if still valid
     if (cached && Date.now() < cached.expiry) {
-      console.log('📊 Using cached price data');
       return { ...cached.data, source: 'cache' };
     }
 
@@ -151,8 +150,6 @@ export class PriceOracle {
     const trxAmountNum = parseFloat(trxAmount);
     const ethAmount = trxAmountNum * prices.trxToEth;
     
-    console.log(`💱 Converting ${trxAmount} TRX → ${ethAmount.toFixed(8)} ETH (rate: ${prices.trxToEth.toFixed(8)})`);
-    
     return ethAmount.toFixed(18); // Return with 18 decimals for precision
   }
 
@@ -163,8 +160,6 @@ export class PriceOracle {
     const prices = await this.getCurrentPrices();
     const ethAmountNum = parseFloat(ethAmount);
     const trxAmount = ethAmountNum * prices.ethToTrx;
-    
-    console.log(`💱 Converting ${ethAmount} ETH → ${trxAmount.toFixed(6)} TRX (rate: ${prices.ethToTrx.toFixed(2)})`);
     
     return trxAmount.toFixed(6); // Return with 6 decimals for TRX
   }
@@ -177,8 +172,6 @@ export class PriceOracle {
     const nearAmountNum = parseFloat(nearAmount);
     const ethAmount = nearAmountNum * prices.nearToEth;
     
-    console.log(`💱 Converting ${nearAmount} NEAR → ${ethAmount.toFixed(8)} ETH (rate: ${prices.nearToEth.toFixed(8)})`);
-    
     return ethAmount.toFixed(18); // Return with 18 decimals for precision
   }
 
@@ -189,8 +182,6 @@ export class PriceOracle {
     const prices = await this.getCurrentPrices();
     const ethAmountNum = parseFloat(ethAmount);
     const nearAmount = ethAmountNum * prices.ethToNear;
-    
-    console.log(`💱 Converting ${ethAmount} ETH → ${nearAmount.toFixed(8)} NEAR (rate: ${prices.ethToNear.toFixed(2)})`);
     
     return nearAmount.toFixed(8); // Return with 8 decimals for NEAR
   }

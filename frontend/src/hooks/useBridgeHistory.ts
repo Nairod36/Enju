@@ -124,7 +124,7 @@ function generateMockBridgeHistory(address: string): BridgeHistoryItem[] {
       ethTxHash: '0x' + Math.random().toString(16).substring(2, 66),
       nearTxHash: Math.random().toString(16).substring(2, 44),
       ethRecipient: address,
-      nearAccount: 'mat-event.testnet',
+      nearAccount: 'matthias-dev.testnet',
       createdAt: now - 2 * 60 * 60 * 1000, // 2 hours ago
       completedAt: now - 2 * 60 * 60 * 1000 + 45000, // 45 seconds later
       hashlock: '0x' + Math.random().toString(16).substring(2, 66),
@@ -139,7 +139,7 @@ function generateMockBridgeHistory(address: string): BridgeHistoryItem[] {
       ethTxHash: '0x' + Math.random().toString(16).substring(2, 66),
       nearTxHash: Math.random().toString(16).substring(2, 44),
       ethRecipient: address,
-      nearAccount: 'mat-event.testnet',
+      nearAccount: 'matthias-dev.testnet',
       createdAt: now - 24 * 60 * 60 * 1000, // 24 hours ago
       completedAt: now - 24 * 60 * 60 * 1000 + 52000, // 52 seconds later
       hashlock: '0x' + Math.random().toString(16).substring(2, 66),
@@ -153,7 +153,7 @@ function generateMockBridgeHistory(address: string): BridgeHistoryItem[] {
       toChain: 'near',
       ethTxHash: '0x' + Math.random().toString(16).substring(2, 66),
       ethRecipient: address,
-      nearAccount: 'mat-event.testnet',
+      nearAccount: 'matthias-dev.testnet',
       createdAt: now - 5 * 60 * 1000, // 5 minutes ago
       hashlock: '0x' + Math.random().toString(16).substring(2, 66),
     },

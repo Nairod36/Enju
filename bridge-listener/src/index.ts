@@ -48,9 +48,12 @@ async function main() {
   console.log('📋 Configuration:');
   console.log(`   ETH RPC: ${config.ethRpcUrl}`);
   console.log(`   ETH Bridge: ${config.ethBridgeContract}`);
+  console.log(`   ETH Private Key: ${config.ethPrivateKey.substring(0, 10)}...${config.ethPrivateKey.substring(config.ethPrivateKey.length - 4)} (${config.ethPrivateKey.length} chars)`);
   console.log(`   NEAR Network: ${config.nearNetworkId}`);
+  console.log(`   NEAR RPC: ${config.nearRpcUrl}`);
   console.log(`   NEAR Contract: ${config.nearContractId}`);
   console.log(`   NEAR Account: ${config.nearAccountId}`);
+  console.log(`   NEAR Private Key: ${config.nearPrivateKey.substring(0, 10)}...${config.nearPrivateKey.substring(config.nearPrivateKey.length - 4)} (${config.nearPrivateKey.length} chars)`);
   console.log(`   1inch Factory: ${config.inchEscrowFactory}`);
   console.log(`   API Port: ${port}`);
   
