@@ -34,7 +34,7 @@ export function AppDashboard() {
   const getNetworkName = (chainId: number | undefined) => {
     switch (chainId) {
       case 1:
-        return "Ethereum Mainnet";
+        return "Ethereum Fork Mainnet";
       case 11155111:
         return "Sepolia Testnet";
       case 31337:
@@ -248,7 +248,7 @@ export function AppDashboard() {
       )}
 
       {/* Header */}
-      <div className="bg-white border-b border-gray-200">
+      <div className="bg-gray-50 border-b border-gray-200">
         <div className="max-w-full pr-8 py-4 pl-20">
           <div className="flex items-center justify-between">
             <div>
@@ -266,6 +266,18 @@ export function AppDashboard() {
                     <div className="w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse"></div>
                     {getNetworkName(chainId)}
                   </div>
+                  {/* Explorer Link */}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 px-3 text-xs font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 border border-gray-200 rounded-full"
+                    onClick={() =>
+                      window.open("http://vps-b11044fd.vps.ovh.net/", "_blank")
+                    }
+                  >
+                    <ExternalLink className="w-3 h-3 mr-1.5" />
+                    Explorer
+                  </Button>
                 </div>
                 <div className="w-px h-8 bg-gray-200"></div>
 
@@ -466,36 +478,38 @@ export function AppDashboard() {
 
         {/* Main Content - Bridge & Activity */}
         <div className="flex-1 bg-white flex flex-col">
-          {/* Bridge Section */}
-          <div className="px-8 py-8 border-b border-gray-200">
-            {!isConnected ? (
-              <div className="text-center py-16">
-                <div className="w-16 h-16 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl mx-auto mb-6 flex items-center justify-center shadow-lg">
-                  <MapPin className="w-8 h-8 text-white" />
+          {/* Bridge Section - Sticky */}
+          <div className="sticky top-0 z-10 bg-white border-b border-gray-200 shadow-sm">
+            <div className="px-8 py-8">
+              {!isConnected ? (
+                <div className="text-center py-16">
+                  <div className="w-16 h-16 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl mx-auto mb-6 flex items-center justify-center shadow-lg">
+                    <MapPin className="w-8 h-8 text-white" />
+                  </div>
+                  <h2 className="text-2xl font-bold text-gray-900 mb-3">
+                    Connect Your Wallet
+                  </h2>
+                  <p className="text-gray-500 mb-6">
+                    Connect to start bridging assets across chains
+                  </p>
+                  <w3m-button />
                 </div>
-                <h2 className="text-2xl font-bold text-gray-900 mb-3">
-                  Connect Your Wallet
-                </h2>
-                <p className="text-gray-500 mb-6">
-                  Connect to start bridging assets across chains
-                </p>
-                <w3m-button />
-              </div>
-            ) : (
-              <ModernBridge
-                onBridgeSuccess={() => {
-                  setTreeCount((prev) => prev + 1);
-                  setTimeout(() => {
-                    refreshHistory();
-                  }, 5000);
-                }}
-              />
-            )}
+              ) : (
+                <ModernBridge
+                  onBridgeSuccess={() => {
+                    setTreeCount((prev) => prev + 1);
+                    setTimeout(() => {
+                      refreshHistory();
+                    }, 5000);
+                  }}
+                />
+              )}
+            </div>
           </div>
 
           {/* Recent Activity */}
-          <div className="flex-1 flex flex-col">
-            <div className="px-8 py-6 border-b border-gray-200">
+          <div className="flex-1 flex flex-col overflow-hidden">
+            <div className="px-8 py-6 border-b border-gray-200 bg-gray-50">
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-semibold text-gray-900">
                   Recent Activity
@@ -512,117 +526,141 @@ export function AppDashboard() {
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto px-8">
-              {isLoadingHistory ? (
-                <div className="flex items-center justify-center py-12">
-                  <div className="flex items-center">
-                    <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mr-3"></div>
-                    <span className="text-gray-600">Loading...</span>
+            <div className="flex-1 overflow-y-auto bg-white">
+              <div className="px-8 py-4">
+                {isLoadingHistory ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="flex items-center">
+                      <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mr-3"></div>
+                      <span className="text-gray-600">Loading...</span>
+                    </div>
                   </div>
-                </div>
-              ) : bridgeHistory.length === 0 ? (
-                <div className="text-center py-12">
-                  <ArrowRightLeft className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                  <h4 className="text-sm font-medium text-gray-900 mb-2">
-                    No transactions yet
-                  </h4>
-                  <p className="text-xs text-gray-500">
-                    {!isConnected
-                      ? "Connect your wallet to view transactions"
-                      : "Start bridging to see your activity here"}
-                  </p>
-                </div>
-              ) : (
-                <div className="divide-y divide-gray-100">
-                  {bridgeHistory.map((bridge) => (
-                    <div
-                      key={bridge.id}
-                      className="py-4 hover:bg-gray-50 transition-colors -mx-8 px-8"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-4">
-                          <div
-                            className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                              bridge.status === "COMPLETED"
-                                ? "bg-green-100"
-                                : bridge.status === "PENDING"
-                                ? "bg-yellow-100"
-                                : "bg-red-100"
-                            }`}
-                          >
-                            {bridge.status === "COMPLETED" && (
-                              <CheckCircle className="w-5 h-5 text-green-600" />
-                            )}
-                            {bridge.status === "PENDING" && (
-                              <Activity className="w-5 h-5 text-yellow-600 animate-pulse" />
-                            )}
-                            {bridge.status === "FAILED" && (
-                              <AlertCircle className="w-5 h-5 text-red-600" />
-                            )}
-                          </div>
-                          <div>
-                            <div className="text-sm font-medium text-gray-900">
-                              {formatAmount(bridge.amount).toFixed(4)}{" "}
-                              {bridge.fromChain === "ethereum" ? "ETH" : "NEAR"}
+                ) : bridgeHistory.length === 0 ? (
+                  <div className="text-center py-12">
+                    <div className="w-12 h-12 bg-gray-100 rounded-xl mx-auto mb-4 flex items-center justify-center">
+                      <ArrowRightLeft className="w-6 h-6 text-gray-400" />
+                    </div>
+                    <h4 className="text-sm font-medium text-gray-900 mb-2">
+                      No transactions yet
+                    </h4>
+                    <p className="text-xs text-gray-500">
+                      {!isConnected
+                        ? "Connect your wallet to view transactions"
+                        : "Start bridging to see your activity here"}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {bridgeHistory.map((bridge) => (
+                      <div
+                        key={bridge.id}
+                        className="bg-white border border-gray-200 rounded-xl p-4 hover:shadow-md transition-all duration-200 hover:border-gray-300"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-4">
+                            <div
+                              className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-sm ${
+                                bridge.status === "COMPLETED"
+                                  ? "bg-emerald-50 border border-emerald-200"
+                                  : bridge.status === "PENDING"
+                                  ? "bg-amber-50 border border-amber-200"
+                                  : "bg-red-50 border border-red-200"
+                              }`}
+                            >
+                              {bridge.status === "COMPLETED" && (
+                                <CheckCircle className="w-5 h-5 text-emerald-600" />
+                              )}
+                              {bridge.status === "PENDING" && (
+                                <Activity className="w-5 h-5 text-amber-600 animate-pulse" />
+                              )}
+                              {bridge.status === "FAILED" && (
+                                <AlertCircle className="w-5 h-5 text-red-600" />
+                              )}
                             </div>
-                            <div className="text-xs text-gray-500">
-                              {bridge.fromChain === "ethereum"
-                                ? "Ethereum"
-                                : "NEAR"}{" "}
-                              →{" "}
-                              {bridge.toChain === "ethereum"
-                                ? "Ethereum"
-                                : "NEAR"}
+                            <div>
+                              <div className="flex items-center space-x-2">
+                                <span className="text-sm font-semibold text-gray-900">
+                                  {formatAmount(bridge.amount).toFixed(4)}{" "}
+                                  {bridge.fromChain === "ethereum"
+                                    ? "ETH"
+                                    : "NEAR"}
+                                </span>
+                                <div
+                                  className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                    bridge.status === "COMPLETED"
+                                      ? "bg-emerald-100 text-emerald-800"
+                                      : bridge.status === "PENDING"
+                                      ? "bg-amber-100 text-amber-800"
+                                      : "bg-red-100 text-red-800"
+                                  }`}
+                                >
+                                  {bridge.status === "COMPLETED" &&
+                                    "✓ Complete"}
+                                  {bridge.status === "PENDING" && "⏳ Pending"}
+                                  {bridge.status === "FAILED" && "✗ Failed"}
+                                </div>
+                              </div>
+                              <div className="flex items-center space-x-2 mt-1">
+                                <span className="text-xs text-gray-500">
+                                  {bridge.fromChain === "ethereum"
+                                    ? "🔷 Ethereum"
+                                    : "🔺 NEAR"}{" "}
+                                  →{" "}
+                                  {bridge.toChain === "ethereum"
+                                    ? "🔷 Ethereum"
+                                    : "🔺 NEAR"}
+                                </span>
+                              </div>
                             </div>
                           </div>
-                        </div>
-                        <div className="text-right">
-                          <div className="text-sm font-semibold text-gray-900">
-                            $
-                            {(
-                              formatAmount(bridge.amount) * 2500
-                            ).toLocaleString("en-US", {
-                              maximumFractionDigits: 0,
-                            })}
-                          </div>
-                          <div className="flex items-center space-x-1 mt-1 justify-end">
-                            {bridge.ethTxHash && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-6 w-6 p-0"
-                                onClick={() =>
-                                  window.open(
-                                    `https://etherscan.io/tx/${bridge.ethTxHash}`,
-                                    "_blank"
-                                  )
-                                }
-                              >
-                                <ExternalLink className="w-3 h-3" />
-                              </Button>
-                            )}
-                            {bridge.nearTxHash && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-6 w-6 p-0"
-                                onClick={() =>
-                                  window.open(
-                                    `https://testnet.nearblocks.io/txns/${bridge.nearTxHash}`,
-                                    "_blank"
-                                  )
-                                }
-                              >
-                                <ExternalLink className="w-3 h-3" />
-                              </Button>
-                            )}
+                          <div className="text-right">
+                            <div className="text-sm font-semibold text-gray-900">
+                              $
+                              {(
+                                formatAmount(bridge.amount) * 2500
+                              ).toLocaleString("en-US", {
+                                maximumFractionDigits: 0,
+                              })}
+                            </div>
+                            <div className="flex items-center space-x-1 mt-1 justify-end">
+                              {bridge.ethTxHash && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 w-6 p-0 hover:bg-gray-100"
+                                  onClick={() =>
+                                    window.open(
+                                      `https://etherscan.io/tx/${bridge.ethTxHash}`,
+                                      "_blank"
+                                    )
+                                  }
+                                >
+                                  <ExternalLink className="w-3 h-3 text-gray-400" />
+                                </Button>
+                              )}
+                              {bridge.nearTxHash && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 w-6 p-0 hover:bg-gray-100"
+                                  onClick={() =>
+                                    window.open(
+                                      `https://testnet.nearblocks.io/txns/${bridge.nearTxHash}`,
+                                      "_blank"
+                                    )
+                                  }
+                                >
+                                  <ExternalLink className="w-3 h-3 text-gray-400" />
+                                </Button>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>

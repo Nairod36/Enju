@@ -11,7 +11,6 @@ import {
 } from "lucide-react";
 import { BridgeModal } from "./BridgeModal";
 import { useAccount } from "wagmi";
-import { useCustomBalance } from "@/hooks/useCustomBalance";
 import { useWalletSelector } from "@near-wallet-selector/react-hook";
 import { ethers } from "ethers";
 import { BRIDGE_CONFIG } from "@/config/networks";
@@ -56,8 +55,7 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
     }
   };
 
-  const { address, isConnected, chainId } = useAccount();
-  const { balance, isLoading: balanceLoading } = useCustomBalance();
+  const { address, isConnected } = useAccount();
   const { signedAccountId: nearAccountId, callFunction } = useWalletSelector();
   const nearConnected = !!nearAccountId;
 
@@ -65,7 +63,6 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
   const {
     address: tronAddress,
     isConnected: tronConnected,
-    balance: tronBalance,
     callContract: callTronContract,
     tronWeb,
   } = useTronWallet();
@@ -1059,57 +1056,6 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
                     <span className="text-lg">{chainLogos[fromChain]}</span>
                     From {chainNames[fromChain]}
                   </label>
-                  {fromChain === "ethereum" && isConnected && (
-                    <div className="text-xs text-gray-500">
-                      {balanceLoading ? (
-                        <div>
-                          <p>Loading balance...</p>
-                          <p className="text-xs text-gray-400">
-                            Chain: {chainId}
-                          </p>
-                        </div>
-                      ) : balance ? (
-                        <div>
-                          <p>
-                            Balance: {parseFloat(balance.formatted).toFixed(4)}{" "}
-                            {balance.symbol}
-                          </p>
-                          <p className="text-xs text-gray-400">
-                            Fork Mainnet ✅
-                          </p>
-                        </div>
-                      ) : (
-                        <div>
-                          <p>No balance available</p>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                  {/* {fromChain === "near" && nearConnected && (
-                    <div className="text-xs text-gray-500">
-                      {nearBalance ? (
-                        <div>
-                          <p>Balance: {nearBalance} NEAR</p>
-                          <p className="text-xs text-gray-400">
-                            NEAR Testnet ✅
-                          </p>
-                        </div>
-                      ) : (
-                        <p>Loading NEAR balance...</p>
-                      )}
-                    </div>
-                  )} */}
-                  {fromChain === "tron" && tronConnected && (
-                    <div className="text-xs text-gray-500">
-                      <div>
-                        <p>
-                          Balance: {parseFloat(tronBalance || "0").toFixed(4)}{" "}
-                          TRX
-                        </p>
-                        <p className="text-xs text-gray-400">TRON Shasta ✅</p>
-                      </div>
-                    </div>
-                  )}
                   {fromChain === "ethereum" && !isConnected && (
                     <p className="text-xs text-red-500">
                       Connect Ethereum wallet
@@ -1387,34 +1333,6 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
                     <span className="font-medium text-gray-700">Fee</span>
                   </div>
                   <span className="font-bold text-blue-700">Free</span>
-                </div>
-              </div>
-
-              {/* Testnet Links */}
-              <div className="bg-gradient-to-r from-gray-50 to-gray-100 p-1.5 rounded-lg border border-gray-200">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-medium text-gray-600">
-                    Need testnet tokens?
-                  </span>
-                  <div className="flex gap-2">
-                    <a
-                      href="https://faucet.paradigm.xyz/"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-blue-600 hover:text-blue-800 font-medium underline"
-                    >
-                      ETH Faucet
-                    </a>
-                    <span className="text-gray-400">•</span>
-                    <a
-                      href="https://near-faucet.io/"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-purple-600 hover:text-purple-800 font-medium underline"
-                    >
-                      NEAR Faucet
-                    </a>
-                  </div>
                 </div>
               </div>
 
