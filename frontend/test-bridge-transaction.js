@@ -12,7 +12,7 @@ async function testBridgeTransaction() {
     
     // Contract ABI (simplified for testing)
     const contractABI = [
-      "function createETHToTRONBridge(bytes32 hashlock, string calldata tronAddress) external payable returns (bytes32 swapId)",
+      "function createETHToTRONBridge(bytes32 hashlock, string calldata tronAddress) external payable returns (address escrow)",
       "event EscrowCreated(address indexed escrow, bytes32 indexed hashlock, uint8 indexed destinationChain, string destinationAccount, uint256 amount)"
     ];
     
