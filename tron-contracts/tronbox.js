@@ -1,46 +1,48 @@
+const port = process.env.HOST_PORT || 9090
+
 module.exports = {
   networks: {
-    mainnet: {
-      // Don't put your private key here:
-      privateKey: process.env.TRON_PRIVATE_KEY,
-      userFeePercentage: 100,
-      feeLimit: 1e8,
-      fullHost: "https://api.trongrid.io",
-      network_id: "1"
-    },
     shasta: {
       privateKey: process.env.TRON_PRIVATE_KEY,
-      userFeePercentage: 50,
-      feeLimit: 1e9, // Augmenté à 1 billion (1000 TRX)
+      userFeePercentage: 100,       // Max percentage for deployment
+      feeLimit: 15000 * 1e6,        // 15000 TRX limit!! (EXTREME MAX)
       fullHost: "https://api.shasta.trongrid.io",
-      network_id: "2"
-    },
-    nile: {
-      privateKey: process.env.TRON_PRIVATE_KEY,
-      userFeePercentage: 100,
-      feeLimit: 1e8,
-      fullHost: "https://nile.trongrid.io",
-      network_id: "3"
+      network_id: "2",
+      consume_user_resource_percent: 100,  // Use max user resources
+      name: 'shasta',
+      originEnergyLimit: 100000000,  // 100M energy limit (EXTREME MAX)
+      deployOriginEnergyLimit: 100000000,
+      createAccountFee: 100000
     },
     development: {
       privateKey: process.env.TRON_PRIVATE_KEY,
       userFeePercentage: 0,
-      feeLimit: 1e8,
-      fullHost: "http://127.0.0.1:9090",
+      feeLimit: 100 * 1e6,
+      fullHost: "http://127.0.0.1:" + port,
       network_id: "9"
-    },
-    compilers: {
-      solc: {
-        version: "0.8.6", // Keep current version for compatibility
-        settings: {
-          optimizer: {
-            enabled: true,
-            runs: 200 // Recommended by Tron docs
+    }
+  },
+  // TronBox-compatible compiler configuration
+  compilers: {
+    solc: {
+      version: "0.8.6",
+      optimizer: {
+        enabled: true,
+        runs: 1,                    // Most aggressive optimization for smaller bytecode
+        details: {
+          yul: true,                // Enable Yul optimizer
+          yulDetails: {
+            stackAllocation: true,
+            optimizerSteps: "dhfoDgvulfnTUtnIf"
           }
+        }
+      },
+      settings: {
+        optimizer: {
+          enabled: true,
+          runs: 1
         }
       }
     }
-  },
-  // if you are use tronide to debug, you must set useZeroFeeContract=true
-  useZeroFeeContract: true
-};
+  }
+}

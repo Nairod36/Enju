@@ -96,40 +96,6 @@ export class EthereumListener extends EventEmitter {
     console.log('🛑 Ethereum listener stopped');
   }
 
-  // Partial Fill handlers
-  private async handlePartialFillCreated(
-    swapId: string,
-    fillId: string,
-    escrow: string,
-    fillAmount: bigint,
-    remainingAmount: bigint,
-    event: ethers.EventLog
-  ): Promise<void> {
-    console.log(`🔥 PARTIAL FILL CREATED:`, {
-      swapId,
-      fillId,
-      escrow,
-      fillAmount: ethers.formatEther(fillAmount),
-      remainingAmount: ethers.formatEther(remainingAmount),
-      txHash: event.transactionHash,
-      block: event.blockNumber,
-      fillPercentage: remainingAmount > 0n
-        ? Math.round(Number((fillAmount * 100n) / (fillAmount + remainingAmount)))
-        : 100
-    });
-
-    this.emit('partialFillCreated', {
-      swapId,
-      fillId,
-      escrow,
-      fillAmount: fillAmount.toString(),
-      remainingAmount: remainingAmount.toString(),
-      txHash: event.transactionHash,
-      blockNumber: event.blockNumber
-    });
-  }
-
-
   private async handleSwapFullyFilled(
     swapId: string,
     totalFilled: bigint,
@@ -243,9 +209,9 @@ export class EthereumListener extends EventEmitter {
       timestamp: new Date().toISOString()
     });
 
-    // Only process NEAR destinations (destinationChain = 0)
-    if (destinationChain !== 0) {
-      console.log(`⚠️ Skipping non-NEAR destination chain: ${destinationChain}`);
+    // Process NEAR (0) and TRON (1) destinations
+    if (destinationChain !== 0 && destinationChain !== 1) {
+      console.log(`⚠️ Skipping unsupported destination chain: ${destinationChain}`);
       return;
     }
 
@@ -272,26 +238,49 @@ export class EthereumListener extends EventEmitter {
     console.log(`✅ Processing new ETH → NEAR bridge:`, {
       escrow,
       hashlock,
-      nearAccount: destinationAccount,
+      destinationAccount,
       amount: ethers.formatEther(amount),
       txHash: event.transactionHash,
       block: event.blockNumber,
       sender: senderAddress
     });
 
-    const bridgeEvent: EthEscrowCreatedEvent = {
-      escrow,
-      hashlock,
-      nearAccount: destinationAccount,
-      amount: amount.toString(),
-      blockNumber: event.blockNumber!,
-      txHash: event.transactionHash!,
-      from: senderAddress // Add sender address to event
-    };
+    if (destinationChain === 0) {
+      // ETH → NEAR bridge
+      const bridgeEvent: EthEscrowCreatedEvent = {
+        escrow,
+        hashlock,
+        nearAccount: destinationAccount,
+        amount: amount.toString(),
+        blockNumber: event.blockNumber!,
+        txHash: event.transactionHash!,
+        from: senderAddress // Add sender address to event
+      };
 
-    console.log(`🚀 Emitting 'escrowCreated' event to bridge-resolver:`, bridgeEvent);
-    this.emit('escrowCreated', bridgeEvent);
-    console.log(`✅ Event emitted successfully to bridge-resolver`);
+      console.log(`🚀 Emitting 'escrowCreated' event to bridge-resolver:`, bridgeEvent);
+      this.emit('escrowCreated', bridgeEvent);
+      console.log(`✅ Event emitted successfully to bridge-resolver`);
+    } else if (destinationChain === 1) {
+      // ETH → TRON bridge
+      console.log(`🔥 ETH → TRON bridge detected, emitting 'ethToTronBridge' event:`, {
+        escrow,
+        hashlock,
+        tronAddress: destinationAccount,
+        amount: amount.toString(),
+        blockNumber: event.blockNumber!,
+        txHash: event.transactionHash!
+      });
+
+      this.emit('ethToTronBridge', {
+        escrow,
+        hashlock,
+        tronAddress: destinationAccount,
+        amount: amount.toString(),
+        blockNumber: event.blockNumber!,
+        txHash: event.transactionHash!
+      });
+      console.log(`✅ ETH → TRON event emitted successfully to bridge-resolver`);
+    }
   }
 
   private async pollForMissedEvents(): Promise<void> {
@@ -352,6 +341,47 @@ export class EthereumListener extends EventEmitter {
     } catch (error) {
       console.error('❌ Error polling for missed events:', error);
     }
+  }
+
+  private async handlePartialFillCreated(
+    swapId: string,
+    fillId: string,
+    escrow: string,
+    fillAmount: bigint,
+    remainingAmount: bigint,
+    event: ethers.EventLog
+  ): Promise<void> {
+    const eventId = `${event.transactionHash}-${event.index}`;
+    console.log(`🔥 INCOMING ETH EVENT: PartialFillCreated detected!`);
+    console.log(`📋 Event details:`, {
+      eventId,
+      swapId,
+      fillId,
+      escrow,
+      fillAmount: ethers.formatEther(fillAmount),
+      remainingAmount: ethers.formatEther(remainingAmount),
+      txHash: event.transactionHash,
+      block: event.blockNumber,
+      timestamp: new Date().toISOString()
+    });
+
+    // Avoid duplicates
+    if (this.processedEvents.has(eventId)) {
+      console.log(`⚠️ Event ${eventId} already processed, skipping...`);
+      return;
+    }
+    this.processedEvents.add(eventId);
+
+    this.emit('partialFillCreated', {
+      swapId,
+      fillId,
+      escrow,
+      fillAmount: fillAmount.toString(),
+      remainingAmount: remainingAmount.toString(),
+      txHash: event.transactionHash,
+      blockNumber: event.blockNumber
+    });
+    console.log(`✅ PartialFillCreated event emitted successfully`);
   }
 
   async getSwapDetails(swapId: string): Promise<any> {

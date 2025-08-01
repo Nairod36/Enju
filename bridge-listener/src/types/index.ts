@@ -1,20 +1,25 @@
 export interface BridgeEvent {
   id: string;
-  type: 'ETH_TO_NEAR' | 'NEAR_TO_ETH';
-  status: 'PENDING' | 'COMPLETED' | 'FAILED' | 'REFUNDED';
+  type: 'ETH_TO_NEAR' | 'NEAR_TO_ETH' | 'ETH_TO_TRON' | 'TRON_TO_ETH';
+  status: 'PENDING' | 'PROCESSING' | 'ACTIVE' | 'COMPLETED' | 'FAILED' | 'REFUNDED';
   ethTxHash?: string;
   nearTxHash?: string;
+  tronTxHash?: string;
   escrowAddress?: string;
   contractId?: string;
+  orderHash?: string; // 1inch Fusion+ order hash
   hashlock: string;
   secret?: string;
   amount: string;
-  ethRecipient: string;
-  nearAccount: string;
-  timelock: number;
+  ethRecipient?: string;
+  nearAccount?: string;
+  tronAddress?: string; // TRON address for ETH<->TRON swaps
+  tronSender?: string; // TRON sender address for TRON->ETH bridges
+  timelock?: number;
   createdAt: number;
   completedAt?: number;
   ethCompletionTxHash?: string;
+  error?: string; // Error message for failed bridges
 }
 
 export interface EthEscrowCreatedEvent {
@@ -49,11 +54,17 @@ export interface ResolverConfig {
   nearAccountId: string;
   nearPrivateKey: string;
   inchEscrowFactory: string;
+  tronConfig?: {
+    privateKey: string;
+    fullHost: string;
+    bridgeContract: string;
+    chainId: string;
+  };
   crossChainResolverAddress: string; // Notre contrat déployé
 }
 
 export interface SwapRequest {
-  type: 'ETH_TO_NEAR' | 'NEAR_TO_ETH';
+  type: 'ETH_TO_NEAR' | 'NEAR_TO_ETH' | 'ETH_TO_TRON' | 'TRON_TO_ETH';
   amount: string;
   hashlock: string;
   timelock: number;

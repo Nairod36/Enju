@@ -29,7 +29,7 @@ export function useCustomBalance() {
         
         // Use fork RPC for mainnet chain ID (our fork)
         if (chainId === 1) {
-          rpcUrl = 'http://vps-b11044fd.vps.ovh.net:8545/';
+          rpcUrl = 'http://vps-b11044fd.vps.ovh.net/rpc';
         } else {
           // For other networks, we might not have balance
           setBalance(null);

@@ -77,6 +77,12 @@ export function useTronWallet() {
       try {
         const balanceInSun = await tronWeb.trx.getBalance(address);
         balanceInTrx = tronWeb.fromSun(balanceInSun).toString();
+        console.log('🔍 TRON Wallet Balance Fetch:', {
+          address,
+          balanceInSun: balanceInSun?.toString(),
+          balanceInTrx,
+          timestamp: new Date().toISOString()
+        });
       } catch (balanceError) {
         console.warn('Failed to fetch TRON balance:', balanceError);
         balanceInTrx = '0'; // Default to 0 if balance fetch fails

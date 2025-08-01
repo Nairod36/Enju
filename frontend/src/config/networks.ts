@@ -1,9 +1,9 @@
 export const FORK_MAINNET_CONFIG = {
-  chainId: 1, // Fork of mainnet keeps same chain ID
+  chainId: 1, // Mainnet fork chain ID
   name: 'Forked Mainnet',
-  rpcUrl: process.env.NODE_ENV === 'development' 
-    ? 'http://vps-b11044fd.vps.ovh.net:8545/' 
-    : 'https://vps-b11044fd.vps.ovh.net:8545/', // Use HTTPS if available
+  rpcUrl: process.env.NODE_ENV === 'development'
+    ? 'http://vps-b11044fd.vps.ovh.net/rpc'
+    : 'http://vps-b11044fd.vps.ovh.net/rpc',
   nativeCurrency: {
     name: 'Ethereum',
     symbol: 'ETH',
@@ -18,11 +18,11 @@ export const BRIDGE_CONFIG = {
   rpcUrl: 'http://vps-b11044fd.vps.ovh.net:8545/',
   listenerApi: 'http://localhost:3002',
   nearContract: 'sharknadok.testnet',
-  
+
   // Official 1inch contracts
   inchEscrowFactory: '0xa7bCb4EAc8964306F9e3764f67Db6A7af6DdF99A',
   inchLimitOrderProtocol: '0x111111125421cA6dc452d289314280a0f8842A65',
-  
+
   tron: {
     contractAddress: 'TA879tNjuFCd8w57V3BHNhsshehKn1Ks86',
     network: 'shasta',
@@ -57,12 +57,12 @@ export const switchToForkNetwork = async () => {
   try {
     await window.ethereum.request({
       method: 'wallet_switchEthereumChain',
-      params: [{ chainId: `0x${FORK_MAINNET_CONFIG.chainId.toString(16)}` }],
+      params: [{ chainId: `0x${FORK_MAINNET_CONFIG.chainId.toString(16)}` }], // 0x7a69
     });
-    
+
     console.log('✅ Successfully switched to Fork Mainnet');
     return true;
-    
+
   } catch (switchError: any) {
     console.log('ℹ️ Network not found - please add it manually using instructions above');
     return false;

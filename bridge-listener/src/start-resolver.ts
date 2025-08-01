@@ -1,6 +1,6 @@
 #!/usr/bin/env tsx
 
-import { EthTronResolver } from './services/eth-tron-resolver';
+import { BridgeResolver } from './services/bridge-resolver';
 import { InchFusionTypes } from './types/cross-chain-types';
 import dotenv from 'dotenv';
 
@@ -32,13 +32,20 @@ async function startResolver() {
   // Configuration du resolver
   const config = {
     ethRpcUrl: process.env.ETH_RPC_URL!,
+    ethBridgeContract: process.env.ETH_BRIDGE_CONTRACT || '0xAE2c8c3bBDC09116bE01064009f13fCc272b0944',
     ethPrivateKey: process.env.ETH_PRIVATE_KEY!,
+    nearNetworkId: process.env.NEAR_NETWORK_ID || 'testnet',
+    nearRpcUrl: process.env.NEAR_RPC_URL || 'https://rpc.testnet.fastnear.com',
+    nearContractId: process.env.NEAR_CONTRACT_ID || 'mat-event.testnet',
+    nearAccountId: process.env.NEAR_ACCOUNT_ID || 'mat-event.testnet',
+    nearPrivateKey: process.env.NEAR_PRIVATE_KEY || '',
+    inchEscrowFactory: process.env.INCH_ESCROW_FACTORY || '0xa7bCb4EAc8964306F9e3764f67Db6A7af6DdF99A',
     tronConfig: {
       privateKey: process.env.TRON_PRIVATE_KEY!,
       fullHost: process.env.TRON_FULL_HOST!,
       bridgeContract: process.env.TRON_BRIDGE_CONTRACT!,
       chainId: process.env.TRON_CHAIN_ID || '2' // Shasta par défaut
-    } as InchFusionTypes.Config['tron']
+    }
   };
 
   console.log('⚙️ Configuration:');
@@ -48,7 +55,7 @@ async function startResolver() {
 
   try {
     // Créer et démarrer le resolver
-    const resolver = new EthTronResolver(config);
+    const resolver = new BridgeResolver(config);
     
     // Gérer l'arrêt propre
     process.on('SIGINT', () => {
@@ -74,7 +81,7 @@ async function startResolver() {
     setInterval(() => {
       const status = resolver.getStatus();
       if (status.running) {
-        console.log(`💚 Resolver running - ETH: ${status.ethAddress.substring(0, 6)}... | TRON: ${status.tronContract.substring(0, 6)}...`);
+        console.log(`💚 Resolver running - Bridges: ${status.activeBridgesCount} | TRON enabled: ${status.tronEnabled}`);
       }
     }, 60000); // Status toutes les minutes
 
@@ -91,16 +98,23 @@ async function testConfiguration() {
   try {
     const config = {
       ethRpcUrl: process.env.ETH_RPC_URL!,
+      ethBridgeContract: process.env.ETH_BRIDGE_CONTRACT || '0xAE2c8c3bBDC09116bE01064009f13fCc272b0944',
       ethPrivateKey: process.env.ETH_PRIVATE_KEY!,
+      nearNetworkId: process.env.NEAR_NETWORK_ID || 'testnet',
+      nearRpcUrl: process.env.NEAR_RPC_URL || 'https://rpc.testnet.fastnear.com',
+      nearContractId: process.env.NEAR_CONTRACT_ID || 'mat-event.testnet',
+      nearAccountId: process.env.NEAR_ACCOUNT_ID || 'mat-event.testnet',
+      nearPrivateKey: process.env.NEAR_PRIVATE_KEY || '',
+      inchEscrowFactory: process.env.INCH_ESCROW_FACTORY || '0xa7bCb4EAc8964306F9e3764f67Db6A7af6DdF99A',
       tronConfig: {
         privateKey: process.env.TRON_PRIVATE_KEY!,
         fullHost: process.env.TRON_FULL_HOST!,
         bridgeContract: process.env.TRON_BRIDGE_CONTRACT!,
         chainId: process.env.TRON_CHAIN_ID || '2'
-      } as InchFusionTypes.Config['tron']
+      }
     };
 
-    const resolver = new EthTronResolver(config);
+    const resolver = new BridgeResolver(config);
     const status = resolver.getStatus();
     
     console.log('✅ Configuration test passed!');

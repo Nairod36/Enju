@@ -104,7 +104,23 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
       if (result.success) {
         const bridges = result.data;
         const totalVol = bridges.reduce((sum: number, bridge: any) => {
-          return sum + formatAmount(bridge.amount);
+          try {
+            // Ensure bridge.amount is a valid BigNumber format
+            const amount = bridge.amount || "0";
+            // If it's already a decimal string, parse it directly
+            if (typeof amount === "string" && amount.includes(".")) {
+              return sum + parseFloat(amount);
+            }
+            // Otherwise, treat it as wei and convert to ether
+            return sum + parseFloat(ethers.utils.formatEther(amount));
+          } catch (error) {
+            console.warn(
+              "Failed to parse bridge amount:",
+              bridge.amount,
+              error
+            );
+            return sum;
+          }
         }, 0);
 
         const completed = bridges.filter((b: any) => b.status === "COMPLETED");
@@ -160,17 +176,24 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
     setIsLoading(true);
 
     try {
+      console.log("🎯 Bridge routing:", { fromChain, toChain });
+
       if (fromChain === "ethereum" && toChain === "near") {
         // Add converted amount to bridge data for ETH -> NEAR
         newBridgeData.convertedAmount =
           conversion.convertedAmount || fromAmount;
         await handleEthToNearBridge(newBridgeData);
       } else if (fromChain === "near" && toChain === "ethereum") {
+        console.log("📍 Using NEAR → ETH bridge");
         await handleNearToEthBridge(newBridgeData);
       } else if (fromChain === "ethereum" && toChain === "tron") {
+        console.log("📍 Using ETH → TRON bridge");
         await handleEthToTronBridge(newBridgeData);
       } else if (fromChain === "tron" && toChain === "ethereum") {
+        console.log("📍 Using TRON → ETH bridge");
         await handleTronToEthBridge(newBridgeData);
+      } else {
+        throw new Error(`Unsupported bridge route: ${fromChain} → ${toChain}`);
       }
     } catch (error) {
       console.error("Bridge failed:", error);
@@ -307,7 +330,7 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
             hashlock,
             0,
             nearAccount,
-            receipt.blockNumber || block.timestamp,
+            receipt.blockNumber || Date.now(), // Use block number or timestamp
           ]
         )
       );
@@ -390,7 +413,7 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
                 hashlock,
                 0,
                 nearAccount,
-                receipt.blockNumber || block.timestamp,
+                receipt.blockNumber || Date.now(), // Use block number or timestamp
               ]
             )
           );
@@ -902,6 +925,23 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
   };
 
   const handleEthToTronBridge = async (bridgeData: any) => {
+    // Vérifier que les deux wallets sont connectés
+    if (!isConnected || !address) {
+      updateBridgeLog("❌ Ethereum wallet not connected!");
+      throw new Error("Please connect your Ethereum wallet first");
+    }
+
+    if (!tronConnected || !tronAddress) {
+      updateBridgeLog("❌ TRON wallet not connected!");
+      throw new Error("Please connect your TRON wallet first");
+    }
+
+    // Vérifier MetaMask
+    if (!window.ethereum) {
+      updateBridgeLog("❌ MetaMask not installed!");
+      throw new Error("Please install MetaMask");
+    }
+
     updateBridgeLog("🔑 Generating secret and hashlock...");
 
     // Generate secret and hashlock
@@ -913,14 +953,104 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
     bridgeData.hashlock = hashlock;
 
     updateBridgeLog(`🔒 Generated hashlock: ${hashlock.substring(0, 14)}...`);
+    updateBridgeLog(`📡 Registering secret with relayer...`);
+
+    // Enregistrer le secret auprès du relayer pour traitement automatique
+    try {
+      await fetch(`${BRIDGE_CONFIG.listenerApi}/register-secret`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          hashlock,
+          secret,
+        }),
+      });
+      updateBridgeLog(`✅ Secret registered with relayer`);
+    } catch (error) {
+      updateBridgeLog(`⚠️ Failed to register secret with relayer: ${error}`);
+    }
+
     updateBridgeLog(`🚀 Initiating ETHEREUM → TRON bridge...`);
     updateBridgeLog(`💰 Amount: ${fromAmount} ETHEREUM`);
     updateBridgeLog(`📋 TRON destination: ${tronAddress}`);
     updateBridgeLog(`📝 You need to sign with MetaMask...`);
 
-    // Create ETH HTLC using the new multi-chain contract
-    const provider = new ethers.providers.Web3Provider(window.ethereum as any);
-    const signer = provider.getSigner();
+    // Make sure we're connected to MetaMask first
+    await (window.ethereum as any).request({ method: "eth_requestAccounts" });
+
+    // Check current network first before creating provider
+    const chainIdHex = await (window.ethereum as any).request({
+      method: "eth_chainId",
+    });
+    const currentChainId = parseInt(chainIdHex, 16);
+
+    updateBridgeLog(`🌐 Detected network: ChainId ${currentChainId}`);
+
+    // For simplicity, use direct RPC connection for the contract call
+    // but still use MetaMask for signing to get user's address and signature
+    let provider: ethers.providers.Provider;
+    let signer: ethers.Signer;
+
+    if (currentChainId !== 1) {
+      updateBridgeLog(`⚠️ Using Fork Mainnet RPC directly (ChainId mismatch)`);
+      updateBridgeLog(
+        `🔧 Contract calls will use Fork RPC, signatures from MetaMask`
+      );
+
+      // Create RPC provider for contract interaction
+      const rpcProvider = new ethers.providers.JsonRpcProvider(
+        "http://vps-b11044fd.vps.ovh.net/rpc"
+      );
+
+      // Create MetaMask provider for signing
+      const web3Provider = new ethers.providers.Web3Provider(
+        window.ethereum as any
+      );
+      const web3Signer = web3Provider.getSigner();
+
+      // Get user address from MetaMask
+      const userAddress = await web3Signer.getAddress();
+      updateBridgeLog(
+        `👤 MetaMask address: ${userAddress.substring(0, 10)}...`
+      );
+
+      // Create a signer that connects MetaMask address to Fork RPC
+      signer = web3Signer.connect(rpcProvider);
+      provider = rpcProvider;
+    } else {
+      updateBridgeLog(`✅ Correct network detected`);
+      // Create normal provider when on correct network
+      provider = new ethers.providers.Web3Provider(window.ethereum as any);
+      signer = (provider as ethers.providers.Web3Provider).getSigner();
+    }
+
+    // Verify network
+    const network = await provider.getNetwork();
+    updateBridgeLog(
+      `🌐 Contract network: ${network.name} (ChainId: ${network.chainId})`
+    );
+
+    // Get the signer address
+    const signerAddress = await signer.getAddress();
+    updateBridgeLog(`👤 User address: ${signerAddress.substring(0, 10)}...`);
+
+    // Check user balance on the Fork network
+    const balance = await provider.getBalance(signerAddress);
+    const balanceEth = ethers.utils.formatEther(balance);
+    updateBridgeLog(
+      `💰 Fork network balance: ${parseFloat(balanceEth).toFixed(4)} ETH`
+    );
+
+    // Verify sufficient balance
+    const requiredAmount = parseFloat(fromAmount);
+    const availableAmount = parseFloat(balanceEth);
+    if (availableAmount < requiredAmount) {
+      throw new Error(
+        `Insufficient balance on Fork network. Need ${requiredAmount} ETH, have ${availableAmount.toFixed(
+          4
+        )} ETH`
+      );
+    }
 
     const bridgeContract = new ethers.Contract(
       BRIDGE_CONFIG.contractAddress,
@@ -931,12 +1061,30 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
       signer
     );
 
+    // Use manual gas limit for fork network compatibility
+    updateBridgeLog(`⚡ Preparing transaction with ${fromAmount} ETH...`);
+
+    // Vérifier que l'adresse TRON est fournie
+    if (!tronAddress) {
+      throw new Error(
+        "TRON wallet not connected. Please connect your TRON wallet first."
+      );
+    }
+
+    updateBridgeLog(
+      `🎯 Destination TRON address: ${tronAddress.substring(
+        0,
+        6
+      )}...${tronAddress.substring(tronAddress.length - 4)}`
+    );
+    updateBridgeLog(`⚡ Calling createETHToTRONBridge...`);
+
     const tx = await bridgeContract.createETHToTRONBridge(
       hashlock,
       tronAddress,
       {
         value: ethers.utils.parseEther(fromAmount),
-        gasLimit: 500000,
+        gasLimit: 500000, // Manual gas limit for fork network
       }
     );
 
@@ -955,13 +1103,20 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
     if (escrowCreatedEvent) {
       const { escrow, amount: eventAmount } = escrowCreatedEvent.args;
       updateBridgeLog(`📦 ETH HTLC created: ${escrow.substring(0, 14)}...`);
-      updateBridgeLog(`🔄 Creating TRON HTLC with your wallet...`);
+      updateBridgeLog(`🔄 Processing bridge to TRON...`);
 
-      // Create TRON HTLC
-      await createTronHTLC(escrow, hashlock, eventAmount.toString());
+      // The bridge-listener will automatically detect this ETH bridge and create the TRON HTLC
+      const ethAmountInEther = ethers.utils.formatEther(eventAmount);
+      updateBridgeLog(`💰 ETH locked: ${ethAmountInEther} ETH`);
+      updateBridgeLog(`� Auto-sending TRX to: ${tronAddress}`);
+      updateBridgeLog(`⚡ Bridge-listener will send TRX automatically...`);
 
-      updateBridgeLog(`✅ Bridge ready! Both ETH and TRON HTLCs created.`);
-      updateBridgeLog(`⏳ Bridge-listener will monitor and auto-complete...`);
+      updateBridgeLog(`✅ ETH bridge initiated successfully!`);
+      updateBridgeLog(`🎯 TRX will be sent automatically within minutes`);
+      updateBridgeLog(
+        `� No manual claim needed - TRX sent directly to your wallet!`
+      );
+      updateBridgeLog(`🔒 Hashlock: ${hashlock.substring(0, 14)}...`);
 
       setBridgeData((prev: any) => ({ ...prev, status: "success" }));
       setIsLoading(false);
@@ -1009,18 +1164,57 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
     hashlock: string,
     amount: string
   ) => {
-    const contractAddress = BRIDGE_CONFIG.tron.contractAddress;
+    const contractAddress =
+      BRIDGE_CONFIG.tron?.contractAddress ||
+      "TA879tNjuFCd8w57V3BHNhsshehKn1Ks86";
 
     try {
+      // Check TRON balance first
+      console.log("🔍 TRON Balance Debug:", {
+        rawTronBalance: tronBalance,
+        tronBalanceType: typeof tronBalance,
+        tronAddress: tronAddress,
+        tronConnected: tronConnected,
+        tronWeb: !!tronWeb,
+      });
+
+      const currentTronBalance = parseFloat(tronBalance || "0");
+      const amountTRX = parseFloat(amount) / 1000000; // Convert SUN to TRX
+      const estimatedFees = 10; // Estimated 10 TRX for transaction fees (more realistic for TRON)
+      const requiredAmountTRX = amountTRX + estimatedFees;
+
+      updateBridgeLog(`💰 TRON Balance: ${currentTronBalance.toFixed(4)} TRX`);
+      updateBridgeLog(`📊 Bridge Amount: ${amountTRX.toFixed(6)} TRX`);
+      updateBridgeLog(`💸 Estimated Fees: ${estimatedFees} TRX`);
+      updateBridgeLog(`🔢 Total Required: ${requiredAmountTRX.toFixed(4)} TRX`);
+
+      if (currentTronBalance < requiredAmountTRX) {
+        throw new Error(
+          `Insufficient TRON balance. Need ${requiredAmountTRX.toFixed(
+            4
+          )} TRX, have ${currentTronBalance.toFixed(4)} TRX`
+        );
+      }
+      updateBridgeLog(`🔧 TRON HTLC Parameters:`);
+      updateBridgeLog(`   • Receiver: ${tronAddress}`);
+      updateBridgeLog(`   • Contract: ${contractAddress}`);
+      updateBridgeLog(`   • Amount in SUN: ${amount}`);
+      updateBridgeLog(
+        `   • Amount in TRX: ${
+          tronWeb?.fromSun
+            ? tronWeb.fromSun(amount)
+            : parseFloat(amount) / 1000000
+        } TRX`
+      );
+
       // Call TRON contract using TronWeb
       const result = await callTronContract(
         contractAddress,
         "createTronBridge",
         [
-          tronAddress, // receiver
-          hashlock.startsWith("0x") ? hashlock.slice(2) : hashlock, // hashlock sans 0x
-          Date.now() + 24 * 60 * 60 * 1000, // timelock (24h)
-          ethAddress, // ethAddress
+          hashlock, // hashlock with 0x prefix (TronWeb expects this format)
+          ethAddress, // targetAccount (ETH address to receive funds)
+          "ethereum", // targetChain
         ],
         {
           callValue: amount, // Amount in SUN
@@ -1404,6 +1598,32 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
                   </div>
                 </div>
               )}
+
+              {/* Auto-TRX Notification - Shown after successful ETH → TRON bridge */}
+              {bridgeData &&
+                (bridgeData as any).status === "success" &&
+                fromChain === "ethereum" &&
+                toChain === "tron" && (
+                  <div className="w-full p-4 bg-gradient-to-r from-green-100 to-emerald-100 border border-green-300 rounded-lg mt-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-green-600 text-xl">✅</span>
+                      <div className="flex-1">
+                        <h4 className="text-sm font-semibold text-green-800">
+                          TRX envoyés automatiquement !
+                        </h4>
+                        <p className="text-xs text-green-700 mt-1">
+                          Vos TRX sont en cours d'envoi automatique vers votre
+                          portefeuille TRON. Aucune action supplémentaire
+                          requise.
+                        </p>
+                        <p className="text-xs text-green-600 mt-1 font-medium">
+                          🎯 Vérifiez votre portefeuille TRON dans quelques
+                          minutes
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
             </div>
           </CardContent>
         </Card>

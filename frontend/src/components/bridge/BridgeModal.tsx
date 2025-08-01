@@ -86,6 +86,50 @@ const stepConfigs = {
       description: "Finalizing cross-chain transfer",
     },
   ],
+  "ethereum-to-tron": [
+    {
+      id: "initiate",
+      label: "Initiate ETH Bridge",
+      description: "Creating ETH escrow transaction",
+    },
+    {
+      id: "confirm",
+      label: "Confirm ETH Transaction",
+      description: "Waiting for ETH confirmation",
+    },
+    {
+      id: "auto-relay",
+      label: "Auto-Relay Processing",
+      description: "Bridge-listener sending TRX automatically",
+    },
+    {
+      id: "complete",
+      label: "Bridge Complete",
+      description: "TRX received automatically",
+    },
+  ],
+  "tron-to-ethereum": [
+    {
+      id: "initiate",
+      label: "Initiate TRON Bridge",
+      description: "Creating TRON HTLC transaction",
+    },
+    {
+      id: "confirm",
+      label: "Confirm TRON Tx",
+      description: "Waiting for TRON confirmation",
+    },
+    {
+      id: "create-escrow",
+      label: "Create ETH Escrow",
+      description: "Bridge-listener creating ETH escrow",
+    },
+    {
+      id: "complete",
+      label: "Complete Bridge",
+      description: "Finalizing cross-chain transfer",
+    },
+  ],
 };
 
 export function BridgeModal({ isOpen, onClose, bridgeData }: BridgeModalProps) {
