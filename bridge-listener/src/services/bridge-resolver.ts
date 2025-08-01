@@ -527,44 +527,7 @@ export class BridgeResolver extends EventEmitter {
 
     console.log('✅ ETH → TRON event listeners set up');
 
-    // Vérifier les événements récents (derniers 100 blocs) au cas où on aurait raté quelque chose
-    try {
-      console.log('🔍 Checking for recent ETH → TRON events...');
-      const latestBlock = await this.ethProvider.getBlockNumber();
-      const fromBlock = Math.max(0, latestBlock - 500);
-      
-      console.log(`📊 Scanning blocks ${fromBlock} to ${latestBlock} for EscrowCreated events...`);
-      
-      const filter = bridgeContract.filters.EscrowCreated();
-      const events = await bridgeContract.queryFilter(filter, fromBlock, latestBlock);
-      
-      console.log(`📋 Found ${events.length} EscrowCreated events in recent blocks`);
-      
-      for (const event of events) {
-        if ('args' in event && event.args) {
-          const [escrow, hashlock, destinationChain, destinationAccount, amount] = event.args;
-          console.log(`📝 Event: escrow=${escrow.substring(0,10)}... destinationChain=${destinationChain} (type: ${typeof destinationChain}) account=${destinationAccount} amount=${ethers.formatEther(amount)} ETH`);
-          
-          // Convertir destinationChain en nombre pour comparaison
-          const chainId = Number(destinationChain);
-          console.log(`🔍 Converted destinationChain: ${chainId} (TRON=1)`);
-          
-          if (chainId === 1) {
-            console.log('🎯 Found recent TRON bridge event, processing...');
-            console.log('⚙️ Processing ETH → TRON swap with Fusion+ compatibility...');
-            try {
-              await this.processEthToTronSwap(escrow, destinationAccount, amount, hashlock);
-            } catch (error) {
-              console.error('❌ Failed to process recent ETH → TRON event:', error);
-            }
-          } else {
-            console.log(`⏭️ Skipping event - chainId=${chainId} (not TRON=1)`);
-          }
-        }
-      }
-    } catch (error) {
-      console.error('❌ Failed to check recent events:', error);
-    }
+    console.log('✅ ETH → TRON event listeners ready, waiting for new events only...');
   }
 
   /**
@@ -662,9 +625,10 @@ export class BridgeResolver extends EventEmitter {
 
       // 2. Create TRON-side escrow with Fusion+ compatibility
       console.log('🏗️ [FUSION+] Creating TRON escrow with safety deposit...');
+      console.log('💡 [FUSION+] Funds will go to resolver, then redistributed to user');
       const result = await this.tronFusionClient.createTronEscrow(
         immutables,
-        tronAddress, // TRON maker address
+        this.resolverSigner.address, // Resolver gets the funds (Fusion+ pattern)
         escrowAddress // ETH taker address (for cross-chain coordination)
       );
 
@@ -758,6 +722,9 @@ export class BridgeResolver extends EventEmitter {
           if (tronResult.success) {
             console.log('✅ [FUSION+] TRON side completed:', tronResult.txHash?.substring(0, 10) + '...');
             
+            // Redistribute TRX from resolver to final user
+            await this.redistributeTronToUser(immutables.amount, bridgeEvent.ethRecipient!);
+            
             // Complete ETH side
             await this.completeEthSwap(bridgeEvent.escrowAddress!, secret);
             
@@ -767,7 +734,7 @@ export class BridgeResolver extends EventEmitter {
             bridgeEvent.secret = secret;
             this.activeBridges.set(bridgeEvent.id, bridgeEvent);
             
-            console.log('✅ [FUSION+] Both sides completed atomically!');
+            console.log('✅ [FUSION+] Both sides completed atomically with redistribution!');
             this.emit('bridgeCompleted', bridgeEvent);
           }
         }
@@ -1007,6 +974,53 @@ export class BridgeResolver extends EventEmitter {
     } catch (error) {
       console.error('Failed to extract secret from ETH events:', error);
       return null;
+    }
+  }
+
+  /**
+   * Redistribute ETH from resolver to final user (Fusion+ pattern)
+   */
+  private async redistributeEthToUser(amount: string, ethUserAddress: string): Promise<void> {
+    try {
+      console.log(`💸 [FUSION+] Redistributing ${amount} ETH from resolver to user: ${ethUserAddress}`);
+      
+      const tx = await this.resolverSigner.sendTransaction({
+        to: ethUserAddress,
+        value: ethers.parseEther(amount),
+        gasLimit: 21000
+      });
+
+      await tx.wait();
+      console.log('✅ [FUSION+] ETH redistribution completed:', tx.hash.substring(0, 10) + '...');
+      
+    } catch (error) {
+      console.error('❌ [FUSION+] Error redistributing ETH to user:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Redistribute TRX from resolver to final user (Fusion+ pattern)
+   */
+  private async redistributeTronToUser(amount: string, tronUserAddress: string): Promise<void> {
+    try {
+      console.log(`💸 [FUSION+] Redistributing ${amount} TRX from resolver to user: ${tronUserAddress}`);
+      
+      if (!this.tronFusionClient) {
+        throw new Error('TRON Fusion+ client not initialized');
+      }
+
+      const result = await this.tronFusionClient.sendTRX(tronUserAddress, amount);
+      
+      if (result.success) {
+        console.log('✅ [FUSION+] TRX redistribution completed:', result.txHash?.substring(0, 10) + '...');
+      } else {
+        console.error('❌ [FUSION+] TRX redistribution failed:', result.error);
+        throw new Error(`TRX redistribution failed: ${result.error}`);
+      }
+    } catch (error) {
+      console.error('❌ [FUSION+] Error redistributing TRX to user:', error);
+      throw error;
     }
   }
 
