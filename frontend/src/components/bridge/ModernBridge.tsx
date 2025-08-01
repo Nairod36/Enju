@@ -10,7 +10,6 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { BridgeModal } from "./BridgeModal";
-import { PartialFillsPanel } from "./PartialFillsPanel";
 import { useAccount } from "wagmi";
 import { useCustomBalance } from "@/hooks/useCustomBalance";
 import { useWalletSelector } from "@near-wallet-selector/react-hook";
@@ -47,7 +46,7 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
   const formatAmount = (amount: any): number => {
     if (!amount) return 0;
     try {
-      if (typeof amount === 'string' && amount.includes('.')) {
+      if (typeof amount === "string" && amount.includes(".")) {
         return parseFloat(amount);
       } else {
         return parseFloat(ethers.utils.formatEther(amount));
@@ -70,8 +69,6 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
     callContract: callTronContract,
     tronWeb,
   } = useTronWallet();
-
-
 
   const [fromAmount, setFromAmount] = useState("");
   const [fromChain, setFromChain] = useState<"ethereum" | "near" | "tron">(
@@ -168,7 +165,8 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
     try {
       if (fromChain === "ethereum" && toChain === "near") {
         // Add converted amount to bridge data for ETH -> NEAR
-        newBridgeData.convertedAmount = conversion.convertedAmount || fromAmount;
+        newBridgeData.convertedAmount =
+          conversion.convertedAmount || fromAmount;
         await handleEthToNearBridge(newBridgeData);
       } else if (fromChain === "near" && toChain === "ethereum") {
         await handleNearToEthBridge(newBridgeData);
@@ -187,7 +185,7 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
 
   const updateBridgeLog = (message: string) => {
     const timestampedMessage = `[${new Date().toLocaleTimeString()}] ${message}`;
-    
+
     // Ajouter à la référence stable
     bridgeLogsRef.current = [...bridgeLogsRef.current, timestampedMessage];
 
@@ -206,14 +204,14 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
       updateBridgeLog("❌ NEAR wallet not connected!");
       throw new Error("NEAR wallet not connected");
     }
-    
+
     if (showPartialFills) {
       updateBridgeLog("🧩 Using Partial Fills mode (1inch Fusion+)");
       updateBridgeLog("✅ Bridge-listener will use exact NEAR amounts!");
     } else {
       updateBridgeLog("🔄 Using standard bridge mode");
     }
-    
+
     // Both modes now use the same logic since bridge-listener handles exact amounts
     await handleEthToNearBridgeStandard(bridgeData);
   };
@@ -248,7 +246,7 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
         "event EscrowCreated(address indexed escrow, bytes32 indexed hashlock, uint8 indexed destinationChain, string destinationAccount, uint256 amount)",
         "event EscrowCreatedLegacy(address indexed escrow, bytes32 indexed hashlock, string nearAccount, uint256 amount)",
         "function getSwap(bytes32 swapId) external view returns (address srcEscrow, address dstEscrow, address user, uint256 totalAmount, uint256 filledAmount, uint256 remainingAmount, bytes32 hashlock, uint8 destinationChain, string memory destinationAccount, bool completed, uint256 createdAt, uint256 fillCount)",
-        "function getSwapProgress(bytes32 swapId) external view returns (uint256 totalAmount, uint256 filledAmount, uint256 remainingAmount, uint256 fillCount, bool completed, uint256 fillPercentage)"
+        "function getSwapProgress(bytes32 swapId) external view returns (uint256 totalAmount, uint256 filledAmount, uint256 remainingAmount, uint256 fillCount, bool completed, uint256 fillPercentage)",
       ],
       signer
     );
@@ -270,15 +268,14 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
     const receipt = await tx.wait();
     updateBridgeLog(`✅ Transaction confirmed!`);
 
-
     // Parse events for escrow address
     updateBridgeLog(`🔍 Looking for EscrowCreated events in transaction...`);
-    
+
     // Try legacy event first (for backward compatibility)
     let escrowCreatedEvent = receipt.events?.find(
       (event: any) => event.event === "EscrowCreatedLegacy"
     );
-    
+
     // If no legacy event, try the new multi-chain event
     if (!escrowCreatedEvent) {
       escrowCreatedEvent = receipt.events?.find(
@@ -292,94 +289,127 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
     if (escrowCreatedEvent) {
       const { escrow, amount: eventAmount } = escrowCreatedEvent.args;
       const hashlock = escrowCreatedEvent.args[1];
-      const nearAccount = escrowCreatedEvent.args[2] || escrowCreatedEvent.args[3]; // Handle both event types
-      
+      const nearAccount =
+        escrowCreatedEvent.args[2] || escrowCreatedEvent.args[3]; // Handle both event types
+
       updateBridgeLog(`📦 ETH HTLC created: ${escrow.substring(0, 14)}...`);
-      updateBridgeLog(`🔄 Bridge resolver will automatically create NEAR HTLC...`);
-      updateBridgeLog(`✅ Bridge ready! ETH side locked, NEAR side being created automatically.`);
+      updateBridgeLog(
+        `🔄 Bridge resolver will automatically create NEAR HTLC...`
+      );
+      updateBridgeLog(
+        `✅ Bridge ready! ETH side locked, NEAR side being created automatically.`
+      );
       updateBridgeLog(`⏳ Bridge-listener will monitor and auto-complete...`);
 
       // Generate swapId for partial fills tracking
       const swapId = ethers.utils.keccak256(
         ethers.utils.solidityPack(
-          ['address', 'bytes32', 'uint256', 'string', 'uint256'],
-          [escrow, hashlock, 0, nearAccount, receipt.blockNumber || block.timestamp]
+          ["address", "bytes32", "uint256", "string", "uint256"],
+          [
+            escrow,
+            hashlock,
+            0,
+            nearAccount,
+            receipt.blockNumber || block.timestamp,
+          ]
         )
       );
-      
+
       updateBridgeLog(`🔍 Swap ID for tracking: ${swapId.substring(0, 14)}...`);
       setCurrentSwapId(swapId);
       setShowPartialFills(true);
 
-      setBridgeData((prev: any) => ({ 
-        ...prev, 
+      setBridgeData((prev: any) => ({
+        ...prev,
         status: "success",
         swapId: swapId,
         escrow: escrow,
-        partialFillsEnabled: true
+        partialFillsEnabled: true,
       }));
       setIsLoading(false);
 
       onBridgeSuccess?.(bridgeData);
       loadBridgeStats();
-      
+
       // 🔄 AUTO-COMPLETE ETH→NEAR: Monitor for NEAR HTLC creation and auto-complete
-      if (fromChain === 'ethereum' && toChain === 'near' && bridgeData.secret) {
-        updateBridgeLog(`🔍 Monitoring for NEAR HTLC creation to auto-complete...`);
+      if (fromChain === "ethereum" && toChain === "near" && bridgeData.secret) {
+        updateBridgeLog(
+          `🔍 Monitoring for NEAR HTLC creation to auto-complete...`
+        );
         monitorAndCompleteNearHTLC(bridgeData.secret, hashlock);
       }
-      
+
       return; // Exit early since we found the event
     }
 
     // Try to parse logs manually if events are empty
     if (!escrowCreatedEvent && receipt.logs && receipt.logs.length > 0) {
       try {
-        const parsedLogs = receipt.logs.map(log => {
-          try {
-            return bridgeContract.interface.parseLog(log);
-          } catch (e) {
-            return null;
-          }
-        }).filter(log => log !== null);
-        
-        let manualEscrowEvent = parsedLogs.find(log => log?.name === "EscrowCreatedLegacy");
-        
+        const parsedLogs = receipt.logs
+          .map((log) => {
+            try {
+              return bridgeContract.interface.parseLog(log);
+            } catch (e) {
+              return null;
+            }
+          })
+          .filter((log) => log !== null);
+
+        let manualEscrowEvent = parsedLogs.find(
+          (log) => log?.name === "EscrowCreatedLegacy"
+        );
+
         // If no legacy event, try the new multi-chain event
         if (!manualEscrowEvent) {
-          manualEscrowEvent = parsedLogs.find(log => log?.name === "EscrowCreated");
+          manualEscrowEvent = parsedLogs.find(
+            (log) => log?.name === "EscrowCreated"
+          );
         }
-        
+
         if (manualEscrowEvent) {
           updateBridgeLog(`🎯 Found EscrowCreated via manual parsing!`);
           // Use the manually parsed event
           const escrow = manualEscrowEvent.args[0];
           const hashlock = manualEscrowEvent.args[1];
           const nearAccount = manualEscrowEvent.args[2];
-          
+
           updateBridgeLog(`📦 ETH HTLC created: ${escrow.substring(0, 14)}...`);
-          updateBridgeLog(`🔄 Bridge resolver will automatically create NEAR HTLC...`);
-          updateBridgeLog(`✅ Bridge ready! ETH side locked, NEAR side being created automatically.`);
-          updateBridgeLog(`⏳ Bridge-listener will monitor and auto-complete...`);
+          updateBridgeLog(
+            `🔄 Bridge resolver will automatically create NEAR HTLC...`
+          );
+          updateBridgeLog(
+            `✅ Bridge ready! ETH side locked, NEAR side being created automatically.`
+          );
+          updateBridgeLog(
+            `⏳ Bridge-listener will monitor and auto-complete...`
+          );
 
           // Generate swapId for partial fills tracking
           const swapId = ethers.utils.keccak256(
             ethers.utils.solidityPack(
-              ['address', 'bytes32', 'uint256', 'string', 'uint256'],
-              [escrow, hashlock, 0, nearAccount, receipt.blockNumber || block.timestamp]
+              ["address", "bytes32", "uint256", "string", "uint256"],
+              [
+                escrow,
+                hashlock,
+                0,
+                nearAccount,
+                receipt.blockNumber || block.timestamp,
+              ]
             )
           );
-          
-          updateBridgeLog(`🔍 Swap ID for tracking: ${swapId.substring(0, 14)}...`);
+
+          updateBridgeLog(
+            `🔍 Swap ID for tracking: ${swapId.substring(0, 14)}...`
+          );
           setCurrentSwapId(swapId);
           setShowPartialFills(true);
 
-          setBridgeData((prev: any) => ({ 
-            ...prev, 
+          setBridgeData((prev: any) => ({
+            ...prev,
             status: "success",
             swapId: swapId,
             escrow: escrow,
-            partialFillsEnabled: true
+            partialFillsEnabled: true,
           }));
           setIsLoading(false);
 
@@ -387,8 +417,7 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
           loadBridgeStats();
           return; // Exit early since we found the event
         }
-      } catch (parseError) {
-      }
+      } catch (parseError) {}
     }
 
     // If we reach here, no EscrowCreated event was found
@@ -399,19 +428,21 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
   };
 
   // Monitor for NEAR HTLC creation and auto-complete for ETH→NEAR bridges
-  const monitorAndCompleteNearHTLC = async (secret: string, hashlock: string) => {
+  const monitorAndCompleteNearHTLC = async (
+    secret: string,
+    hashlock: string
+  ) => {
     const maxAttempts = 30; // Monitor for 30 attempts (5 minutes)
     let attempts = 0;
-    
+
     const checkInterval = setInterval(async () => {
       attempts++;
-      
+
       try {
         // Check bridge-listener API for bridges with our hashlock
         const response = await fetch(`${BRIDGE_CONFIG.listenerApi}/bridges`);
         const result = await response.json();
-        
-        
+
         // Handle different response formats
         let bridges = [];
         if (Array.isArray(result)) {
@@ -423,38 +454,45 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
         } else {
           return;
         }
-        
+
         // Find our ETH→NEAR bridge that has a NEAR contract ID
-        const ourBridge = bridges.find((bridge: any) => 
-          bridge.type === 'ETH_TO_NEAR' && 
-          bridge.hashlock === hashlock && 
-          bridge.contractId && 
-          bridge.status === 'PENDING'
+        const ourBridge = bridges.find(
+          (bridge: any) =>
+            bridge.type === "ETH_TO_NEAR" &&
+            bridge.hashlock === hashlock &&
+            bridge.contractId &&
+            bridge.status === "PENDING"
         );
-        
+
         if (ourBridge) {
-          updateBridgeLog(`🎯 NEAR HTLC detected! Auto-completing with secret...`);
-          
+          updateBridgeLog(
+            `🎯 NEAR HTLC detected! Auto-completing with secret...`
+          );
+
           try {
             // Complete the NEAR HTLC with our secret
             await completeNearHTLC(ourBridge.contractId, secret, hashlock);
-            updateBridgeLog(`✅ Bridge completed! You should receive your NEAR now.`);
-            
+            updateBridgeLog(
+              `✅ Bridge completed! You should receive your NEAR now.`
+            );
+
             clearInterval(checkInterval);
             return;
-            
           } catch (completionError) {
-            updateBridgeLog(`❌ Failed to complete NEAR HTLC: ${completionError}`);
+            updateBridgeLog(
+              `❌ Failed to complete NEAR HTLC: ${completionError}`
+            );
           }
         }
-        
+
         if (attempts >= maxAttempts) {
-          updateBridgeLog(`⏰ Timeout waiting for NEAR HTLC - you may need to complete manually`);
+          updateBridgeLog(
+            `⏰ Timeout waiting for NEAR HTLC - you may need to complete manually`
+          );
           clearInterval(checkInterval);
         }
-        
       } catch (error) {
-        console.error('❌ Error monitoring NEAR HTLC:', error);
+        console.error("❌ Error monitoring NEAR HTLC:", error);
       }
     }, 10000); // Check every 10 seconds
   };
@@ -468,7 +506,7 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
       setIsLoading(false);
       return;
     }
-    
+
     updateBridgeLog("🔑 Generating secret and hashlock...");
 
     // Generate secret and hashlock like in ETH → NEAR bridge
@@ -482,11 +520,13 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
     updateBridgeLog(`🚀 Initiating NEAR → ETHEREUM bridge...`);
     updateBridgeLog(`💰 Amount: ${fromAmount} NEAR`);
     updateBridgeLog(`📋 ETH destination: ${address}`);
-    updateBridgeLog(`🔄 Bridge-listener will create NEAR HTLC automatically...`);
+    updateBridgeLog(
+      `🔄 Bridge-listener will create NEAR HTLC automatically...`
+    );
 
     try {
       updateBridgeLog(`📝 You need to create NEAR HTLC with your wallet...`);
-      
+
       // Create NEAR HTLC using user's wallet (like in ETH → NEAR flow)
       const result = await createNearHTLC(
         address!, // ETH address as destination
@@ -495,7 +535,7 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
       );
 
       updateBridgeLog(`✅ NEAR HTLC created successfully!`);
-      
+
       // Extract contract ID from result
       let contractId = "";
       try {
@@ -507,7 +547,7 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
             }
           }
         }
-        
+
         for (const log of allLogs) {
           if (log.includes("Cross-chain HTLC created:")) {
             const match = log.match(/Cross-chain HTLC created:\s*([^,\s]+)/);
@@ -517,7 +557,7 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
             }
           }
         }
-        
+
         if (contractId) {
           updateBridgeLog(`📋 Contract ID: ${contractId}`);
         }
@@ -527,25 +567,28 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
 
       // Now notify bridge-listener to create ETH escrow
       updateBridgeLog(`📡 Notifying bridge-listener to create ETH escrow...`);
-      
+
       const bridgeRequest = {
-        type: 'NEAR_TO_ETH',
+        type: "NEAR_TO_ETH",
         amount: fromAmount.toString(),
         nearAccount: nearAccountId,
         ethRecipient: address,
         secret: secret,
         hashlock: hashlock,
-        timelock: Date.now() + (24 * 60 * 60 * 1000),
-        contractId: contractId
+        timelock: Date.now() + 24 * 60 * 60 * 1000,
+        contractId: contractId,
       };
-      
-      const response = await fetch(`${BRIDGE_CONFIG.listenerApi}/bridges/initiate`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(bridgeRequest)
-      });
+
+      const response = await fetch(
+        `${BRIDGE_CONFIG.listenerApi}/bridges/initiate`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(bridgeRequest),
+        }
+      );
 
       if (!response.ok) {
         throw new Error(`Bridge API call failed: ${response.status}`);
@@ -554,15 +597,14 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
       const apiResult = await response.json();
       updateBridgeLog(`✅ ETH escrow will be created automatically`);
       updateBridgeLog(`⏳ You can now complete the NEAR HTLC to get your ETH`);
-      
+
       // Store bridge ID for monitoring
       setCurrentSwapId(apiResult.bridgeId);
-      
+
       // Monitor for bridge completion
       setBridgeData((prev) => ({ ...prev, status: "pending" }));
       setIsLoading(false);
       monitorBridgeCompletion(bridgeData);
-
     } catch (error) {
       console.error("Failed to initiate NEAR → ETH bridge:", error);
       updateBridgeLog(`❌ Failed to initiate bridge: ${error}`);
@@ -588,7 +630,7 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
               bridge.status === "COMPLETED" &&
               (bridge.type === "NEAR_TO_ETH" || bridge.type === "ETH_TO_NEAR")
           );
-          
+
           // Look for NEAR→ETH bridge that's ready (has ETH escrow) but not completed
           const readyNearToEthBridge = result.data.find(
             (bridge: any) =>
@@ -596,7 +638,7 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
               bridge.type === "NEAR_TO_ETH" &&
               bridge.status === "PENDING" &&
               bridge.ethTxHash && // ETH escrow is created
-              bridge.contractId   // NEAR HTLC exists
+              bridge.contractId // NEAR HTLC exists
           );
 
           if (completedBridge) {
@@ -645,7 +687,7 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
             loadBridgeStats();
             return;
           }
-          
+
           // Handle NEAR→ETH bridge ready for manual completion
           if (readyNearToEthBridge) {
             updateBridgeLog(
@@ -654,16 +696,14 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
             updateBridgeLog(
               `🔓 You can now complete your NEAR HTLC to receive ETH`
             );
-            updateBridgeLog(
-              `📋 ETH Escrow: ${readyNearToEthBridge.ethTxHash}`
-            );
-            
+            updateBridgeLog(`📋 ETH Escrow: ${readyNearToEthBridge.ethTxHash}`);
+
             // Set status to show completion button
-            setBridgeData((prev) => ({ 
-              ...prev, 
+            setBridgeData((prev) => ({
+              ...prev,
               status: "ready-to-complete",
               ethTxHash: readyNearToEthBridge.ethTxHash,
-              contractId: readyNearToEthBridge.contractId
+              contractId: readyNearToEthBridge.contractId,
             }));
             setIsLoading(false);
             return;
@@ -696,7 +736,6 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
     hashlock: string,
     nearAmountStr: string
   ) => {
-
     // Verify NEAR connection again
     if (!nearConnected || !nearAccountId || !callFunction) {
       const error = `NEAR wallet not properly connected: nearConnected=${nearConnected}, nearAccountId=${nearAccountId}, callFunction=${typeof callFunction}`;
@@ -717,18 +756,15 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
     const nearAmount = parseFloat(nearAmountStr); // This is the NEAR amount entered by user
     const nearYocto = BigInt(Math.floor(nearAmount * 1e24)); // Convert to yoctoNEAR
 
-
-
     updateBridgeLog(
       `📋 Calling NEAR contract with ${nearYocto.toString()} yoctoNEAR...`
     );
 
-
     try {
       updateBridgeLog(`📝 Calling NEAR wallet for signature...`);
-      
+
       // Test with minimal deposit first to see if wallet responds
-      
+
       const result = await callFunction({
         contractId: BRIDGE_CONFIG.nearContract,
         method: "create_cross_chain_htlc",
@@ -742,34 +778,42 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
     } catch (error) {
       console.error("❌ NEAR HTLC creation failed:", error);
       updateBridgeLog(`❌ NEAR HTLC creation failed: ${error}`);
-      
+
       // Try to get more error details
-      if (error && typeof error === 'object') {
-        if ('message' in error) {
+      if (error && typeof error === "object") {
+        if ("message" in error) {
           updateBridgeLog(`❌ Error message: ${error.message}`);
         }
-        if ('cause' in error && error.cause) {
+        if ("cause" in error && error.cause) {
           updateBridgeLog(`❌ Error cause: ${JSON.stringify(error.cause)}`);
         }
-        if ('stack' in error) {
+        if ("stack" in error) {
         }
       }
-      
+
       throw error;
     }
   };
 
   const handleCompleteNearToEth = async () => {
-    if (!bridgeData?.contractId || !bridgeData?.secret || !bridgeData?.hashlock) {
+    if (
+      !bridgeData?.contractId ||
+      !bridgeData?.secret ||
+      !bridgeData?.hashlock
+    ) {
       updateBridgeLog(`❌ Missing bridge data for completion`);
       return;
     }
 
     setIsLoading(true);
     updateBridgeLog(`🔓 Completing NEAR HTLC to receive your ETH...`);
-    
+
     try {
-      await completeNearHTLC(bridgeData.contractId, bridgeData.secret, bridgeData.hashlock);
+      await completeNearHTLC(
+        bridgeData.contractId,
+        bridgeData.secret,
+        bridgeData.hashlock
+      );
       updateBridgeLog(`✅ NEAR HTLC completed! You should receive ETH soon.`);
       setBridgeData((prev) => ({ ...prev, status: "success" }));
       onBridgeSuccess?.(bridgeData);
@@ -827,7 +871,9 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
 
     // Convert secret to base64 using ethers utilities (browser-compatible)
     const secretBytesForCompletion = ethers.utils.arrayify("0x" + secretHex);
-    const preimageBase64 = btoa(String.fromCharCode(...Array.from(secretBytesForCompletion)));
+    const preimageBase64 = btoa(
+      String.fromCharCode(...Array.from(secretBytesForCompletion))
+    );
     console.log("🔧 Secret bytes array:", Array.from(secretBytesForCompletion));
     console.log("🔧 Preimage base64:", preimageBase64);
 
@@ -843,7 +889,7 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
     // The HTLC ID format is: cc-{contract_address}-{receiver}-{amount}-{timestamp}
     // But we should always call the deployed contract (sharknadok.testnet)
     const actualContractId = BRIDGE_CONFIG.nearContract;
-    
+
     console.log(`🔧 Calling contract: ${actualContractId}`);
     console.log(`🔧 With HTLC ID: ${contractId}`);
 
@@ -999,44 +1045,9 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
       : "from-purple-500 to-purple-600";
   };
 
-
   return (
     <>
       <div className="space-y-4">
-        {/* Header - Ultra Compact */}
-        <div className="text-center space-y-0.5">
-          <h2 className="text-lg font-bold bg-gradient-to-r from-emerald-600 to-blue-600 bg-clip-text text-transparent">
-            Cross-Chain Bridge
-          </h2>
-          <p className="text-xs text-gray-500">
-            Powered by 1inch Fusion+ Technology
-          </p>
-        </div>
-
-        {/* Stats Cards - Ultra Compact */}
-        <div className="grid grid-cols-2 gap-1.5">
-          <div className="bg-gradient-to-r from-emerald-50 to-emerald-100 p-3.5 rounded-md border border-emerald-200">
-            <div className="flex items-center gap-1">
-              <TrendingUp className="w-3 h-3 text-emerald-600" />
-              <span className="text-xs font-medium text-emerald-700">
-                Volume
-              </span>
-            </div>
-            <p className="text-xs font-bold text-emerald-800">
-              ${(parseFloat(stats.totalVolume) * 2500).toLocaleString()}
-            </p>
-          </div>
-          <div className="bg-gradient-to-r from-blue-50 to-blue-100 p-3.5 rounded-md border border-blue-200">
-            <div className="flex items-center gap-1">
-              <Shield className="w-3 h-3 text-blue-600" />
-              <span className="text-xs font-medium text-blue-700">Success</span>
-            </div>
-            <p className="text-xs font-bold text-blue-800">
-              {stats.successRate}%
-            </p>
-          </div>
-        </div>
-
         {/* Main Bridge Card - Compact */}
         <Card className="overflow-hidden">
           <CardContent className="px-3 bg-white/90 backdrop-blur-sm rounded-lg">
@@ -1263,14 +1274,14 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
                     onClick={() => setShowPartialFills(!showPartialFills)}
                     className={`text-xs px-2 py-1 rounded-full transition-all ${
                       showPartialFills
-                        ? 'bg-orange-500 text-white'
-                        : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
+                        ? "bg-orange-500 text-white"
+                        : "bg-gray-200 text-gray-600 hover:bg-gray-300"
                     }`}
                   >
-                    {showPartialFills ? 'ON' : 'OFF'}
+                    {showPartialFills ? "ON" : "OFF"}
                   </button>
                 </div>
-                
+
                 {showPartialFills && (
                   <div className="bg-gradient-to-r from-orange-50 to-yellow-50 border border-orange-200 rounded-lg p-3">
                     <div className="flex items-start gap-3">
@@ -1279,41 +1290,54 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
                           Smart Order Splitting
                         </div>
                         <div className="text-[11px] text-orange-700 leading-relaxed">
-                          {parseFloat(fromAmount || "0") > 0.1 
+                          {parseFloat(fromAmount || "0") > 0.1
                             ? "Orders can be split into smaller chunks and filled progressively for better liquidity."
-                            : "Even small orders benefit from optimal routing and can be partially filled for better execution."
-                          }
+                            : "Even small orders benefit from optimal routing and can be partially filled for better execution."}
                         </div>
-                        
+
                         {/* Smart Example Based on Amount */}
                         <div className="mt-2 flex items-center gap-1 text-[10px] text-orange-600">
                           <span>📊 Example:</span>
                           {parseFloat(fromAmount || "0") > 1 ? (
                             <>
-                              <span className="bg-orange-200 px-1 rounded">5 ETH</span>
+                              <span className="bg-orange-200 px-1 rounded">
+                                5 ETH
+                              </span>
                               <span>→</span>
-                              <span className="bg-green-200 px-1 rounded">2+1.5+1.5</span>
+                              <span className="bg-green-200 px-1 rounded">
+                                2+1.5+1.5
+                              </span>
                             </>
                           ) : parseFloat(fromAmount || "0") > 0.1 ? (
                             <>
-                              <span className="bg-orange-200 px-1 rounded">0.5 ETH</span>
+                              <span className="bg-orange-200 px-1 rounded">
+                                0.5 ETH
+                              </span>
                               <span>→</span>
-                              <span className="bg-green-200 px-1 rounded">0.2+0.3</span>
+                              <span className="bg-green-200 px-1 rounded">
+                                0.2+0.3
+                              </span>
                             </>
                           ) : (
                             <>
-                              <span className="bg-orange-200 px-1 rounded">0.01 ETH</span>
+                              <span className="bg-orange-200 px-1 rounded">
+                                0.01 ETH
+                              </span>
                               <span>→</span>
-                              <span className="bg-green-200 px-1 rounded">0.004+0.006</span>
+                              <span className="bg-green-200 px-1 rounded">
+                                0.004+0.006
+                              </span>
                             </>
                           )}
                           <span>⚡</span>
                         </div>
                       </div>
-                      
+
                       {currentSwapId && (
                         <div className="text-right">
-                          <div className="text-[10px] text-orange-600 mb-1">Active Swap</div>
+                          <div className="text-[10px] text-orange-600 mb-1">
+                            Active Swap
+                          </div>
                           <div className="text-[9px] font-mono bg-orange-200 px-1.5 py-0.5 rounded text-orange-800">
                             {currentSwapId.substring(0, 8)}...
                           </div>
@@ -1423,11 +1447,15 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
                   (toChain === "tron" && !tronConnected) ? (
                   "Connect Destination Wallet"
                 ) : (
-                  `${showPartialFills ? '🧩 ' : ''}Bridge ${fromAmount || "0"} ${fromChain.toUpperCase()} → ${
+                  `${showPartialFills ? "🧩 " : ""}Bridge ${
+                    fromAmount || "0"
+                  } ${fromChain.toUpperCase()} → ${
                     conversion.convertedAmount && !conversion.isLoading
                       ? parseFloat(conversion.convertedAmount).toFixed(4)
                       : "..."
-                  } ${toChain.toUpperCase()}${showPartialFills ? ' (Partial Fills)' : ''}`
+                  } ${toChain.toUpperCase()}${
+                    showPartialFills ? " (Partial Fills)" : ""
+                  }`
                 )}
               </Button>
 
@@ -1462,12 +1490,6 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
           </CardContent>
         </Card>
       </div>
-
-      {/* Partial Fills Panel */}
-      <PartialFillsPanel
-        swapId={currentSwapId}
-        isVisible={true}
-      />
 
       {/* Bridge Modal */}
       <BridgeModal
