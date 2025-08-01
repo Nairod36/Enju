@@ -22,7 +22,7 @@ export class BridgeAPI {
   private setupMiddleware(): void {
     this.app.use(cors());
     this.app.use(express.json());
-    
+
     // Request logging
     this.app.use((req, res, next) => {
       console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
@@ -84,7 +84,7 @@ export class BridgeAPI {
             error: 'Bridge not found'
           });
         }
-        
+
         res.json({
           success: true,
           data: bridge
@@ -102,7 +102,7 @@ export class BridgeAPI {
       try {
         const request: SwapRequest = req.body;
         console.log('🚀 Bridge initiate request:', JSON.stringify(request, null, 2));
-        
+
         // Validate request
         if (!request.type || !request.amount || !request.hashlock || !request.timelock || !request.ethRecipient || !request.nearAccount) {
           console.log('❌ Validation failed - missing fields:', {
@@ -122,7 +122,7 @@ export class BridgeAPI {
         console.log('✅ Validation passed, initiating bridge...');
         const bridgeId = await this.resolver.initiateBridge(request);
         console.log('✅ Bridge initiated successfully:', bridgeId);
-        
+
         res.json({
           success: true,
           data: {
@@ -144,7 +144,7 @@ export class BridgeAPI {
     this.app.post('/bridges/:bridgeId/complete', async (req, res) => {
       try {
         const { secret } = req.body;
-        
+
         if (!secret) {
           return res.status(400).json({
             success: false,
@@ -153,7 +153,7 @@ export class BridgeAPI {
         }
 
         await this.resolver.completeBridge(req.params.bridgeId, secret);
-        
+
         res.json({
           success: true,
           message: 'Bridge completed successfully'
@@ -170,7 +170,7 @@ export class BridgeAPI {
     this.app.post('/bridges/create-near-htlc', async (req, res) => {
       try {
         const { receiver, hashlock, timelock, ethAddress, amount } = req.body;
-        
+
         if (!receiver || !hashlock || !timelock || !ethAddress || !amount) {
           return res.status(400).json({
             success: false,
@@ -188,7 +188,7 @@ export class BridgeAPI {
           ethAddress,
           amount
         });
-        
+
         res.json({
           success: true,
           data: {
@@ -225,7 +225,7 @@ export class BridgeAPI {
     });
 
     // ===== PRICE ORACLE ENDPOINTS =====
-    
+
     // Get current prices
     this.app.get('/api/prices', async (req, res) => {
       try {
@@ -303,7 +303,7 @@ export class BridgeAPI {
     });
 
     // ===== MINT ETH ENDPOINT (FOR TESTING ON FORK) =====
-    
+
     // Mint ETH to address (for hackathon/testing purposes)
     this.app.post('/api/mint-eth', async (req, res) => {
       try {
@@ -330,17 +330,17 @@ export class BridgeAPI {
         // Use the admin wallet to send ETH (from config)
         const { ethers } = require('ethers');
         const provider = new ethers.JsonRpcProvider(this.config.ethRpcUrl);
-        
+
         // Use admin private key from config or fallback to default Anvil key
-        const adminPrivateKey = this.config.ethAdminPrivateKey || 
+        const adminPrivateKey = this.config.ethAdminPrivateKey ||
           '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
-        
+
         const adminWallet = new ethers.Wallet(adminPrivateKey, provider);
 
         // Check admin balance first
         const adminBalance = await provider.getBalance(adminWallet.address);
         const amountWei = ethers.parseEther(amount);
-        
+
         if (adminBalance < amountWei) {
           return res.status(400).json({
             success: false,
@@ -356,10 +356,10 @@ export class BridgeAPI {
         });
 
         console.log(`📋 Mint transaction sent: ${tx.hash}`);
-        
+
         // Wait for confirmation
         const receipt = await tx.wait();
-        
+
         if (!receipt) {
           throw new Error('Transaction receipt is null');
         }
@@ -390,7 +390,7 @@ export class BridgeAPI {
     });
 
     // ===== WALLET INFO ENDPOINTS =====
-    
+
     // Get ETH balance of an address
     this.app.get('/api/balance/:address', async (req, res) => {
       try {
@@ -405,7 +405,7 @@ export class BridgeAPI {
 
         const { ethers } = require('ethers');
         const provider = new ethers.JsonRpcProvider(this.config.ethRpcUrl);
-        
+
         const balance = await provider.getBalance(address);
         const balanceInEth = ethers.formatEther(balance);
 
@@ -433,8 +433,8 @@ export class BridgeAPI {
         const { address } = req.params;
 
         // Get bridge transactions involving this address
-        const bridges = this.resolver.getAllBridges().filter(bridge => 
-          bridge.ethRecipient === address || 
+        const bridges = this.resolver.getAllBridges().filter(bridge =>
+          bridge.ethRecipient === address ||
           bridge.nearAccount === address ||
           (bridge as any).user === address
         );
@@ -525,11 +525,11 @@ export class BridgeAPI {
 
   async start(): Promise<void> {
     console.log('🚀 Starting Bridge API...');
-    
+
     // Initialize resolver
     await this.resolver.initialize();
     await this.resolver.start();
-    
+
     // Start HTTP server
     this.server = this.app.listen(this.port, () => {
       console.log(`✅ Bridge API listening on port ${this.port}`);
@@ -541,11 +541,11 @@ export class BridgeAPI {
 
   async stop(): Promise<void> {
     console.log('🛑 Stopping Bridge API...');
-    
+
     if (this.server) {
       this.server.close();
     }
-    
+
     await this.resolver.stop();
     console.log('✅ Bridge API stopped');
   }
