@@ -343,6 +343,47 @@ export class EthereumListener extends EventEmitter {
     }
   }
 
+  private async handlePartialFillCreated(
+    swapId: string,
+    fillId: string,
+    escrow: string,
+    fillAmount: bigint,
+    remainingAmount: bigint,
+    event: ethers.EventLog
+  ): Promise<void> {
+    const eventId = `${event.transactionHash}-${event.index}`;
+    console.log(`🔥 INCOMING ETH EVENT: PartialFillCreated detected!`);
+    console.log(`📋 Event details:`, {
+      eventId,
+      swapId,
+      fillId,
+      escrow,
+      fillAmount: ethers.formatEther(fillAmount),
+      remainingAmount: ethers.formatEther(remainingAmount),
+      txHash: event.transactionHash,
+      block: event.blockNumber,
+      timestamp: new Date().toISOString()
+    });
+
+    // Avoid duplicates
+    if (this.processedEvents.has(eventId)) {
+      console.log(`⚠️ Event ${eventId} already processed, skipping...`);
+      return;
+    }
+    this.processedEvents.add(eventId);
+
+    this.emit('partialFillCreated', {
+      swapId,
+      fillId,
+      escrow,
+      fillAmount: fillAmount.toString(),
+      remainingAmount: remainingAmount.toString(),
+      txHash: event.transactionHash,
+      blockNumber: event.blockNumber
+    });
+    console.log(`✅ PartialFillCreated event emitted successfully`);
+  }
+
   async getSwapDetails(swapId: string): Promise<any> {
     try {
       return await this.contract.getSwap(swapId);
