@@ -158,7 +158,7 @@ class IslandsService {
     const response = await fetch(`${API_BASE_URL}/islands/public?page=${page}&limit=${limit}`);
 
     if (!response.ok) {
-      throw new Error('Failed to fetch public islands');
+      throw new Error(`Failed to fetch public islands: ${response.status} ${response.statusText}`);
     }
 
     return response.json();
