@@ -24,10 +24,9 @@ import { Canvas } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import { FloatingIsland, FloatingIslandRef } from "./island/island";
 import { ModernBridge } from "../../components/bridge/ModernBridge";
-import { TronBridgeTest } from "../../components/TronBridgeTest";
+import { MintEthButton } from "../../components/bridge/MintEthButton";
 
 import { useIslands } from "../../hooks/useIslands";
-import { generateIslandSeed } from "./island/island.generators";
 import { useAuthContext } from "@/contexts/AuthContext";
 import { ethers } from "ethers";
 // import { useEscrowEventListener } from "../../hooks/useEscrowEventListener";
@@ -37,7 +36,7 @@ export function AppDashboard() {
   const formatAmount = (amount: any): number => {
     if (!amount) return 0;
     try {
-      if (typeof amount === 'string' && amount.includes('.')) {
+      if (typeof amount === "string" && amount.includes(".")) {
         return parseFloat(amount);
       } else {
         return parseFloat(ethers.utils.formatEther(amount));
@@ -395,7 +394,9 @@ export function AppDashboard() {
                                       </span>
                                       <div className="text-xs text-gray-500">
                                         ≈ $
-                                        {(formatAmount(bridge.amount) * 2500).toFixed(2)}
+                                        {(
+                                          formatAmount(bridge.amount) * 2500
+                                        ).toFixed(2)}
                                       </div>
                                     </div>
                                   </TableCell>
@@ -496,7 +497,7 @@ export function AppDashboard() {
                         // Trigger island update if needed
                         if (islandRef.current) {
                           // Island ref available for future use
-                          console.log('Island ref available for tree update');
+                          console.log("Island ref available for tree update");
                         }
                         // Refresh bridge history to show the new transaction
                         setTimeout(() => {
@@ -504,9 +505,9 @@ export function AppDashboard() {
                         }, 5000); // Wait 5 seconds then refresh
                       }}
                     />
-                    
-                    {/* TRON Bridge Test Component */}
-                    <TronBridgeTest />
+
+                    {/* ETH Faucet for Testing */}
+                    <MintEthButton />
                   </div>
                 </div>
               </div>

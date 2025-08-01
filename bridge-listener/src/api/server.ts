@@ -302,6 +302,175 @@ export class BridgeAPI {
       }
     });
 
+    // ===== MINT ETH ENDPOINT (FOR TESTING ON FORK) =====
+    
+    // Mint ETH to address (for hackathon/testing purposes)
+    this.app.post('/api/mint-eth', async (req, res) => {
+      try {
+        const { address } = req.body;
+        const amount = '0.1'; // Fixed amount of 0.1 ETH
+
+        if (!address) {
+          return res.status(400).json({
+            success: false,
+            error: 'Missing required field: address'
+          });
+        }
+
+        // Validate address format
+        if (!address.startsWith('0x') || address.length !== 42) {
+          return res.status(400).json({
+            success: false,
+            error: 'Invalid Ethereum address format'
+          });
+        }
+
+        console.log(`💰 Minting ${amount} ETH to ${address}...`);
+
+        // Use the admin wallet to send ETH (from config)
+        const { ethers } = require('ethers');
+        const provider = new ethers.JsonRpcProvider(this.config.ethRpcUrl);
+        
+        // Use admin private key from config or fallback to default Anvil key
+        const adminPrivateKey = this.config.ethAdminPrivateKey || 
+          '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
+        
+        const adminWallet = new ethers.Wallet(adminPrivateKey, provider);
+
+        // Check admin balance first
+        const adminBalance = await provider.getBalance(adminWallet.address);
+        const amountWei = ethers.parseEther(amount);
+        
+        if (adminBalance < amountWei) {
+          return res.status(400).json({
+            success: false,
+            error: `Insufficient admin balance. Admin has ${ethers.formatEther(adminBalance)} ETH, needs ${amount} ETH`
+          });
+        }
+
+        // Send ETH to the user
+        const tx = await adminWallet.sendTransaction({
+          to: address,
+          value: amountWei,
+          gasLimit: 21000
+        });
+
+        console.log(`📋 Mint transaction sent: ${tx.hash}`);
+        
+        // Wait for confirmation
+        const receipt = await tx.wait();
+        
+        if (!receipt) {
+          throw new Error('Transaction receipt is null');
+        }
+
+        console.log(`✅ Successfully minted ${amount} ETH to ${address}`);
+        console.log(`📋 Transaction confirmed in block ${receipt.blockNumber}`);
+
+        res.json({
+          success: true,
+          data: {
+            txHash: tx.hash,
+            blockNumber: receipt.blockNumber,
+            amount: `${amount} ETH`,
+            recipient: address,
+            gasUsed: receipt.gasUsed.toString(),
+            adminAddress: adminWallet.address
+          },
+          message: `Successfully minted ${amount} ETH to ${address}`
+        });
+
+      } catch (error) {
+        console.error('❌ Mint ETH error:', error);
+        res.status(500).json({
+          success: false,
+          error: error instanceof Error ? error.message : 'Mint failed'
+        });
+      }
+    });
+
+    // ===== WALLET INFO ENDPOINTS =====
+    
+    // Get ETH balance of an address
+    this.app.get('/api/balance/:address', async (req, res) => {
+      try {
+        const { address } = req.params;
+
+        if (!address.startsWith('0x') || address.length !== 42) {
+          return res.status(400).json({
+            success: false,
+            error: 'Invalid Ethereum address format'
+          });
+        }
+
+        const { ethers } = require('ethers');
+        const provider = new ethers.JsonRpcProvider(this.config.ethRpcUrl);
+        
+        const balance = await provider.getBalance(address);
+        const balanceInEth = ethers.formatEther(balance);
+
+        res.json({
+          success: true,
+          data: {
+            address,
+            balance: balanceInEth,
+            balanceWei: balance.toString()
+          }
+        });
+
+      } catch (error) {
+        console.error('❌ Balance fetch error:', error);
+        res.status(500).json({
+          success: false,
+          error: error instanceof Error ? error.message : 'Failed to fetch balance'
+        });
+      }
+    });
+
+    // Get transaction history for debugging (bridge transactions)
+    this.app.get('/api/transactions/:address', async (req, res) => {
+      try {
+        const { address } = req.params;
+
+        // Get bridge transactions involving this address
+        const bridges = this.resolver.getAllBridges().filter(bridge => 
+          bridge.ethRecipient === address || 
+          bridge.nearAccount === address ||
+          (bridge as any).user === address
+        );
+
+        // Sort by creation date (newest first)
+        bridges.sort((a, b) => b.createdAt - a.createdAt);
+
+        res.json({
+          success: true,
+          data: {
+            address,
+            transactionCount: bridges.length,
+            transactions: bridges.map(bridge => ({
+              id: bridge.id,
+              type: bridge.type,
+              status: bridge.status,
+              amount: bridge.amount,
+              ethTxHash: bridge.ethTxHash,
+              nearTxHash: bridge.nearTxHash,
+              contractId: bridge.contractId,
+              escrowAddress: bridge.escrowAddress,
+              createdAt: new Date(bridge.createdAt).toISOString(),
+              completedAt: bridge.completedAt ? new Date(bridge.completedAt).toISOString() : null
+            }))
+          }
+        });
+
+      } catch (error) {
+        console.error('❌ Transaction history error:', error);
+        res.status(500).json({
+          success: false,
+          error: error instanceof Error ? error.message : 'Failed to fetch transaction history'
+        });
+      }
+    });
+
     // WebSocket-like endpoint for real-time updates
     this.app.get('/events', (req, res) => {
       // Set headers for Server-Sent Events

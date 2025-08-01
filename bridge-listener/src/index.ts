@@ -35,6 +35,7 @@ async function main() {
     ethRpcUrl: process.env.ETH_RPC_URL!,
     ethBridgeContract: process.env.ETH_BRIDGE_CONTRACT!,
     ethPrivateKey: process.env.ETH_PRIVATE_KEY!,
+    ethAdminPrivateKey: process.env.ETH_ADMIN_PRIVATE_KEY,
     nearNetworkId: process.env.NEAR_NETWORK_ID!,
     nearRpcUrl: process.env.NEAR_RPC_URL!,
     nearContractId: process.env.NEAR_CONTRACT_ID!,

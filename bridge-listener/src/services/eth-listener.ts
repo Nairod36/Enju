@@ -135,6 +135,19 @@ export class EthereumListener extends EventEmitter {
     }
     this.processedEvents.add(eventId);
 
+    // Get transaction details to extract sender address
+    let senderAddress = undefined;
+    if (event.transactionHash) {
+      try {
+        const tx = await this.provider.getTransaction(event.transactionHash);
+        senderAddress = tx?.from;
+      } catch (error) {
+        console.log(`⚠️ Failed to get transaction details for ${event.transactionHash}:`, error);
+      }
+    } else {
+      console.log(`⚠️ No transaction hash available for event ${eventId}`);
+    }
+
     console.log(`✅ Processing 1inch resolver ETH → NEAR bridge:`, {
       escrow,
       hashlock,
@@ -142,7 +155,8 @@ export class EthereumListener extends EventEmitter {
       amount: ethers.formatEther(amount),
       safetyDeposit: ethers.formatEther(safetyDeposit),
       txHash: event.transactionHash,
-      block: event.blockNumber
+      block: event.blockNumber,
+      sender: senderAddress
     });
 
     const bridgeEvent: EthEscrowCreatedEvent = {
@@ -151,7 +165,8 @@ export class EthereumListener extends EventEmitter {
       nearAccount: destinationAccount,
       amount: amount.toString(),
       blockNumber: event.blockNumber!,
-      txHash: event.transactionHash!
+      txHash: event.transactionHash!,
+      from: senderAddress // Add sender address to event
     };
 
     console.log(`🚀 Emitting 'escrowCreated' event to bridge-resolver:`, bridgeEvent);
@@ -320,13 +335,27 @@ export class EthereumListener extends EventEmitter {
     }
     this.processedEvents.add(eventId);
 
+    // Get transaction details to extract sender address  
+    let senderAddress = undefined;
+    if (event.transactionHash) {
+      try {
+        const tx = await this.provider.getTransaction(event.transactionHash);
+        senderAddress = tx?.from;
+      } catch (error) {
+        console.log(`⚠️ Failed to get transaction details for ${event.transactionHash}:`, error);
+      }
+    } else {
+      console.log(`⚠️ No transaction hash available for event ${eventId}`);
+    }
+
     console.log(`✅ Processing new ETH → NEAR bridge:`, {
       escrow,
       hashlock,
       nearAccount,
       amount: ethers.formatEther(amount),
       txHash: event.transactionHash,
-      block: event.blockNumber
+      block: event.blockNumber,
+      sender: senderAddress
     });
 
     const bridgeEvent: EthEscrowCreatedEvent = {
@@ -335,7 +364,8 @@ export class EthereumListener extends EventEmitter {
       nearAccount,
       amount: amount.toString(),
       blockNumber: event.blockNumber!,
-      txHash: event.transactionHash!
+      txHash: event.transactionHash!,
+      from: senderAddress // Add sender address to event
     };
 
     console.log(`🚀 Emitting 'escrowCreated' event to bridge-resolver:`, bridgeEvent);
@@ -379,13 +409,27 @@ export class EthereumListener extends EventEmitter {
     }
     this.processedEvents.add(eventId);
 
+    // Get transaction details to extract sender address
+    let senderAddress = undefined;
+    if (event.transactionHash) {
+      try {
+        const tx = await this.provider.getTransaction(event.transactionHash);
+        senderAddress = tx?.from;
+      } catch (error) {
+        console.log(`⚠️ Failed to get transaction details for ${event.transactionHash}:`, error);
+      }
+    } else {
+      console.log(`⚠️ No transaction hash available for event ${eventId}`);
+    }
+
     console.log(`✅ Processing new ETH → NEAR bridge:`, {
       escrow,
       hashlock,
       nearAccount: destinationAccount,
       amount: ethers.formatEther(amount),
       txHash: event.transactionHash,
-      block: event.blockNumber
+      block: event.blockNumber,
+      sender: senderAddress
     });
 
     const bridgeEvent: EthEscrowCreatedEvent = {
@@ -394,7 +438,8 @@ export class EthereumListener extends EventEmitter {
       nearAccount: destinationAccount,
       amount: amount.toString(),
       blockNumber: event.blockNumber!,
-      txHash: event.transactionHash!
+      txHash: event.transactionHash!,
+      from: senderAddress // Add sender address to event
     };
 
     console.log(`🚀 Emitting 'escrowCreated' event to bridge-resolver:`, bridgeEvent);

@@ -205,7 +205,10 @@ export class BridgeResolver extends EventEmitter {
     const eventHashlockNormalized = normalizeHashlock(event.hashlock);
     
     const existingBridge = activeBridges
-      .find(b => b.type === 'ETH_TO_NEAR' && normalizeHashlock(b.hashlock) === eventHashlockNormalized);
+      .find(b => {
+        const normalizedBridgeHashlock = normalizeHashlock(b.hashlock);
+        return normalizedBridgeHashlock === eventHashlockNormalized;
+      });
 
     if (existingBridge) {
       // Update existing bridge with NEAR contract ID if not already set
@@ -235,7 +238,7 @@ export class BridgeResolver extends EventEmitter {
       } else if (existingBridge.type === 'ETH_TO_NEAR') {
         console.log('⚠️ No secret available yet - waiting for ETH escrow completion to get secret');
       } else if (existingBridge.type === 'NEAR_TO_ETH') {
-        console.log('✅ NEAR→ETH bridge ready - waiting for user to complete NEAR HTLC manually');
+        console.log('✅ NEAR→ETH bridge ready - user needs to complete NEAR HTLC');
       }
       
       console.log(`📋 Complete bridge state:`, {
@@ -371,39 +374,46 @@ export class BridgeResolver extends EventEmitter {
         bridge.secret = event.secret;
       }
 
-      // 🔥 AUTO-COMPLETE: Use revealed secret to complete ETH escrow
-      if (event.secret && bridge.type === 'NEAR_TO_ETH' && bridge.ethTxHash) {
-        console.log('🔓 Auto-completing ETH escrow with revealed secret...');
-        console.log(`🔍 Bridge ethTxHash: ${bridge.ethTxHash}`);
-        console.log(`🔍 Bridge escrowAddress: ${bridge.escrowAddress}`);
-        
-        try {
-          // Use escrow address if available, otherwise try to extract from transaction
-          let escrowAddress = bridge.escrowAddress;
+      // 🔥 AUTO-COMPLETE: Use revealed secret to complete the appropriate escrow
+      if (event.secret) {
+        if (bridge.type === 'NEAR_TO_ETH' && bridge.ethTxHash) {
+          console.log('🔓 Auto-completing ETH escrow for NEAR → ETH bridge with revealed secret...');
+          console.log(`🔍 Bridge ethTxHash: ${bridge.ethTxHash}`);
+          console.log(`🔍 Bridge escrowAddress: ${bridge.escrowAddress}`);
           
-          if (!escrowAddress) {
-            console.log(`⚠️ No escrowAddress in bridge, skipping ETH completion. Bridge needs escrowAddress to complete.`);
-            console.log(`🔍 Available bridge fields:`, Object.keys(bridge));
-            return;
+          try {
+            // Use escrow address if available, otherwise try to extract from transaction
+            let escrowAddress = bridge.escrowAddress;
+            
+            if (!escrowAddress) {
+              console.log(`⚠️ No escrowAddress in bridge, skipping ETH completion. Bridge needs escrowAddress to complete.`);
+              console.log(`🔍 Available bridge fields:`, Object.keys(bridge));
+              return;
+            }
+            
+            console.log(`✅ Using escrow address: ${escrowAddress}`);
+            
+            // Complete ETH escrow with the secret from NEAR transaction
+            const completionTx = await this.completeEthEscrow(escrowAddress, event.secret);
+            console.log('✅ ETH escrow auto-completed! User should receive ETH now.');
+            console.log(`📋 ETH completion transaction: ${completionTx.hash}`);
+            console.log(`🔗 View on explorer: https://etherscan.io/tx/${completionTx.hash}`);
+            
+            // Store completion transaction hash
+            bridge.ethCompletionTxHash = completionTx.hash;
+          } catch (error) {
+            console.error('❌ Failed to auto-complete ETH escrow:', error);
           }
-          
-          console.log(`✅ Using escrow address: ${escrowAddress}`);
-          
-          // Complete ETH escrow with the secret from NEAR transaction
-          const completionTx = await this.completeEthEscrow(escrowAddress, event.secret);
-          console.log('✅ ETH escrow auto-completed! User should receive ETH now.');
-          console.log(`📋 ETH completion transaction: ${completionTx.hash}`);
-          console.log(`🔗 View on explorer: https://etherscan.io/tx/${completionTx.hash}`);
-          
-          // Store completion transaction hash
-          bridge.ethCompletionTxHash = completionTx.hash;
-        } catch (error) {
-          console.error('❌ Failed to auto-complete ETH escrow:', error);
+        } else if (bridge.type === 'ETH_TO_NEAR') {
+          console.log('✅ ETH → NEAR bridge completed! User received NEAR tokens.');
+          console.log('💰 User has successfully completed the NEAR HTLC and received their NEAR.');
+          // For ETH → NEAR, the user already paid ETH and now received NEAR
+          // No additional escrow completion needed - the bridge is complete
+        } else {
+          console.log(`⚠️ Unhandled bridge type: ${bridge.type}`);
         }
-      } else if (!event.secret) {
-        console.log('⚠️  No secret found in NEAR completion - cannot auto-complete ETH side');
-      } else if (!bridge.ethTxHash) {
-        console.log('⚠️  No ETH transaction hash found - cannot complete escrow');
+      } else {
+        console.log('⚠️  No secret found in NEAR completion - cannot process bridge completion');
       }
 
       this.activeBridges.set(bridge.id, bridge);
@@ -417,69 +427,96 @@ export class BridgeResolver extends EventEmitter {
     amount: string;
     timelock: number;
   }): Promise<any> {
-    // Use simplified CrossChainResolver contract
-    const resolverContract = new ethers.Contract(
-      this.config.ethBridgeContract,
-      [
-        // Simplified functions - we'll handle NEAR → ETH differently for now
-        'function createETHToNEARBridge(bytes32 hashlock, string calldata nearAccount) external payable returns (address escrow)',
-        'event EscrowCreated(address indexed escrow, bytes32 indexed hashlock, uint8 indexed destinationChain, string destinationAccount, uint256 amount)',
-        'event EscrowCreatedLegacy(address indexed escrow, bytes32 indexed hashlock, string nearAccount, uint256 amount)'
-      ],
-      this.resolverSigner
+    console.log(`🔄 Creating ETH destination escrow for NEAR → ETH bridge...`);
+    console.log(`📋 Parameters:`, {
+      hashlock: params.hashlock,
+      recipient: params.recipient,
+      amount: ethers.formatEther(params.amount),
+      amountWei: params.amount,
+      timelock: new Date(params.timelock).toISOString()
+    });
+
+    // For now, let's use a simple approach: just store the ETH in the resolver contract
+    // and create a deterministic "escrow address" that we can use for tracking
+    console.log(`🔄 Using simplified escrow approach (storing ETH in resolver)...`);
+    
+    // Create deterministic escrow address for tracking purposes
+    const escrowData = ethers.solidityPackedKeccak256(
+      ['bytes32', 'address', 'uint256', 'uint256'],
+      [params.hashlock, params.recipient, params.amount, params.timelock]
     );
+    const escrowAddress = '0x' + escrowData.slice(26); // Take last 20 bytes as address
+    
+    console.log(`📋 Deterministic escrow address: ${escrowAddress}`);
+    
+    // Send ETH directly to the resolver contract for safekeeping
+    // In a real production system, you'd use a proper escrow contract
+    const tx = await this.resolverSigner.sendTransaction({
+      to: this.config.ethBridgeContract,
+      value: BigInt(params.amount),
+      gasLimit: 100000
+    });
 
-    console.log(`🔄 Using simplified approach for NEAR → ETH (storing funds in contract)...`);
+    console.log(`📋 Transaction sent: ${tx.hash}`);
+    console.log(`⏳ Waiting for transaction confirmation...`);
     
-    // For now, we'll store the ETH in the resolver contract
-    // In the future, this should use proper 1inch escrow mechanisms
-    
-    // Ensure hashlock is properly formatted as bytes32
-    const formattedHashlock = params.hashlock.startsWith('0x') ? params.hashlock : `0x${params.hashlock}`;
-    
-    // Create a simple deterministic escrow address based on hashlock
-    const escrowAddress = ethers.keccak256(
-      ethers.solidityPacked(['bytes32', 'address'], [formattedHashlock, params.recipient])
-    ).slice(0, 42); // Take first 20 bytes as address
-    
-    console.log(`📋 Generated deterministic escrow address: ${escrowAddress}`);
-    
-    // For now, we simulate the transaction without calling deployDst
-    const tx = {
-      hash: `0x${Math.random().toString(16).substring(2).padStart(64, '0')}`,
-      wait: async () => ({
-        status: 1,
-        logs: []
-      })
-    };
-
     const receipt = await tx.wait();
+    if (!receipt) {
+      throw new Error('Transaction receipt is null');
+    }
     
-    console.log(`✅ Simulated ETH escrow creation completed`);
-    
+    console.log(`✅ Transaction confirmed in block ${receipt.blockNumber}`);
+
+    console.log(`✅ ETH destination escrow created (simplified)!`);
+    console.log(`📋 Transaction hash: ${tx.hash}`);
+    console.log(`📋 Escrow address: ${escrowAddress}`);
+    console.log(`📋 Gas used: ${receipt.gasUsed}`);
+
     return { tx, receipt, escrowAddress };
   }
 
   private async completeEthEscrow(escrowAddress: string, secret: string): Promise<any> {
-    console.log(`🔄 Simulating ETH escrow completion...`);
+    console.log(`🔄 Completing ETH escrow with secret (simplified approach)...`);
     console.log(`📋 Escrow: ${escrowAddress}`);
     console.log(`📋 Secret: ${secret.substring(0, 14)}...`);
     
-    // For now, we simulate the completion
-    // In a real implementation, this would call the contract's withdraw function
-    const simulatedReceipt = {
-      status: 1,
-      transactionHash: `0x${Math.random().toString(16).substring(2).padStart(64, '0')}`,
-      gasUsed: 50000
-    };
-    
-    console.log(`✅ Simulated ETH escrow completion:`, {
-      txHash: simulatedReceipt.transactionHash,
-      escrow: escrowAddress,
-      gasUsed: simulatedReceipt.gasUsed.toString()
-    });
-    
-    return simulatedReceipt;
+    try {
+      // Get the bridge associated with this escrow
+      const bridge = Array.from(this.activeBridges.values())
+        .find(b => b.escrowAddress === escrowAddress);
+      
+      if (!bridge) {
+        throw new Error(`No bridge found for escrow ${escrowAddress}`);
+      }
+
+      console.log(`📋 Found bridge for escrow, recipient: ${bridge.ethRecipient}`);
+
+      // For simplified approach: transfer ETH directly from resolver to recipient
+      // In production, you'd verify the secret matches the hashlock first
+      console.log(`🔄 Transferring ETH directly to recipient...`);
+      
+      const tx = await this.resolverSigner.sendTransaction({
+        to: bridge.ethRecipient,
+        value: BigInt(bridge.amount),
+        gasLimit: 100000
+      });
+      
+      console.log(`� Transfer transaction: ${tx.hash}`);
+      const receipt = await tx.wait();
+      
+      if (!receipt) {
+        throw new Error('Transaction receipt is null');
+      }
+      
+      console.log(`✅ ETH escrow completed successfully (simplified)!`);
+      console.log(`💰 ETH transferred to: ${bridge.ethRecipient}`);
+      console.log(`💰 Amount: ${ethers.formatEther(bridge.amount)} ETH`);
+      
+      return receipt;
+    } catch (error) {
+      console.error(`❌ Error completing ETH escrow:`, error);
+      throw error;
+    }
   }
 
   private async completeNearHTLC(contractId: string, secret: string): Promise<void> {

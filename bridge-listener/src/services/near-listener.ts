@@ -331,8 +331,6 @@ export class NearListener extends EventEmitter {
     let nearAmount: string;
     let nearYocto: bigint;
     
-    console.log(`🔍 Debug amount conversion - params.amount:`, params.amount, `type:`, typeof params.amount);
-    
     // Check if amount is already in NEAR format (for NEAR→ETH bridges)
     if (typeof params.amount === 'string' && (params.amount.includes('.') || parseFloat(params.amount) < 1000)) {
       // Already in NEAR format - use directly
@@ -350,41 +348,35 @@ export class NearListener extends EventEmitter {
       const ethWei = BigInt(params.amount);
       const ethAmount = Number(ethWei) / 1e18; // Convert wei to ETH
       
-      console.log(`💱 Converting ${ethAmount} ETH to NEAR using market rates...`);
+      console.log(`💱 Converting ${ethAmount} ETH to NEAR...`);
       nearAmount = await this.priceOracle.convertEthToNear(ethAmount.toString());
-      nearYocto = BigInt(Math.floor(parseFloat(nearAmount) * 1e24)); // Convert to yoctoNEAR
-      console.log(`💰 Conversion: ${ethAmount} ETH → ${nearAmount} NEAR (${nearYocto.toString()} yoctoNEAR)`);
+      nearYocto = BigInt(Math.floor(parseFloat(nearAmount) * 1e24));
+      console.log(`💰 ${ethAmount} ETH → ${nearAmount} NEAR`);
     }
 
-    // 🔥 AUTO-DETECT: Determine if partial fills are enabled
-    // For now, we default to partial fills mode since the contract is updated
-    const usePartialFills = params.usePartialFills !== false; // Default to true
+    // Use partial fills mode by default
+    const usePartialFills = params.usePartialFills !== false;
     
     if (usePartialFills) {
-      console.log(`✅ 🧩 PARTIAL FILLS MODE: User will sign for EXACT amount: ${nearAmount} NEAR`);
-      console.log(`🎯 Using optimized system - no more huge amounts!`);
+      console.log(`✅ Creating HTLC for ${nearAmount} NEAR`);
     } else {
-      console.log(`✅ 🔄 STANDARD MODE: Using traditional cross-chain HTLC`);
-      console.log(`⚠️ User will sign for: ${nearAmount} NEAR`);
+      console.log(`✅ Using standard mode for ${nearAmount} NEAR`);
     }
       
-    console.log(`🚀 About to call NEAR smart contract with:`);
-    console.log(`   contractId: ${this.config.nearContractId}`);
+    console.log(`🚀 Calling NEAR contract: ${this.config.nearContractId}`);
     console.log(`   methodName: create_cross_chain_htlc`);
     console.log(`   args:`, JSON.stringify(args, null, 2));
     console.log(`   attachedDeposit: ${nearYocto.toString()} yoctoNEAR`);
-    console.log(`   gas: 100000000000000`);
-
-    // Use the updated cross-chain HTLC method (which now uses exact amounts)
+    // Use the updated cross-chain HTLC method
     const result = await this.account.functionCall({
       contractId: this.config.nearContractId,
       methodName: 'create_cross_chain_htlc',
       args,
       gas: BigInt('100000000000000'),
-      attachedDeposit: nearYocto, // Always exact amount now
+      attachedDeposit: nearYocto,
     });
 
-    console.log(`✅ ${usePartialFills ? 'Partial Fill' : 'Standard'} HTLC created`);
+    console.log(`✅ HTLC created successfully`);
     
     // Extract contract ID
     const allLogs = result.receipts_outcome
