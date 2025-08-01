@@ -26,7 +26,7 @@ export const usePublicIslands = () => {
     setError(null);
     try {
       const response = await islandsService.getPublicIslands(page, limit);
-      
+
       if (response && response.islands) {
         setIslands(response.islands as PublicIslandData[]);
       } else {
