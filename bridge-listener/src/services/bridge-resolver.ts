@@ -225,6 +225,31 @@ export class BridgeResolver extends EventEmitter {
         console.log(`✅ NEAR HTLC created automatically: ${contractId}`);
         console.log(`🎯 Bridge ready for completion! Both sides active.`);
 
+        // Mint reward tokens for the user
+        try {
+          console.log(`🪙 Minting reward tokens for ETH → NEAR bridge...`);
+          const rewardResponse = await fetch('http://localhost:3001/api/rewards/mint', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              userAddress: event.from || event.nearAccount,
+              amount: ethAmountInEth,
+              currency: 'ETH'
+            }),
+          });
+
+          if (rewardResponse.ok) {
+            const rewardResult = await rewardResponse.json() as { txHash: string };
+            console.log(`✅ Reward tokens minted: ${rewardResult.txHash}`);
+          } else {
+            console.error('❌ Failed to mint reward tokens:', await rewardResponse.text());
+          }
+        } catch (rewardError) {
+          console.error('❌ Error minting reward tokens:', rewardError);
+        }
+
       } catch (nearError) {
         console.error('❌ Failed to create NEAR HTLC automatically:', nearError);
         // Fallback to monitoring mode if auto-creation fails
@@ -882,40 +907,66 @@ export class BridgeResolver extends EventEmitter {
         return;
       }
 
-      // Vérifier que c'est bien un bridge vers TRON (destinationChain = 1)
+      // Vérifier que c'est bien un bridge vers TRON (destinationChain = 1) ou NEAR (destinationChain = 0)
       const chainId = Number(destinationChain);
-      if (chainId !== 1) {
-        console.log(`⏭️ Ignoring event - destinationChain=${chainId} (not TRON=1)`);
+      if (chainId !== 1 && chainId !== 0) {
+        console.log(`⏭️ Ignoring event - destinationChain=${chainId} (not TRON=1 or NEAR=0)`);
         return;
       }
 
-      console.log('🎯 Processing ETH → TRON bridge event...');
+      if (chainId === 1) {
+        console.log('🎯 Processing ETH → TRON bridge event...');
 
-      try {
-        // Traiter l'événement ETH → TRON
-        const bridgeEventData = {
-          txHash: event.transactionHash,
-          escrow: escrow,
-          hashlock: hashlock,
-          tronAddress: destinationAccount,
-          amount: amount
-        };
+        try {
+          // Traiter l'événement ETH → TRON
+          const bridgeEventData = {
+            txHash: event.transactionHash,
+            escrow: escrow,
+            hashlock: hashlock,
+            tronAddress: destinationAccount,
+            amount: amount
+          };
 
-        console.log('📝 ETH → TRON bridge data:', bridgeEventData);
+          console.log('📝 ETH → TRON bridge data:', bridgeEventData);
 
-        // Appeler le handler pour traiter le bridge
-        await this.handleEthToTronBridge(bridgeEventData);
+          // Appeler le handler pour traiter le bridge
+          await this.handleEthToTronBridge(bridgeEventData);
 
-        console.log('✅ ETH → TRON bridge processed successfully');
-      } catch (error) {
-        console.error('❌ Failed to process ETH → TRON swap:', error);
+          console.log('✅ ETH → TRON bridge processed successfully');
+        } catch (error) {
+          console.error('❌ Failed to process ETH → TRON swap:', error);
+        }
+      } else if (chainId === 0) {
+        console.log('🎯 Processing ETH → NEAR bridge event...');
+
+        try {
+          // Traiter l'événement ETH → NEAR
+          const bridgeEventData = {
+            escrow: escrow,
+            hashlock: hashlock,
+            nearAccount: destinationAccount,
+            amount: amount.toString(),
+            blockNumber: event.blockNumber,
+            txHash: event.transactionHash,
+            from: undefined // Will be fetched if needed
+          };
+
+          console.log('📝 ETH → NEAR bridge data:', bridgeEventData);
+
+          // Call the existing ETH → NEAR bridge handler
+          await this.handleEthToNearBridge(bridgeEventData);
+
+          console.log('✅ ETH → NEAR bridge event emitted successfully');
+        } catch (error) {
+          console.error('❌ Failed to process ETH → NEAR bridge:', error);
+        }
       }
     });
 
-    // Écouter aussi tous les événements pour déboguer
-    bridgeContract.on('*', (event) => {
-      console.log('📡 Any event detected:', event);
-    });
+    // Écouter aussi tous les événements pour déboguer (disabled to prevent buffer overrun)
+    // bridgeContract.on('*', (event) => {
+    //   console.log('📡 Any event detected:', event);
+    // });
 
     console.log('✅ ETH → TRON event listeners set up');
 
@@ -939,11 +990,11 @@ export class BridgeResolver extends EventEmitter {
     try {
       // Ensure hashlock has 0x prefix for consistency
       const hashlock = event.hashlock.startsWith('0x') ? event.hashlock : `0x${event.hashlock}`;
-      
+
       // Find existing bridge with same hashlock instead of creating a new one
       const normalizeHashlock = (hl: string) => hl.replace(/^0x/, '').toLowerCase();
       const eventHashlockNormalized = normalizeHashlock(hashlock);
-      
+
       let existingBridge = Array.from(this.activeBridges.values())
         .find(b => {
           const normalizedBridgeHashlock = normalizeHashlock(b.hashlock);
@@ -956,7 +1007,7 @@ export class BridgeResolver extends EventEmitter {
         existingBridge.tronTxHash = event.txHash;
         existingBridge.status = 'PROCESSING'; // Update status to processing
         this.activeBridges.set(existingBridge.id, existingBridge);
-        
+
         console.log(`✅ Updated existing TRON → ETH bridge: ${existingBridge.id}`);
       } else {
         // Create new bridge if none exists (fallback)
@@ -1306,11 +1357,11 @@ export class BridgeResolver extends EventEmitter {
       });
 
       const receipt = await tx.wait();
-      
+
       if (!receipt) {
         throw new Error('Transaction receipt is null');
       }
-      
+
       console.log('✅ ETH sent successfully!');
       console.log(`📋 ETH transaction hash: ${receipt.hash}`);
       console.log(`💰 Amount sent: ${ethAmount} ETH`);
@@ -1322,7 +1373,7 @@ export class BridgeResolver extends EventEmitter {
       // Find and update the existing bridge by hashlock
       const normalizeHashlock = (hl: string) => hl.replace(/^0x/, '').toLowerCase();
       const eventHashlockNormalized = normalizeHashlock(hashlock);
-      
+
       const bridge = Array.from(this.activeBridges.values())
         .find(b => {
           const normalizedBridgeHashlock = normalizeHashlock(b.hashlock);
@@ -1335,7 +1386,7 @@ export class BridgeResolver extends EventEmitter {
         bridge.completedAt = Date.now();
         this.activeBridges.set(bridge.id, bridge); // Update the bridge in the map
         this.emit('bridgeCompleted', bridge);
-        
+
         console.log(`✅ TRON → ETH bridge completed: ${bridge.id}`);
         console.log(`🎉 User has received their ETH! Bridge transaction complete.`);
       } else {
@@ -1349,7 +1400,7 @@ export class BridgeResolver extends EventEmitter {
       const hashlock = event.hashlock.startsWith('0x') ? event.hashlock : `0x${event.hashlock}`;
       const normalizeHashlock = (hl: string) => hl.replace(/^0x/, '').toLowerCase();
       const eventHashlockNormalized = normalizeHashlock(hashlock);
-      
+
       const bridge = Array.from(this.activeBridges.values())
         .find(b => {
           const normalizedBridgeHashlock = normalizeHashlock(b.hashlock);

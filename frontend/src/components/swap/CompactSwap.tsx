@@ -78,6 +78,12 @@ const TOKENS: Record<string, Token> = {
     name: "Wrapped Bitcoin",
     decimals: 8,
   },
+  REWARD: {
+    address: "0x012EB96bcc36d3c32847dB4AC416B19Febeb9c54",
+    symbol: "REWARD",
+    name: "Enju Reward Token",
+    decimals: 18,
+  },
 };
 
 export const CompactSwap: React.FC = () => {

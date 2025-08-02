@@ -109,6 +109,7 @@ export function useTokenBalances() {
             { address: "0xdAC17F958D2ee523a2206206994597C13D831ec7", decimals: 6 },  // USDT
             { address: "0x6B175474E89094C44Da98b954EedeAC495271d0F", decimals: 18 }, // DAI
             { address: "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599", decimals: 8 },  // WBTC
+            { address: "0x012EB96bcc36d3c32847dB4AC416B19Febeb9c54", decimals: 18 }, // REWARD Token
         ];
 
         try {
