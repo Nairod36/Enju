@@ -197,8 +197,11 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
       return;
     }
 
-    // Check network if Ethereum is involved
-    if (needsEthWallet) {
+    // Check network if Ethereum is the SOURCE chain (not destination)
+    // For TRON->ETH, we don't need to check ETH network upfront since bridge-listener handles it
+    const needsEthNetworkCheck = fromChain === "ethereum";
+    
+    if (needsEthNetworkCheck) {
       console.log("🔍 Checking Ethereum network...");
       try {
         // Multiple attempts to get the correct chainId with more thorough checking
@@ -372,7 +375,23 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
     try {
       console.log("🎯 Bridge routing:", { fromChain, toChain });
 
-      if (fromChain === "ethereum" && toChain === "near") {
+      // Special handling for TRON → ETH to ensure we only use TronLink
+      if (fromChain === "tron" && toChain === "ethereum") {
+        console.log("📍 Using TRON → ETH bridge (TronLink only)");
+        
+        // Additional TronLink verification before proceeding
+        if (!window.tronLink) {
+          throw new Error("TronLink extension is required for TRON → ETH bridge");
+        }
+        
+        if (!tronConnected || !tronAddress) {
+          throw new Error("Please connect your TronLink wallet first");
+        }
+        
+        // Explicitly avoid accessing window.ethereum during TRON → ETH
+        console.log("🔒 TRON → ETH bridge: Using TronLink exclusively");
+        await handleTronToEthBridge(newBridgeData);
+      } else if (fromChain === "ethereum" && toChain === "near") {
         // Add converted amount to bridge data for ETH -> NEAR
         newBridgeData.convertedAmount =
           conversion.convertedAmount || fromAmount;
@@ -383,9 +402,6 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
       } else if (fromChain === "ethereum" && toChain === "tron") {
         console.log("📍 Using ETH → TRON bridge");
         await handleEthToTronBridge(newBridgeData);
-      } else if (fromChain === "tron" && toChain === "ethereum") {
-        console.log("📍 Using TRON → ETH bridge");
-        await handleTronToEthBridge(newBridgeData);
       } else {
         throw new Error(`Unsupported bridge route: ${fromChain} → ${toChain}`);
       }
@@ -1245,6 +1261,29 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
   };
 
   const handleTronToEthBridge = async (bridgeData: any) => {
+    // Verify TronLink is available before starting
+    if (!window.tronLink) {
+      updateBridgeLog(`❌ TronLink extension not found!`);
+      updateBridgeLog(`📲 Please install TronLink extension to use TRON bridge`);
+      setBridgeData((prev) => {
+        if (!prev) return null;
+        return { ...prev, status: "error" };
+      });
+      setIsLoading(false);
+      return;
+    }
+
+    if (!tronConnected || !tronAddress) {
+      updateBridgeLog(`❌ TronLink wallet not connected!`);
+      updateBridgeLog(`🔗 Please connect your TronLink wallet first`);
+      setBridgeData((prev) => {
+        if (!prev) return null;
+        return { ...prev, status: "error" };
+      });
+      setIsLoading(false);
+      return;
+    }
+
     // Validation
     const amount = parseFloat(fromAmount);
     if (!fromAmount || amount <= 0) {
@@ -1277,6 +1316,15 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
 
     try {
       updateBridgeLog(`📝 You need to create TRON HTLC with your wallet...`);
+
+      // Test TronLink connectivity first
+      updateBridgeLog(`🔍 Testing TronLink connectivity...`);
+      try {
+        await window.tronLink.request({ method: 'tron_requestAccounts' });
+        updateBridgeLog(`✅ TronLink connectivity test passed`);
+      } catch (testError) {
+        updateBridgeLog(`⚠️ TronLink connectivity test warning: ${testError}`);
+      }
 
       // Create TRON HTLC using user's wallet (similar to NEAR flow)
       const tronAmount = tronWeb.toSun(fromAmount);
@@ -1398,7 +1446,30 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
         } TRX`
       );
 
-      // Call TRON contract using TronWeb
+      // Verify TronLink is ready for signing
+      if (!window.tronLink) {
+        throw new Error('TronLink not available for signing');
+      }
+
+      updateBridgeLog(`🔐 TronLink ready - calling contract with signature...`);
+
+      // Add extra verification before calling the contract
+      console.log('🔍 Pre-contract call verification:', {
+        tronWeb: !!tronWeb,
+        tronLink: !!window.tronLink,
+        contractAddress,
+        functionSelector: "createTronBridge",
+        parameters: [hashlock, ethAddress, "ethereum"],
+        options: {
+          callValue: amount,
+          feeLimit: 1000000000,
+        }
+      });
+
+      updateBridgeLog(`📋 About to call TronLink for transaction signature...`);
+      updateBridgeLog(`⚠️ Please check for TronLink popup and approve the transaction`);
+
+      // Call TRON contract using the correct aliased function name
       const result = await callTronContract(
         contractAddress,
         "createTronBridge",

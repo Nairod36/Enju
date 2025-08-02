@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { TRON_FUSION_BRIDGE_ABI } from '../config/tronABI';
 
 // Extend window object to include TronWeb
 declare global {
@@ -202,15 +203,80 @@ export function useTronWallet() {
     }
 
     try {
-      const contract = await state.tronWeb.contract().at(contractAddress);
-      const result = await contract[functionSelector](...parameters).send(options);
+      console.log('🔗 Calling TRON contract with TronLink signing:', {
+        contractAddress,
+        functionSelector,
+        parameters,
+        options,
+        from: state.address
+      });
+
+      // Ensure TronLink is ready for signing
+      if (!window.tronLink) {
+        throw new Error('TronLink not available for signing');
+      }
+
+      // Force TronLink to be ready for signing by requesting accounts
+      try {
+        await window.tronLink.request({ method: 'tron_requestAccounts' });
+      } catch (requestError) {
+        console.log('⚠️ TronLink account request failed, continuing anyway:', requestError);
+      }
+
+      // Define the ABI for TronFusionBridge contract
+      const contractABI = TRON_FUSION_BRIDGE_ABI;
+
+      // Get contract instance with proper ABI
+      console.log('📄 Getting contract instance with ABI at:', contractAddress);
+      let contract;
+      try {
+        contract = await state.tronWeb.contract(contractABI, contractAddress);
+        console.log('✅ Contract instance created successfully with ABI');
+      } catch (contractError) {
+        console.error('❌ Failed to get contract instance:', contractError);
+        throw new Error(`Failed to load contract at ${contractAddress}: ${contractError}`);
+      }
+
+      // Prepare the transaction with explicit settings for TronLink
+      const txOptions = {
+        feeLimit: 1000000000, // 1000 TRX default fee limit
+        callValue: 0, // Default call value
+        ...options, // Override with provided options
+        from: state.address, // Always set from address
+      };
+
+      console.log('🔐 Calling contract method with TronLink signature prompt:', {
+        method: functionSelector,
+        parameters,
+        options: txOptions
+      });
+
+      // Call the contract method - this should trigger TronLink popup
+      console.log('🚀 Executing contract call...');
+      const result = await contract[functionSelector](...parameters).send(txOptions);
       
+      console.log('✅ TRON contract transaction completed:', result);
       return result;
     } catch (error) {
       console.error('❌ TRON contract call failed:', error);
-      throw error;
+      
+      // Enhanced error reporting
+      if (error && typeof error === 'object') {
+        if ('message' in error) {
+          console.error('❌ Error message:', error.message);
+        }
+        if ('code' in error) {
+          console.error('❌ Error code:', error.code);
+        }
+        if ('type' in error) {
+          console.error('❌ Error type:', error.type);
+        }
+      }
+      
+      // Re-throw with more context
+      throw new Error(`TRON contract call failed: ${error instanceof Error ? error.message : error}`);
     }
-  }, [state.tronWeb, state.isConnected]);
+  }, [state.tronWeb, state.isConnected, state.address]);
 
   // Auto-check connection on mount and when TronLink changes
   useEffect(() => {
