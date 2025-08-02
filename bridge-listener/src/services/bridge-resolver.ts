@@ -269,7 +269,7 @@ export class BridgeResolver extends EventEmitter {
 
     // Récupérer l'adresse de l'expéditeur si elle n'est pas déjà présente
     console.log(`🔍 Event details: from=${event.from}, txHash=${event.txHash}`);
-    
+
     if (!event.from && event.txHash) {
       try {
         console.log(`🔍 Fetching transaction sender for ${event.txHash}...`);
@@ -342,7 +342,7 @@ export class BridgeResolver extends EventEmitter {
           // Get user address dynamically from the bridge event or escrow contract
           let userAddress = event.from;
           console.log(`🔍 Initial user address: ${userAddress}`);
-          
+
           // If not available, search for recent EscrowCreated events with this escrow address
           if (!userAddress && bridgeEvent.escrowAddress) {
             try {
@@ -352,9 +352,9 @@ export class BridgeResolver extends EventEmitter {
                 // Get current block and search recent blocks
                 const currentBlock = await provider.getBlockNumber();
                 const fromBlock = Math.max(0, currentBlock - 100); // Search last 100 blocks
-                
+
                 console.log(`🔍 Searching blocks ${fromBlock} to ${currentBlock}`);
-                
+
                 // Create filter for EscrowCreated events
                 const filter = {
                   address: this.ETH_BRIDGE_CONTRACT,
@@ -367,10 +367,10 @@ export class BridgeResolver extends EventEmitter {
                     '0x000000000000000000000000' + bridgeEvent.escrowAddress.slice(2).toLowerCase()
                   ]
                 };
-                
+
                 const logs = await provider.getLogs(filter);
                 console.log(`🔍 Found ${logs.length} EscrowCreated events`);
-                
+
                 if (logs.length > 0) {
                   const log = logs[logs.length - 1]; // Get most recent
                   const tx = await provider.getTransaction(log.transactionHash);
@@ -384,7 +384,7 @@ export class BridgeResolver extends EventEmitter {
               console.log(`⚠️ Failed to get sender from EscrowCreated events:`, error);
             }
           }
-          
+
           if (!userAddress || !userAddress.startsWith('0x') || userAddress.length !== 42) {
             console.error(`❌ Cannot mint rewards: no valid user address found. Event data:`, {
               from: event.from,
@@ -395,7 +395,7 @@ export class BridgeResolver extends EventEmitter {
             // Use the new generic mint function
             await this.mintRewardTokens('ETH_TO_NEAR', ethAmountInEth, userAddress, bridgeId);
           }
-          
+
         } catch (rewardError) {
           console.error('❌ Error minting reward tokens:', rewardError);
         }
@@ -442,7 +442,7 @@ export class BridgeResolver extends EventEmitter {
         existingBridge.ethTxHash = event.txHash;
         existingBridge.escrowAddress = event.escrow;
         this.activeBridges.set(existingBridge.id, existingBridge);
-        
+
         // Continuer avec le traitement TRX si nécessaire
         if (existingBridge.status === 'PENDING') {
           console.log(`🔄 Existing bridge found, will process TRX sending if needed`);
@@ -1158,7 +1158,7 @@ export class BridgeResolver extends EventEmitter {
           // Récupérer l'adresse de l'expéditeur de la transaction
           let senderAddress = undefined;
           console.log(`🔍 Attempting to fetch sender for tx: ${event.transactionHash}`);
-          
+
           if (event.transactionHash) {
             try {
               if (!this.resolverSigner.provider) {
@@ -1614,7 +1614,7 @@ export class BridgeResolver extends EventEmitter {
       console.log(`🔐 Hashlock: ${hashlock}`);
       console.log(`⛽ Gas used: ${receipt.gasUsed}`);
       console.log(`📊 Block number: ${receipt.blockNumber}`);
-      
+
       // 🔍 DIAGNOSTIC: Log détaillé de la transaction ETH
       console.log(`🔍 DETAILED ETH TRANSACTION:`);
       console.log(`   📋 From: ${receipt.from}`);
