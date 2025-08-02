@@ -267,25 +267,15 @@ export function IslandExplorer() {
                             My Island
                           </div>
                         )}
-                        {/* Temporary fallback to test if Canvas works */}
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <div className="text-center p-4">
-                            <div className="text-6xl mb-2">🏝️</div>
-                            <div className="text-lg font-bold text-gray-800">
-                              {island.name}
-                            </div>
-                            <div className="text-sm text-gray-600">
-                              Seed: {island.seed}
-                            </div>
-                            <div className="text-xs text-red-500 mt-2">
-                              Debug: Canvas should be here
-                            </div>
-                          </div>
-                        </div>
                         <Canvas
                           shadows
                           camera={{ position: [12, 6, 12], fov: 45 }}
-                          style={{ opacity: 0.8 }} // Make canvas semi-transparent to see if it renders
+                          onCreated={(state) =>
+                            console.log("Canvas created", state)
+                          }
+                          onError={(error) =>
+                            console.error("Canvas error:", error)
+                          }
                         >
                           <OrbitControls
                             enablePan={false}
@@ -300,15 +290,12 @@ export function IslandExplorer() {
                             intensity={0.9}
                             castShadow
                           />
-                          {/* Test with simple cube first */}
-                          <TestCube />
-                          {/* 
+                          {/* Try to load FloatingIsland with error handling */}
                           <FloatingIsland
                             seed={convertSeedToNumber(island.seed)}
                             initialTreeCount={island.totalTrees || 0}
                             preloadedIslandData={island.islandData}
                           />
-                          */}
                           <fog attach="fog" args={["#87CEEB", 25, 60]} />
                         </Canvas>
                       </div>
