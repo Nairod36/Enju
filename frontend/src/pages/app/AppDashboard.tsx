@@ -495,7 +495,16 @@ export function AppDashboard() {
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="text-lg font-bold text-slate-900">
-                    #{islandSeed || "..."} Island
+                    {authUser?.username ? (
+                      <>
+                        {authUser.username}'s Island
+                        <span className="text-sm font-normal text-slate-500 ml-2">
+                          #{islandSeed || "..."}
+                        </span>
+                      </>
+                    ) : (
+                      `#${islandSeed || "..."} Island`
+                    )}
                   </h3>
                   <p className="text-sm text-slate-500 mt-1">
                     Your personal ecosystem
