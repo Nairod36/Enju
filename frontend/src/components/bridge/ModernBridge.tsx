@@ -1697,12 +1697,12 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
         `⚠️ Please check for TronLink popup and approve the transaction`
       );
 
-      // Call TRON contract using the correct aliased function name
+      // Call TRON contract using the working createTronBridge function
       const result = await callTronContract(
         contractAddress,
         "createTronBridge",
         [
-          hashlock, // hashlock with 0x prefix (TronWeb expects this format)
+          hashlock, // hashlock with 0x prefix
           ethAddress, // targetAccount (ETH address to receive funds)
           "ethereum", // targetChain
         ],

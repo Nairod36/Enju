@@ -36,10 +36,14 @@ export class TronEventListener extends EventEmitter {
 
   async initialize(): Promise<void> {
     console.log('🔧 Initializing TRON Event Listener...');
+    console.log(`📋 TRON Full Host: ${this.fullHost}`);
+    console.log(`📋 TRON Contract Address: ${this.contractAddress}`);
+    console.log(`📋 TRON API Key: ${process.env.TRON_API_KEY ? 'SET' : 'NOT SET'}`);
     
     try {
       // Initialize contract
       this.contract = await this.tronWeb.contract(this.contractAbi, this.contractAddress);
+      console.log('✅ TRON contract initialized successfully');
       
       // Get current block
       const currentBlock = await this.tronWeb.trx.getCurrentBlock();
@@ -47,6 +51,7 @@ export class TronEventListener extends EventEmitter {
       
       console.log(`✅ TRON Event Listener initialized at block ${this.lastProcessedBlock}`);
       console.log(`📋 Contract: ${this.contractAddress}`);
+      console.log(`📋 TronWeb version: ${this.tronWeb.version}`);
     } catch (error) {
       console.error('❌ Failed to initialize TRON Event Listener:', error);
       throw error;
@@ -124,7 +129,8 @@ export class TronEventListener extends EventEmitter {
       // Calculate approximate timestamp from block numbers (TRON blocks are ~3 seconds apart)
       const now = Date.now();
       const blocksBack = Math.max(0, toBlock - fromBlock);
-      const minTimestamp = now - (blocksBack * 3000) - 60000; // Add 1 minute buffer
+      // Look back 10 minutes to catch any recent events we might have missed
+      const minTimestamp = now - (blocksBack * 3000) - 600000; // Add 10 minute buffer
       
       const params = new URLSearchParams({
         only_confirmed: 'true',
@@ -134,19 +140,28 @@ export class TronEventListener extends EventEmitter {
         event_name: 'EscrowCreated' // Filter by event name if API supports it
       });
       
+      console.log(`🔍 Fetching TRON events from ${url}?${params}`);
+      console.log(`🔍 API Key: ${process.env.TRON_API_KEY ? 'SET' : 'NOT SET'}`);
+      
       const response = await fetch(`${url}?${params}`, {
         headers: {
           'TRON-PRO-API-KEY': process.env.TRON_API_KEY || ''
         }
       });
       
+      console.log(`📡 TronGrid API response status: ${response.status}`);
+      
       if (!response.ok) {
-        throw new Error(`TronGrid API error: ${response.status}`);
+        const errorText = await response.text();
+        console.error(`❌ TronGrid API error: ${response.status} - ${errorText}`);
+        throw new Error(`TronGrid API error: ${response.status} - ${errorText}`);
       }
       
       const data = await response.json();
+      console.log(`📊 TronGrid API response:`, JSON.stringify(data, null, 2));
       
       if (!data || !(data as any).data) {
+        console.log('⚠️ No data returned from TronGrid API');
         return [];
       }
       
@@ -154,6 +169,74 @@ export class TronEventListener extends EventEmitter {
       const filteredEvents = (data as any).data.filter((event: any) => {
         return event.event_name === 'EscrowCreated';
       });
+      
+      console.log(`🎯 Found ${filteredEvents.length} EscrowCreated events after filtering`);
+      
+      // If no events found, try a broader search without event_name filter
+      if (filteredEvents.length === 0) {
+        console.log(`🔍 No EscrowCreated events found, trying broader search...`);
+        
+        const broadParams = new URLSearchParams({
+          only_confirmed: 'true',
+          order_by: 'block_timestamp,desc',
+          limit: '20',
+          min_timestamp: minTimestamp.toString()
+          // Remove event_name filter
+        });
+        
+        const broadResponse = await fetch(`${url}?${broadParams}`, {
+          headers: {
+            'TRON-PRO-API-KEY': process.env.TRON_API_KEY || ''
+          }
+        });
+        
+        if (broadResponse.ok) {
+          const broadData = await broadResponse.json();
+          const events = (broadData as any)?.data || [];
+          console.log(`📊 Broad search found ${events.length} total events`);
+          if (events.length > 0) {
+            console.log(`📋 Recent events on contract:`, events.map((e: any) => ({
+              event: e.event_name,
+              tx: e.transaction_id?.substring(0, 8) + '...',
+              timestamp: new Date(e.block_timestamp).toISOString()
+            })));
+          } else {
+            // If no events at all, let's also check contract transactions
+            console.log(`🔍 No events found. Checking recent transactions to contract...`);
+            
+            try {
+              const txUrl = `${this.fullHost}/v1/accounts/${this.contractAddress}/transactions`;
+              const txParams = new URLSearchParams({
+                only_confirmed: 'true',
+                limit: '10',
+                order_by: 'block_timestamp,desc'
+              });
+              
+              const txResponse = await fetch(`${txUrl}?${txParams}`, {
+                headers: {
+                  'TRON-PRO-API-KEY': process.env.TRON_API_KEY || ''
+                }
+              });
+              
+              if (txResponse.ok) {
+                const txData = await txResponse.json();
+                const transactions = (txData as any)?.data || [];
+                console.log(`📊 Found ${transactions.length} recent transactions to contract`);
+                if (transactions.length > 0) {
+                  console.log(`📋 Recent transactions:`, transactions.slice(0, 5).map((tx: any) => ({
+                    txId: tx.txID?.substring(0, 16) + '...',
+                    from: tx.raw_data?.contract?.[0]?.parameter?.value?.owner_address,
+                    type: tx.raw_data?.contract?.[0]?.type,
+                    timestamp: new Date(tx.block_timestamp).toISOString()
+                  })));
+                }
+              }
+            } catch (txError) {
+              console.log(`⚠️ Failed to check transactions: ${txError}`);
+            }
+          }
+        }
+      }
       
       return filteredEvents;
       

@@ -59,6 +59,43 @@
       {
         "indexed": true,
         "internalType": "address",
+        "name": "escrow",
+        "type": "address"
+      },
+      {
+        "indexed": true,
+        "internalType": "bytes32",
+        "name": "hashlock",
+        "type": "bytes32"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "targetAccount",
+        "type": "string"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "targetChain",
+        "type": "string"
+      }
+    ],
+    "name": "EscrowCreated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
         "name": "resolver",
         "type": "address"
       },
@@ -88,7 +125,7 @@
         "type": "bytes32"
       },
       {
-        "indexed": false,
+        "indexed": true,
         "internalType": "address",
         "name": "canceller",
         "type": "address"
@@ -127,6 +164,36 @@
     ],
     "name": "SwapCompleted",
     "type": "event"
+  },
+  {
+    "stateMutability": "payable",
+    "type": "fallback"
+  },
+  {
+    "inputs": [],
+    "name": "MIN_SAFETY_DEPOSIT",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "TIMELOCK_DURATION",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
   },
   {
     "inputs": [
@@ -258,53 +325,50 @@
     "type": "function"
   },
   {
-    "inputs": [],
-    "name": "createTronTimelocks",
-    "outputs": [
+    "inputs": [
       {
-        "components": [
-          {
-            "internalType": "uint32",
-            "name": "srcWithdrawal",
-            "type": "uint32"
-          },
-          {
-            "internalType": "uint32",
-            "name": "srcPublicWithdrawal",
-            "type": "uint32"
-          },
-          {
-            "internalType": "uint32",
-            "name": "srcCancellation",
-            "type": "uint32"
-          },
-          {
-            "internalType": "uint32",
-            "name": "srcPublicCancellation",
-            "type": "uint32"
-          },
-          {
-            "internalType": "uint32",
-            "name": "dstWithdrawal",
-            "type": "uint32"
-          },
-          {
-            "internalType": "uint32",
-            "name": "dstPublicWithdrawal",
-            "type": "uint32"
-          },
-          {
-            "internalType": "uint32",
-            "name": "dstCancellation",
-            "type": "uint32"
-          }
-        ],
-        "internalType": "struct TronFusionBridge.TronTimelocks",
-        "name": "",
-        "type": "tuple"
+        "internalType": "bytes32",
+        "name": "orderHash",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "bytes32",
+        "name": "secret",
+        "type": "bytes32"
       }
     ],
-    "stateMutability": "view",
+    "name": "completeSimpleBridge",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "hashlock",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "string",
+        "name": "targetAccount",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "targetChain",
+        "type": "string"
+      }
+    ],
+    "name": "createTronBridge",
+    "outputs": [
+      {
+        "internalType": "bytes32",
+        "name": "",
+        "type": "bytes32"
+      }
+    ],
+    "stateMutability": "payable",
     "type": "function"
   },
   {
@@ -416,6 +480,87 @@
     "type": "function"
   },
   {
+    "inputs": [],
+    "name": "createTronTimelocks",
+    "outputs": [
+      {
+        "components": [
+          {
+            "internalType": "uint32",
+            "name": "srcWithdrawal",
+            "type": "uint32"
+          },
+          {
+            "internalType": "uint32",
+            "name": "srcPublicWithdrawal",
+            "type": "uint32"
+          },
+          {
+            "internalType": "uint32",
+            "name": "srcCancellation",
+            "type": "uint32"
+          },
+          {
+            "internalType": "uint32",
+            "name": "srcPublicCancellation",
+            "type": "uint32"
+          },
+          {
+            "internalType": "uint32",
+            "name": "dstWithdrawal",
+            "type": "uint32"
+          },
+          {
+            "internalType": "uint32",
+            "name": "dstPublicWithdrawal",
+            "type": "uint32"
+          },
+          {
+            "internalType": "uint32",
+            "name": "dstCancellation",
+            "type": "uint32"
+          }
+        ],
+        "internalType": "struct TronFusionBridge.TronTimelocks",
+        "name": "",
+        "type": "tuple"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address payable",
+        "name": "to",
+        "type": "address"
+      },
+      {
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      }
+    ],
+    "name": "emergencyWithdrawAmount",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address payable",
+        "name": "to",
+        "type": "address"
+      }
+    ],
+    "name": "emergencyWithdrawTRX",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
     "inputs": [
       {
         "internalType": "bytes32",
@@ -429,6 +574,19 @@
         "internalType": "string",
         "name": "",
         "type": "string"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "getContractBalance",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
       }
     ],
     "stateMutability": "view",
@@ -547,19 +705,6 @@
         "internalType": "enum TronFusionBridge.TimelockStage",
         "name": "currentStage",
         "type": "uint8"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "MIN_SAFETY_DEPOSIT",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
       }
     ],
     "stateMutability": "view",
@@ -783,90 +928,6 @@
         "internalType": "bytes32",
         "name": "orderHash",
         "type": "bytes32"
-      },
-      {
-        "components": [
-          {
-            "internalType": "bytes32",
-            "name": "orderHash",
-            "type": "bytes32"
-          },
-          {
-            "internalType": "bytes32",
-            "name": "hashlock",
-            "type": "bytes32"
-          },
-          {
-            "internalType": "address",
-            "name": "maker",
-            "type": "address"
-          },
-          {
-            "internalType": "address",
-            "name": "taker",
-            "type": "address"
-          },
-          {
-            "internalType": "address",
-            "name": "token",
-            "type": "address"
-          },
-          {
-            "internalType": "uint256",
-            "name": "amount",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint256",
-            "name": "safetyDeposit",
-            "type": "uint256"
-          },
-          {
-            "components": [
-              {
-                "internalType": "uint32",
-                "name": "srcWithdrawal",
-                "type": "uint32"
-              },
-              {
-                "internalType": "uint32",
-                "name": "srcPublicWithdrawal",
-                "type": "uint32"
-              },
-              {
-                "internalType": "uint32",
-                "name": "srcCancellation",
-                "type": "uint32"
-              },
-              {
-                "internalType": "uint32",
-                "name": "srcPublicCancellation",
-                "type": "uint32"
-              },
-              {
-                "internalType": "uint32",
-                "name": "dstWithdrawal",
-                "type": "uint32"
-              },
-              {
-                "internalType": "uint32",
-                "name": "dstPublicWithdrawal",
-                "type": "uint32"
-              },
-              {
-                "internalType": "uint32",
-                "name": "dstCancellation",
-                "type": "uint32"
-              }
-            ],
-            "internalType": "struct TronFusionBridge.TronTimelocks",
-            "name": "timelocks",
-            "type": "tuple"
-          }
-        ],
-        "internalType": "struct TronFusionBridge.Immutables",
-        "name": "immutables",
-        "type": "tuple"
       }
     ],
     "name": "rescueFunds",
@@ -1020,19 +1081,6 @@
     "type": "function"
   },
   {
-    "inputs": [],
-    "name": "TIMELOCK_DURATION",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
     "inputs": [
       {
         "internalType": "bytes32",
@@ -1137,9 +1185,5 @@
   {
     "stateMutability": "payable",
     "type": "receive"
-  },
-  {
-    "stateMutability": "payable",
-    "type": "fallback"
   }
 ]
