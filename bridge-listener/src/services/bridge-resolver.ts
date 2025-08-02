@@ -145,6 +145,95 @@ export class BridgeResolver extends EventEmitter {
     throw new Error(`No ETH address found for NEAR account ${nearAccount}. Please ensure the NEAR contract includes the correct ETH address.`);
   }
 
+  /**
+   * Mint reward tokens based on bridge type and amount
+   * Reward rates:
+   * - 1 ETH = 100 REWARD tokens
+   * - 1 NEAR ≈ 0.068 REWARD tokens
+   * - 1 TRX ≈ 0.00394 REWARD tokens
+   */
+  private async mintRewardTokens(
+    bridgeType: 'ETH_TO_NEAR' | 'NEAR_TO_ETH' | 'ETH_TO_TRON' | 'TRON_TO_ETH',
+    amount: number,
+    userAddress: string,
+    bridgeId?: string
+  ): Promise<void> {
+    try {
+      let rewardAmount = 0;
+      let baseUnit = '';
+
+      // Calculate reward amount based on bridge type
+      switch (bridgeType) {
+        case 'ETH_TO_NEAR':
+        case 'NEAR_TO_ETH':
+          if (bridgeType === 'ETH_TO_NEAR') {
+            // amount is in ETH
+            rewardAmount = amount * 100; // 100 REWARD per 1 ETH
+            baseUnit = 'ETH';
+          } else {
+            // amount is in NEAR - direct rate: 1 NEAR ≈ 0.068 REWARD
+            rewardAmount = amount * 0.068; // 0.068 REWARD per 1 NEAR
+            baseUnit = 'NEAR';
+          }
+          break;
+
+        case 'ETH_TO_TRON':
+        case 'TRON_TO_ETH':
+          if (bridgeType === 'ETH_TO_TRON') {
+            // amount is in ETH
+            rewardAmount = amount * 100; // 100 REWARD per 1 ETH
+            baseUnit = 'ETH';
+          } else {
+            // amount is in TRX
+            rewardAmount = amount * 0.00394; // 0.00394 REWARD per 1 TRX
+            baseUnit = 'TRX';
+          }
+          break;
+
+        default:
+          throw new Error(`Unknown bridge type: ${bridgeType}`);
+      }
+
+      if (rewardAmount <= 0) {
+        console.log(`⚠️ Reward amount is 0 or negative (${rewardAmount}), skipping mint`);
+        return;
+      }
+
+      console.log(`🪙 Minting reward tokens for ${bridgeType} bridge...`);
+      console.log(`💰 Amount: ${amount} ${baseUnit} = ${rewardAmount.toFixed(6)} REWARD`);
+      console.log(`👤 Rewarding user: ${userAddress}`);
+      console.log(`🎯 Bridge ID: ${bridgeId || 'N/A'}`);
+
+      // Validate user address
+      if (!userAddress || !userAddress.startsWith('0x') || userAddress.length !== 42) {
+        console.error(`❌ Cannot mint rewards: invalid user address: ${userAddress}`);
+        return;
+      }
+
+      // Direct contract minting using ethers v6
+      const { ethers } = require('ethers');
+      const provider = new ethers.JsonRpcProvider('http://vps-b11044fd.vps.ovh.net:8545/');
+      const privateKey = '0xac1762026311647f72e957f5188de55e4c0c4b154f8ba382a63a057e20e1d006';
+      const wallet = new ethers.Wallet(privateKey, provider);
+
+      const tokenAddress = '0x012EB96bcc36d3c32847dB4AC416B19Febeb9c54';
+      const abi = ['function mintReward(address to, uint256 amount) external'];
+      const contract = new ethers.Contract(tokenAddress, abi, wallet);
+
+      const amountWei = ethers.parseEther(rewardAmount.toString());
+      const tx = await contract.mintReward(userAddress, amountWei, { gasLimit: 200000 });
+      console.log(`📤 Minting transaction sent: ${tx.hash}`);
+
+      const receipt = await tx.wait();
+      console.log(`✅ Reward tokens minted successfully! Block: ${receipt.blockNumber}`);
+      console.log(`🎉 ${rewardAmount.toFixed(6)} REWARD tokens minted to ${userAddress}`);
+
+    } catch (error) {
+      console.error(`❌ Error minting reward tokens for ${bridgeType}:`, error);
+      // Don't throw the error to avoid breaking the bridge process
+    }
+  }
+
   private setupEventHandlers(): void {
     // Handle ETH → NEAR bridge initiation
     this.ethListener.on('escrowCreated', this.handleEthToNearBridge.bind(this));
@@ -177,6 +266,29 @@ export class BridgeResolver extends EventEmitter {
       return;
     }
     this.processedTxHashes.add(dedupeKey);
+
+    // Récupérer l'adresse de l'expéditeur si elle n'est pas déjà présente
+    console.log(`🔍 Event details: from=${event.from}, txHash=${event.txHash}`);
+    
+    if (!event.from && event.txHash) {
+      try {
+        console.log(`🔍 Fetching transaction sender for ${event.txHash}...`);
+        const provider = this.resolverSigner.provider;
+        if (provider) {
+          const tx = await provider.getTransaction(event.txHash);
+          event.from = tx?.from;
+          console.log('📤 Retrieved transaction sender:', event.from);
+        } else {
+          console.log('⚠️ No provider available to fetch transaction');
+        }
+      } catch (error) {
+        console.log(`⚠️ Failed to get transaction details for ${event.txHash}:`, error);
+      }
+    } else if (event.from) {
+      console.log(`✅ Sender address already available: ${event.from}`);
+    } else {
+      console.log('⚠️ No txHash available to fetch sender address');
+    }
 
     try {
       const bridgeId = this.generateBridgeId(event.hashlock, 'ETH_TO_NEAR');
@@ -225,27 +337,65 @@ export class BridgeResolver extends EventEmitter {
         console.log(`✅ NEAR HTLC created automatically: ${contractId}`);
         console.log(`🎯 Bridge ready for completion! Both sides active.`);
 
-        // Mint reward tokens for the user
+        // Mint reward tokens for the user using the new generic function
         try {
-          console.log(`🪙 Minting reward tokens for ETH → NEAR bridge...`);
-          const rewardResponse = await fetch('http://localhost:3001/api/rewards/mint', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              userAddress: event.from || event.nearAccount,
-              amount: ethAmountInEth,
-              currency: 'ETH'
-            }),
-          });
-
-          if (rewardResponse.ok) {
-            const rewardResult = await rewardResponse.json() as { txHash: string };
-            console.log(`✅ Reward tokens minted: ${rewardResult.txHash}`);
-          } else {
-            console.error('❌ Failed to mint reward tokens:', await rewardResponse.text());
+          // Get user address dynamically from the bridge event or escrow contract
+          let userAddress = event.from;
+          console.log(`🔍 Initial user address: ${userAddress}`);
+          
+          // If not available, search for recent EscrowCreated events with this escrow address
+          if (!userAddress && bridgeEvent.escrowAddress) {
+            try {
+              console.log(`🔍 Searching for EscrowCreated events for escrow: ${bridgeEvent.escrowAddress}`);
+              const provider = this.resolverSigner.provider;
+              if (provider) {
+                // Get current block and search recent blocks
+                const currentBlock = await provider.getBlockNumber();
+                const fromBlock = Math.max(0, currentBlock - 100); // Search last 100 blocks
+                
+                console.log(`🔍 Searching blocks ${fromBlock} to ${currentBlock}`);
+                
+                // Create filter for EscrowCreated events
+                const filter = {
+                  address: this.ETH_BRIDGE_CONTRACT,
+                  fromBlock: fromBlock,
+                  toBlock: currentBlock,
+                  topics: [
+                    // EscrowCreated event signature
+                    '0xad2756dd05d5af1c70ea1be6270e2a143264331a3ee37d9083a6fa9daf2dc126',
+                    // escrow address as first indexed parameter
+                    '0x000000000000000000000000' + bridgeEvent.escrowAddress.slice(2).toLowerCase()
+                  ]
+                };
+                
+                const logs = await provider.getLogs(filter);
+                console.log(`🔍 Found ${logs.length} EscrowCreated events`);
+                
+                if (logs.length > 0) {
+                  const log = logs[logs.length - 1]; // Get most recent
+                  const tx = await provider.getTransaction(log.transactionHash);
+                  if (tx && tx.from) {
+                    userAddress = tx.from;
+                    console.log(`🔍 Retrieved sender from EscrowCreated event: ${userAddress}`);
+                  }
+                }
+              }
+            } catch (error) {
+              console.log(`⚠️ Failed to get sender from EscrowCreated events:`, error);
+            }
           }
+          
+          if (!userAddress || !userAddress.startsWith('0x') || userAddress.length !== 42) {
+            console.error(`❌ Cannot mint rewards: no valid user address found. Event data:`, {
+              from: event.from,
+              txHash: event.txHash,
+              escrowAddress: bridgeEvent.escrowAddress
+            });
+          } else {
+            // Use the new generic mint function
+            await this.mintRewardTokens('ETH_TO_NEAR', ethAmountInEth, userAddress, bridgeId);
+          }
+          
         } catch (rewardError) {
           console.error('❌ Error minting reward tokens:', rewardError);
         }
@@ -341,6 +491,17 @@ export class BridgeResolver extends EventEmitter {
             bridgeEvent.tronTxHash = tronTxResult.txHash;
             bridgeEvent.completedAt = Date.now();
             this.activeBridges.set(bridgeId, bridgeEvent);
+
+            // 🪙 Mint reward tokens for ETH → TRON bridge
+            try {
+              const ethAmountInEth = parseFloat(ethAmountInEther);
+              const userAddress = event.from || event.sender; // Get user's ETH address from event
+              if (ethAmountInEth > 0 && userAddress) {
+                await this.mintRewardTokens('ETH_TO_TRON', ethAmountInEth, userAddress, bridgeId);
+              }
+            } catch (rewardError) {
+              console.error('❌ Failed to mint reward tokens for ETH → TRON bridge:', rewardError);
+            }
 
             this.emit('bridgeCompleted', bridgeEvent);
           } else {
@@ -628,6 +789,28 @@ export class BridgeResolver extends EventEmitter {
 
           // Store the secret for tracking but don't transfer ETH again
           bridge.ethCompletionTxHash = bridge.ethTxHash; // Use the original transfer tx
+
+          // 🪙 Mint reward tokens for NEAR → ETH bridge
+          try {
+            const userAddress = bridge.ethRecipient;
+            const nearAmountStr = bridge.amount;
+            let nearAmount: number = 0;
+
+            // Parse NEAR amount from bridge
+            if (nearAmountStr.includes('NEAR')) {
+              const nearAmountMatch = nearAmountStr.match(/(\d+\.?\d*)/);
+              nearAmount = nearAmountMatch ? parseFloat(nearAmountMatch[1]) : 0;
+            } else {
+              const yoctoAmount = BigInt(nearAmountStr);
+              nearAmount = Number(yoctoAmount) / 1e24;
+            }
+
+            if (nearAmount > 0 && userAddress) {
+              await this.mintRewardTokens('NEAR_TO_ETH', nearAmount, userAddress, bridge.id);
+            }
+          } catch (rewardError) {
+            console.error('❌ Failed to mint reward tokens for NEAR → ETH bridge:', rewardError);
+          }
         } else if (bridge.type === 'ETH_TO_NEAR') {
           console.log('✅ ETH → NEAR bridge completed! User received NEAR tokens.');
           console.log('💰 User has successfully completed the NEAR HTLC and received their NEAR.');
@@ -940,6 +1123,28 @@ export class BridgeResolver extends EventEmitter {
         console.log('🎯 Processing ETH → NEAR bridge event...');
 
         try {
+          // Récupérer l'adresse de l'expéditeur de la transaction
+          let senderAddress = undefined;
+          console.log(`🔍 Attempting to fetch sender for tx: ${event.transactionHash}`);
+          
+          if (event.transactionHash) {
+            try {
+              if (!this.resolverSigner.provider) {
+                console.log('⚠️ resolverSigner.provider is null, cannot fetch transaction');
+              } else {
+                console.log('🔄 Fetching transaction details...');
+                const tx = await this.resolverSigner.provider.getTransaction(event.transactionHash);
+                senderAddress = tx?.from;
+                console.log('📤 Transaction sender from watchEthToTronSwaps:', senderAddress);
+                console.log('📄 Full transaction:', tx);
+              }
+            } catch (error) {
+              console.log(`⚠️ Failed to get transaction details for ${event.transactionHash}:`, error);
+            }
+          } else {
+            console.log('⚠️ No transaction hash provided');
+          }
+
           // Traiter l'événement ETH → NEAR
           const bridgeEventData = {
             escrow: escrow,
@@ -948,7 +1153,7 @@ export class BridgeResolver extends EventEmitter {
             amount: amount.toString(),
             blockNumber: event.blockNumber,
             txHash: event.transactionHash,
-            from: undefined // Will be fetched if needed
+            from: senderAddress // Adresse ETH de l'expéditeur
           };
 
           console.log('📝 ETH → NEAR bridge data:', bridgeEventData);
@@ -1385,6 +1590,29 @@ export class BridgeResolver extends EventEmitter {
         bridge.ethTxHash = receipt.hash;
         bridge.completedAt = Date.now();
         this.activeBridges.set(bridge.id, bridge); // Update the bridge in the map
+
+        // 🪙 Mint reward tokens for TRON → ETH bridge
+        try {
+          const trxAmountStr = bridge.amount;
+          let trxAmount: number = 0;
+
+          // Parse TRX amount from bridge
+          if (trxAmountStr.includes('TRX')) {
+            const trxAmountMatch = trxAmountStr.match(/(\d+\.?\d*)/);
+            trxAmount = trxAmountMatch ? parseFloat(trxAmountMatch[1]) : 0;
+          } else {
+            // Assume the amount is in TRX base units (6 decimals)
+            trxAmount = parseFloat(trxAmountStr) / 1e6;
+          }
+
+          const userAddress = bridge.ethRecipient;
+          if (trxAmount > 0 && userAddress) {
+            await this.mintRewardTokens('TRON_TO_ETH', trxAmount, userAddress, bridge.id);
+          }
+        } catch (rewardError) {
+          console.error('❌ Failed to mint reward tokens for TRON → ETH bridge:', rewardError);
+        }
+
         this.emit('bridgeCompleted', bridge);
 
         console.log(`✅ TRON → ETH bridge completed: ${bridge.id}`);

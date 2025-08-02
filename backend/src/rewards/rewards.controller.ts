@@ -80,4 +80,43 @@ export class RewardsController {
             };
         }
     }
+
+    @Post('bridge-mint')
+    async mintRewardForBridge(@Body() body: {
+        userAddress: string;
+        amount: number;
+        currency: string;
+    }) {
+        const { userAddress, amount, currency } = body;
+
+        if (!userAddress || !amount || !currency) {
+            return { error: 'Missing required parameters' };
+        }
+
+        try {
+            const txHash = await this.rewardsService.mintRewardTokens(
+                userAddress,
+                amount,
+                currency
+            );
+
+            if (txHash) {
+                return {
+                    success: true,
+                    txHash,
+                    rewardAmount: this.rewardsService.calculateReward(amount, currency)
+                };
+            } else {
+                return {
+                    success: false,
+                    error: 'Failed to mint reward tokens'
+                };
+            }
+        } catch (error) {
+            return {
+                success: false,
+                error: error.message || 'Failed to mint reward tokens'
+            };
+        }
+    }
 }

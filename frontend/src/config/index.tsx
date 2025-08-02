@@ -27,7 +27,7 @@ export const forkedMainnet: AppKitNetwork = defineChain({
   id: 1, // Keep mainnet ID for fork compatibility
   caipNetworkId: "eip155:1",
   chainNamespace: "eip155",
-  name: "Forked Mainnet",
+  name: "🧪 Fork VPS (Test)",
   nativeCurrency: {
     name: "Ether",
     symbol: "ETH",
@@ -51,7 +51,7 @@ export const forkedMainnet: AppKitNetwork = defineChain({
 });
 
 // for custom networks visit -> https://docs.reown.com/appkit/react/core/custom-networks
-export const networks = [forkedMainnet, mainnet, arbitrum, sepolia] as [
+export const networks = [mainnet, arbitrum, sepolia, forkedMainnet] as [
   AppKitNetwork,
   ...AppKitNetwork[]
 ];

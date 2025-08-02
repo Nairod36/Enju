@@ -6,6 +6,7 @@ import { useAppKit } from "@reown/appkit/react";
 import { Wallet, ChevronDown, X } from "lucide-react";
 import { useWalletSelector } from "@near-wallet-selector/react-hook";
 import { useTronWallet } from "@/hooks/useTronWallet";
+import { NetworkAddButton } from "./NetworkAddButton";
 
 export function DualWalletButton() {
   const { address: ethAddress, isConnected: ethConnected } = useAccount();
@@ -130,14 +131,26 @@ export function DualWalletButton() {
   if (noneConnected) {
     return (
       <>
-        <Button
-          onClick={() => setShowWalletModal(true)}
-          className="bg-black hover:bg-gray-800 text-white px-4 py-2 rounded-lg font-medium transition-all"
-        >
-          Connect Wallet
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            onClick={() => setShowWalletModal(true)}
+            className="bg-black hover:bg-gray-800 text-white px-4 py-2 rounded-lg font-medium transition-all"
+          >
+            Connect Wallet
+          </Button>
+          <NetworkAddButton />
+        </div>
 
         <WalletModal title="Connect Wallet">
+          {/* Network buttons */}
+          <div className="mb-4 p-3 bg-gray-50 rounded-xl border">
+            <div className="text-sm font-medium text-gray-700 mb-2">Configuration VPS :</div>
+            <NetworkAddButton />
+            <div className="text-xs text-gray-500 mt-1">
+              Guide pour configurer le RPC VPS manuellement
+            </div>
+          </div>
+          
           <div className="space-y-3">
             {/* Ethereum Wallet */}
             <button
@@ -202,6 +215,9 @@ export function DualWalletButton() {
   // Connected state - Orbiter Finance style
   return (
     <div className="flex items-center gap-2">
+      {/* Network buttons - Always visible when connected */}
+      <NetworkAddButton />
+      
       {/* ETH Wallet - Connected */}
       {ethConnected && ethAddress && (
         <div className="flex items-center gap-1 bg-gray-50 rounded-lg px-3 py-2 border border-gray-200">
