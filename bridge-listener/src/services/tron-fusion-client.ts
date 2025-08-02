@@ -16,7 +16,6 @@ export class TronFusionClient {
       ? config.privateKey.slice(2) 
       : config.privateKey;
     
-    console.log('🔧 Initializing TronWeb for Fusion+ compatibility...');
     
     // Initialize TronWeb
     this.tronWeb = new TronWeb({
@@ -30,7 +29,6 @@ export class TronFusionClient {
 
   private async initializeFusionBridgeContract() {
     try {
-      console.log('🔧 Initializing TRON Fusion+ bridge contract at:', this.config.bridgeContract);
       
       // Use explicit ABI instead of trying to fetch from network
       this.fusionBridgeContract = await this.tronWeb.contract(
@@ -38,7 +36,6 @@ export class TronFusionClient {
         this.config.bridgeContract
       );
       
-      console.log('✅ TRON Fusion+ bridge contract initialized successfully');
     } catch (error) {
       console.error('❌ Failed to initialize TRON Fusion+ bridge contract:', error);
       console.error('💡 Check if the TronFusionBridge contract is deployed correctly');
@@ -71,22 +68,6 @@ export class TronFusionClient {
       const balanceInTrx = this.tronWeb.fromSun(currentBalance);
       const totalRequiredTrx = this.tronWeb.fromSun(totalRequiredSun.toString());
 
-      console.log('🚀 Creating TRON Fusion+ escrow...');
-      console.log('💰 Current balance:', balanceInTrx, 'TRX');
-      console.log('💸 Required amount:', totalRequiredTrx, 'TRX');
-      console.log('� Valeurs brutes Sun:', {
-        amountInSun: tronImmutables.amount,
-        safetyDepositInSun: tronImmutables.safetyDeposit,
-        totalRequiredSun: totalRequiredSun.toString()
-      });
-      console.log('�📋 Immutables:', {
-        orderHash: tronImmutables.orderHash,
-        hashlock: tronImmutables.hashlock.substring(0, 10) + '...',
-        maker: tronImmutables.maker,
-        taker: tronImmutables.taker,
-        amount: this.tronWeb.fromSun(amountInSun.toString()),
-        safetyDeposit: this.tronWeb.fromSun(safetyDepositInSun.toString())
-      });
 
       if (BigInt(currentBalance) < totalRequiredSun) {
         throw new Error(`Insufficient TRX balance: ${balanceInTrx} TRX < ${totalRequiredTrx} TRX required`);
@@ -465,7 +446,6 @@ export class TronFusionClient {
     amount: string
   ): Promise<{ success: boolean; txHash?: string; error?: string }> {
     try {
-      console.log(`📤 Sending ${amount} TRX to ${toAddress}...`);
       
       // Validate TRON address format
       if (!toAddress.startsWith('T') || toAddress.length !== 34) {
@@ -474,12 +454,10 @@ export class TronFusionClient {
       
       // Convert amount to SUN (1 TRX = 1,000,000 SUN)
       const amountInSun = this.tronWeb.toSun(amount);
-      console.log(`💰 Converting ${amount} TRX to ${amountInSun} SUN`);
       
       // Use the correct TronWeb method for sending TRX
       const transaction = await this.tronWeb.trx.sendTrx(toAddress, amountInSun);
       
-      console.log(`✅ TRX transaction sent: ${transaction.txid || transaction.transaction?.txID}`);
       
       return {
         success: true,

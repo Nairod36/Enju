@@ -55,9 +55,7 @@ export function useTronWallet() {
       // If requestPermission is true, ask for user permission first
       if (requestPermission) {
         try {
-          console.log('🔐 Requesting TronLink permission...');
           const result = await window.tronLink.request({ method: 'tron_requestAccounts' });
-          console.log('📋 TronLink permission result:', result);
           
           if (result.code !== 200) {
             throw new Error(`Connection denied by user (code: ${result.code})`);
@@ -65,7 +63,6 @@ export function useTronWallet() {
           // Wait a bit for TronLink to properly inject TronWeb with account
           await new Promise(resolve => setTimeout(resolve, 500));
         } catch (requestError) {
-          console.error('❌ TronLink permission request failed:', requestError);
           throw new Error('User denied connection or TronLink request failed');
         }
       }
@@ -115,12 +112,6 @@ export function useTronWallet() {
       try {
         const balanceInSun = await tronWeb.trx.getBalance(address);
         balanceInTrx = tronWeb.fromSun(balanceInSun).toString();
-        console.log('🔍 TRON Wallet Balance Fetch:', {
-          address,
-          balanceInSun: balanceInSun?.toString(),
-          balanceInTrx,
-          timestamp: new Date().toISOString()
-        });
       } catch (balanceError) {
         console.warn('Failed to fetch TRON balance:', balanceError);
         balanceInTrx = '0'; // Default to 0 if balance fetch fails
@@ -140,10 +131,8 @@ export function useTronWallet() {
       try {
         localStorage.removeItem('tron-wallet-manually-disconnected');
       } catch (error) {
-        console.warn('Failed to clear disconnection state from localStorage:', error);
+        // Silent fail - localStorage is not critical
       }
-
-      console.log('✅ TRON wallet connected:', { address, balance: balanceInTrx });
 
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to connect to TRON wallet';
@@ -157,7 +146,6 @@ export function useTronWallet() {
         tronWeb: null,
         manuallyDisconnected: false,
       }));
-      console.warn('⚠️ TRON wallet connection failed:', errorMessage);
     }
   }, []);
 
@@ -169,25 +157,23 @@ export function useTronWallet() {
       // Request connection with user permission
       await checkTronLink(true); // Pass true to request permission
     } catch (error) {
-      console.error('❌ TRON wallet connection failed:', error);
+      // Error handling is done in checkTronLink
     }
   }, [checkTronLink]);
 
   // Disconnect wallet
   const disconnectTronWallet = useCallback(async () => {
-    console.log('🔄 Disconnecting TRON wallet...');
-    
     try {
       // Try to disconnect from TronLink if available
       if (window.tronLink && typeof window.tronLink.request === 'function') {
         try {
           await window.tronLink.request({ method: 'tron_disconnect' });
         } catch (disconnectError) {
-          console.warn('⚠️ TronLink disconnect failed:', disconnectError);
+          // Silent fail - TronLink disconnect is not critical
         }
       }
     } catch (error) {
-      console.warn('⚠️ Error during TronLink disconnect:', error);
+      // Silent fail - disconnection errors are not critical
     }
     
     // Always reset state regardless of TronLink response
@@ -205,10 +191,8 @@ export function useTronWallet() {
     try {
       localStorage.setItem('tron-wallet-manually-disconnected', 'true');
     } catch (error) {
-      console.warn('Failed to save disconnection state to localStorage:', error);
+      // Silent fail - localStorage is not critical
     }
-    
-    console.log('✅ TRON wallet disconnected');
   }, []);
 
   // Send transaction
@@ -229,7 +213,6 @@ export function useTronWallet() {
 
       return receipt;
     } catch (error) {
-      console.error('❌ TRON transaction failed:', error);
       throw error;
     }
   }, [state.tronWeb, state.isConnected, state.address]);
@@ -246,13 +229,6 @@ export function useTronWallet() {
     }
 
     try {
-      console.log('🔗 Calling TRON contract with TronLink signing:', {
-        contractAddress,
-        functionSelector,
-        parameters,
-        options,
-        from: state.address
-      });
 
       // Ensure TronLink is ready for signing
       if (!window.tronLink) {
@@ -263,20 +239,15 @@ export function useTronWallet() {
       try {
         await window.tronLink.request({ method: 'tron_requestAccounts' });
       } catch (requestError) {
-        console.log('⚠️ TronLink account request failed, continuing anyway:', requestError);
+        // Continue anyway, might still work
       }
 
-      // Define the ABI for TronFusionBridge contract
-      const contractABI = TRON_FUSION_BRIDGE_ABI;
 
       // Get contract instance with proper ABI
-      console.log('📄 Getting contract instance with ABI at:', contractAddress);
       let contract;
       try {
-        contract = await state.tronWeb.contract(contractABI, contractAddress);
-        console.log('✅ Contract instance created successfully with ABI');
+        contract = await state.tronWeb.contract(TRON_FUSION_BRIDGE_ABI, contractAddress);
       } catch (contractError) {
-        console.error('❌ Failed to get contract instance:', contractError);
         throw new Error(`Failed to load contract at ${contractAddress}: ${contractError}`);
       }
 
@@ -288,32 +259,13 @@ export function useTronWallet() {
         from: state.address, // Always set from address
       };
 
-      console.log('🔐 Calling contract method with TronLink signature prompt:', {
-        method: functionSelector,
-        parameters,
-        options: txOptions
-      });
-
       // Call the contract method - this should trigger TronLink popup
-      console.log('🚀 Executing contract call...');
       const result = await contract[functionSelector](...parameters).send(txOptions);
-
-      console.log('✅ TRON contract transaction completed:', result);
       return result;
     } catch (error) {
-      console.error('❌ TRON contract call failed:', error);
-
-      // Enhanced error reporting
+      // Enhanced error reporting for debugging
       if (error && typeof error === 'object') {
-        if ('message' in error) {
-          console.error('❌ Error message:', error.message);
-        }
-        if ('code' in error) {
-          console.error('❌ Error code:', error.code);
-        }
-        if ('type' in error) {
-          console.error('❌ Error type:', error.type);
-        }
+        console.error('TRON contract call error:', error);
       }
 
       // Re-throw with more context
@@ -323,13 +275,11 @@ export function useTronWallet() {
 
   // Force reconnection
   const reconnectTronWallet = useCallback(async () => {
-    console.log('🔄 Force reconnecting TRON wallet...');
-    
     // Clear manual disconnection state from localStorage
     try {
       localStorage.removeItem('tron-wallet-manually-disconnected');
     } catch (error) {
-      console.warn('Failed to clear disconnection state from localStorage:', error);
+      // Silent fail - localStorage is not critical
     }
     
     // Reset state first
