@@ -48,7 +48,7 @@ export function useTronWallet() {
         return new Promise((resolve, reject) => {
           const check = () => {
             attempts++;
-            
+
             // Check if TronWeb is available and has default address
             if (window.tronWeb && window.tronWeb.defaultAddress && window.tronWeb.defaultAddress.base58) {
               resolve(window.tronWeb);
@@ -130,7 +130,7 @@ export function useTronWallet() {
       // Try to request account access
       try {
         const result = await window.tronLink.request({ method: 'tron_requestAccounts' });
-        
+
         if (result.code === 200) {
           // Wait a bit for TronLink to update
           setTimeout(() => checkTronLink(), 1000);
@@ -139,7 +139,7 @@ export function useTronWallet() {
         }
       } catch (requestError) {
         console.warn('tron_requestAccounts failed, trying direct connection:', requestError);
-        
+
         // Fallback: try direct connection
         await checkTronLink();
       }
@@ -254,12 +254,12 @@ export function useTronWallet() {
       // Call the contract method - this should trigger TronLink popup
       console.log('🚀 Executing contract call...');
       const result = await contract[functionSelector](...parameters).send(txOptions);
-      
+
       console.log('✅ TRON contract transaction completed:', result);
       return result;
     } catch (error) {
       console.error('❌ TRON contract call failed:', error);
-      
+
       // Enhanced error reporting
       if (error && typeof error === 'object') {
         if ('message' in error) {
@@ -272,7 +272,7 @@ export function useTronWallet() {
           console.error('❌ Error type:', error.type);
         }
       }
-      
+
       // Re-throw with more context
       throw new Error(`TRON contract call failed: ${error instanceof Error ? error.message : error}`);
     }
@@ -284,7 +284,6 @@ export function useTronWallet() {
 
     // Listen for account changes using TronWeb events (if available)
     const handleAccountsChanged = () => {
-      console.log('🔄 TRON account changed, reconnecting...');
       setTimeout(checkTronLink, 1000); // Delay to let TronLink update
     };
 
@@ -326,7 +325,7 @@ export function useTronWallet() {
     disconnectTronWallet,
     sendTransaction,
     callContract,
-    
+
     // Utils
     isInstalled: typeof window !== 'undefined' && !!window.tronLink,
     formatBalance: (balance: string) => parseFloat(balance).toFixed(4),

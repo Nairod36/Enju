@@ -7,6 +7,7 @@ import { IslandsModule } from './islands/islands.module';
 import { BridgeModule } from './bridge/bridge.module';
 import { OneInchModule } from './oneinch/oneinch.module';
 import { RpcModule } from './rpc/rpc.module';
+import { RewardsModule } from './rewards/rewards.module';
 import { HealthController } from './health/health.controller';
 import { HealthCronService } from './health/health-cron.service';
 
@@ -21,7 +22,8 @@ import { HealthCronService } from './health/health-cron.service';
     IslandsModule,
     BridgeModule,
     OneInchModule,
-    RpcModule
+    RpcModule,
+    RewardsModule
   ],
   controllers: [HealthController],
   providers: [PrismaService, HealthCronService],

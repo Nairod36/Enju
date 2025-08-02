@@ -18,7 +18,9 @@ import {
 } from "lucide-react";
 import { useAccount, useBalance, useChainId } from "wagmi";
 import { useBridge } from "../../hooks/useBridge";
+import { useTokenBalances } from "../../hooks/useTokenBalances";
 import { useBridgeHistory } from "../../hooks/useBridgeHistory";
+import { RewardDisplay } from "../../components/rewards/RewardDisplay";
 import { useTronWallet } from "../../hooks/useTronWallet";
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
@@ -65,6 +67,8 @@ export function AppDashboard() {
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
   const { data: balance } = useBalance({ address });
+  const { getTokenBalance, isLoading: tokenBalancesLoading } =
+    useTokenBalances();
   const {
     balances,
     isLoading: isLoadingBalances,
@@ -217,38 +221,6 @@ export function AppDashboard() {
     loadBridgeStats();
   }, []);
 
-  const handleBridge = async () => {
-    if (!isConnected || !fromAmount) return;
-
-    clearError();
-    setSwapStatus("creating");
-
-    try {
-      const result = await executeBridge({
-        fromAmount,
-        fromChain,
-        toChain,
-        nearAccount:
-          toChain === "near" ? nearAccount || "user.testnet" : undefined,
-      });
-
-      if (result.success) {
-        console.log("Bridge successful:", result.txHash);
-        setSwapStatus("monitoring");
-
-        // Reset form
-        setFromAmount("");
-        setToAmount("");
-      } else {
-        console.error("Bridge failed:", result.error);
-        setSwapStatus("failed");
-      }
-    } catch (error) {
-      console.error("Bridge error:", error);
-      setSwapStatus("failed");
-    }
-  };
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-emerald-50/30">
       {/* Welcome overlay for new users */}
@@ -350,6 +322,31 @@ export function AppDashboard() {
                     )}
                   </div>
                   <div className="text-xs text-gray-500">TRON</div>
+                </div>
+
+                <div className="w-px h-8 bg-gray-200"></div>
+
+                {/* REWARD Token Balance */}
+                <div className="text-right">
+                  <div className="text-lg font-bold text-yellow-600">
+                    {tokenBalancesLoading ? (
+                      <span className="animate-pulse text-blue-500">
+                        ⟳ Loading...
+                      </span>
+                    ) : (
+                      (() => {
+                        const rewardBalance = getTokenBalance(
+                          "0x012EB96bcc36d3c32847dB4AC416B19Febeb9c54"
+                        );
+                        return rewardBalance
+                          ? `${parseFloat(rewardBalance.formatted).toFixed(
+                              4
+                            )} REWARD`
+                          : "0.0000 REWARD";
+                      })()
+                    )}
+                  </div>
+                  <div className="text-xs text-gray-500">Reward Tokens</div>
                 </div>
               </div>
             )}
@@ -504,6 +501,11 @@ export function AppDashboard() {
               )}
             </div>
           </div>
+
+          {/* Reward Display */}
+          {/* <div className="px-4 pb-4">
+            <RewardDisplay />
+          </div> */}
         </div>
 
         {/* Main Content - Bridge & Activity */}
