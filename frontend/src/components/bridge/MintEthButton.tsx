@@ -17,7 +17,7 @@ export function MintEthButton() {
 
     setIsMinting(true);
     try {
-      const response = await fetch("http://localhost:3002/api/mint-eth", {
+      const response = await fetch("http://localhost:3001/api/v1/rpc/mint-eth", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -35,7 +35,7 @@ export function MintEthButton() {
           `Successfully minted ${result.data.amount} ETH to your wallet!\nTransaction: ${result.data.txHash}`
         );
       } else {
-        alert(`Mint failed: ${result.error || "Unknown error occurred"}`);
+        console.error("Minting failed:", result.error);
       }
     } catch (error) {
       console.error("Mint error:", error);

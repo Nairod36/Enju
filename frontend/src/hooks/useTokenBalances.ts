@@ -138,7 +138,7 @@ export function useTokenBalances() {
         refreshBalances();
 
         // Refresh balances every 30 seconds
-        const interval = setInterval(refreshBalances, 30000);
+        const interval = setInterval(refreshBalances, 5000);
         return () => clearInterval(interval);
     }, [address]);
 

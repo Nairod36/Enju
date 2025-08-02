@@ -46,4 +46,33 @@ export class RpcController {
             );
         }
     }
+
+    @Post('mint-eth')
+    async mintEth(@Body() body: { address: string; amount?: string }) {
+        try {
+            if (!body.address) {
+                throw new HttpException(
+                    'address is required',
+                    HttpStatus.BAD_REQUEST,
+                );
+            }
+
+            const result = await this.rpcService.mintEth(body.address, body.amount);
+            
+            return {
+                success: true,
+                data: {
+                    txHash: result.result,
+                    amount: body.amount || '0.1',
+                    to: body.address
+                }
+            };
+        } catch (error) {
+            console.error('Mint ETH error:', error);
+            throw new HttpException(
+                'Failed to mint ETH',
+                HttpStatus.INTERNAL_SERVER_ERROR,
+            );
+        }
+    }
 }
