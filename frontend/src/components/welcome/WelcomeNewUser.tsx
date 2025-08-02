@@ -6,12 +6,18 @@ interface WelcomeNewUserProps {
   onDismiss: () => void;
   userName?: string;
   islandName?: string;
+  treeCount?: number;
+  bridgeCount?: number;
+  memberSince?: string;
 }
 
 export const WelcomeNewUser: React.FC<WelcomeNewUserProps> = ({
   onDismiss,
   userName,
   islandName = "Your First Island",
+  treeCount = 0,
+  bridgeCount = 0,
+  memberSince,
 }) => {
   return (
     <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -95,20 +101,20 @@ export const WelcomeNewUser: React.FC<WelcomeNewUserProps> = ({
                   <span className="text-sm font-medium text-gray-600">
                     Trees Planted
                   </span>
-                  <span className="text-sm font-bold text-emerald-600">0</span>
+                  <span className="text-sm font-bold text-emerald-600">{treeCount}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-medium text-gray-600">
                     Bridges Completed
                   </span>
-                  <span className="text-sm font-bold text-blue-600">0</span>
+                  <span className="text-sm font-bold text-blue-600">{bridgeCount}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-medium text-gray-600">
                     Member Since
                   </span>
                   <span className="text-sm text-gray-900">
-                    {new Date().toLocaleDateString("en-US", {
+                    {memberSince || new Date().toLocaleDateString("en-US", {
                       month: "short",
                       year: "numeric",
                     })}

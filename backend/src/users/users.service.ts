@@ -367,4 +367,47 @@ export class UsersService {
       },
     };
   }
+
+  async levelUp(userId: string, experienceGain: number, activityBonus: number = 10): Promise<UserResponseDto> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new UserNotFoundException();
+    }
+
+    const newExperience = user.experience + experienceGain;
+    const currentLevel = user.level;
+    
+    // Calcul du nouveau niveau (100 XP par niveau)
+    const newLevel = Math.floor(newExperience / 100) + 1;
+    const levelIncreased = newLevel > currentLevel;
+
+    const updatedUser = await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        experience: newExperience,
+        level: newLevel,
+        activityScore: { increment: activityBonus },
+        lastActivityAt: new Date(),
+      },
+    });
+
+    console.log(`🎉 User level up: ${user.walletAddress} | Level: ${currentLevel} → ${newLevel} | XP: ${user.experience} → ${newExperience}`);
+
+    return this.usersUtils.transformToResponseDto(updatedUser);
+  }
+
+  async levelUpByAddress(walletAddress: string, experienceGain: number, activityBonus: number = 10): Promise<UserResponseDto> {
+    const user = await this.prisma.user.findUnique({
+      where: { walletAddress: walletAddress.toLowerCase() },
+    });
+
+    if (!user) {
+      throw new UserNotFoundException();
+    }
+
+    return this.levelUp(user.id, experienceGain, activityBonus);
+  }
 }

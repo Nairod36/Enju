@@ -220,7 +220,7 @@ export class BridgeResolver extends EventEmitter {
       const abi = ['function mintReward(address to, uint256 amount) external'];
       const contract = new ethers.Contract(tokenAddress, abi, wallet);
 
-      const amountWei = ethers.parseEther(rewardAmount.toString());
+      const amountWei = ethers.parseEther(rewardAmount.toFixed(18));
       const tx = await contract.mintReward(userAddress, amountWei, { gasLimit: 200000 });
       console.log(`📤 Minting transaction sent: ${tx.hash}`);
 
@@ -233,6 +233,39 @@ export class BridgeResolver extends EventEmitter {
       // Don't throw the error to avoid breaking the bridge process
     }
   }
+
+  /**
+   * Level up user through the backend API
+   */
+  private async levelUpUser(walletAddress: string, experience: number, activityBonus: number = 10): Promise<void> {
+    try {
+      console.log(`🎮 Leveling up user ${walletAddress} with ${experience} XP`);
+      
+      const response = await fetch('http://localhost:3001/api/v1/users/level-up-by-address', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          walletAddress,
+          experience,
+          activityBonus
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json() as { level: number; experience: number };
+      console.log(`✅ User leveled up: ${walletAddress} | Level: ${result.level} | XP: ${result.experience}`);
+      
+    } catch (error) {
+      console.error(`❌ Error leveling up user ${walletAddress}:`, error);
+      // Don't throw the error to avoid breaking the bridge process
+    }
+  }
+
 
   private setupEventHandlers(): void {
     // Handle ETH → NEAR bridge initiation
@@ -400,6 +433,45 @@ export class BridgeResolver extends EventEmitter {
           console.error('❌ Error minting reward tokens:', rewardError);
         }
 
+        // 🎮 Level up user for ETH → NEAR bridge
+        try {
+          // Get user address from bridge event
+          let gamificationUserAddress = event.from;
+          
+          // If no user address from event, try to get from transaction
+          if (!gamificationUserAddress || !gamificationUserAddress.startsWith('0x')) {
+            try {
+              const provider = new ethers.JsonRpcProvider(this.config.ethRpcUrl);
+              const filter = {
+                fromBlock: event.blockNumber - 10,
+                toBlock: event.blockNumber + 10,
+                address: bridgeEvent.escrowAddress,
+                topics: [
+                  '0xb8832e39b58db8c8715bb0d6f0eab1e44c7b4c1b9bd88f5b6e4c8e7b4e8b1c2a', // EscrowCreated event signature
+                  ...(bridgeEvent.escrowAddress ? ['0x000000000000000000000000' + bridgeEvent.escrowAddress.slice(2).toLowerCase()] : [])
+                ]
+              };
+              const logs = await provider.getLogs(filter);
+              if (logs.length > 0) {
+                const tx = await provider.getTransaction(logs[logs.length - 1].transactionHash);
+                if (tx && tx.from) {
+                  gamificationUserAddress = tx.from;
+                }
+              }
+            } catch (error) {
+              console.log(`⚠️ Failed to get sender for gamification:`, error);
+            }
+          }
+          
+          if (ethAmountInEth > 0 && gamificationUserAddress && gamificationUserAddress.startsWith('0x')) {
+            const experience = Math.max(15, Math.floor(ethAmountInEth * 100)); // More XP for ETH bridges
+            await this.levelUpUser(gamificationUserAddress, experience);
+            console.log(`🌳 ETH → NEAR bridge completed - frontend will handle tree planting via callback`);
+          }
+        } catch (gamificationError) {
+          console.error('❌ Failed to level up user for ETH → NEAR bridge:', gamificationError);
+        }
+
       } catch (nearError) {
         console.error('❌ Failed to create NEAR HTLC automatically:', nearError);
         // Fallback to monitoring mode if auto-creation fails
@@ -525,6 +597,19 @@ export class BridgeResolver extends EventEmitter {
               }
             } catch (rewardError) {
               console.error('❌ Failed to mint reward tokens for ETH → TRON bridge:', rewardError);
+            }
+
+            // 🎮 Level up user for ETH → TRON bridge
+            try {
+              const ethAmountInEth = parseFloat(ethAmountInEther);
+              const userAddress = event.from || event.sender;
+              if (ethAmountInEth > 0 && userAddress) {
+                const experience = Math.max(15, Math.floor(ethAmountInEth * 100)); // More XP for ETH bridges
+                await this.levelUpUser(userAddress, experience);
+                console.log(`🌳 ETH → TRON bridge completed - frontend will handle tree planting via callback`);
+              }
+            } catch (gamificationError) {
+              console.error('❌ Failed to level up user for ETH → TRON bridge:', gamificationError);
             }
 
             this.emit('bridgeCompleted', bridgeEvent);
@@ -834,6 +919,30 @@ export class BridgeResolver extends EventEmitter {
             }
           } catch (rewardError) {
             console.error('❌ Failed to mint reward tokens for NEAR → ETH bridge:', rewardError);
+          }
+
+          // 🎮 Level up user for NEAR → ETH bridge
+          try {
+            const userAddress = bridge.ethRecipient;
+            const nearAmountStr = bridge.amount;
+            let nearAmount: number = 0;
+
+            // Parse NEAR amount from bridge
+            if (nearAmountStr.includes('NEAR')) {
+              const nearAmountMatch = nearAmountStr.match(/(\d+\.?\d*)/);
+              nearAmount = nearAmountMatch ? parseFloat(nearAmountMatch[1]) : 0;
+            } else {
+              const yoctoAmount = BigInt(nearAmountStr);
+              nearAmount = Number(yoctoAmount) / 1e24;
+            }
+
+            if (nearAmount > 0 && userAddress) {
+              const experience = Math.max(12, Math.floor(nearAmount * 5)); // 5 XP per NEAR
+              await this.levelUpUser(userAddress, experience);
+              console.log(`🌳 NEAR → ETH bridge completed - frontend will handle tree planting via callback`);
+            }
+          } catch (gamificationError) {
+            console.error('❌ Failed to level up user for NEAR → ETH bridge:', gamificationError);
           }
         } else if (bridge.type === 'ETH_TO_NEAR') {
           console.log('✅ ETH → NEAR bridge completed! User received NEAR tokens.');
@@ -1658,6 +1767,29 @@ export class BridgeResolver extends EventEmitter {
           }
         } catch (rewardError) {
           console.error('❌ Failed to mint reward tokens for TRON → ETH bridge:', rewardError);
+        }
+
+        // 🎮 Level up user for successful bridge
+        try {
+          const userAddress = bridge.ethRecipient;
+          if (userAddress) {
+            // Calculate experience based on bridge amount (more amount = more XP)
+            const trxAmountStr = bridge.amount;
+            let trxAmount = 0;
+            if (trxAmountStr.includes('TRX')) {
+              const trxAmountMatch = trxAmountStr.match(/(\d+\.?\d*)/);
+              trxAmount = trxAmountMatch ? parseFloat(trxAmountMatch[1]) : 0;
+            } else {
+              trxAmount = parseFloat(trxAmountStr) / 1e6;
+            }
+            
+            const experience = Math.max(10, Math.floor(trxAmount / 10)); // Min 10 XP, 1 XP per 10 TRX
+            
+            await this.levelUpUser(userAddress, experience);
+            console.log(`🌳 TRON → ETH bridge completed - frontend will handle tree planting via callback`);
+          }
+        } catch (gamificationError) {
+          console.error('❌ Failed to level up user for TRON → ETH bridge:', gamificationError);
         }
 
         this.emit('bridgeCompleted', bridge);
