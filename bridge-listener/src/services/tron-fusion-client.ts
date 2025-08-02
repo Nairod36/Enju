@@ -432,6 +432,10 @@ export class TronFusionClient {
     return this.tronWeb.fromSun(balance);
   }
 
+  getAddress(): string {
+    return this.tronWeb.defaultAddress.base58;
+  }
+
   isValidAddress(address: string): boolean {
     return this.tronWeb.isAddress(address);
   }

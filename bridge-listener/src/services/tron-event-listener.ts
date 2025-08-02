@@ -278,6 +278,15 @@ export class TronEventListener extends EventEmitter {
       
       console.log('📋 Parsed TRON event:', tronEvent);
       
+      // 🔍 DIAGNOSTIC: Vérifier les détails de l'événement TRON
+      console.log('🔍 DIAGNOSTIC - TRON Event Details:');
+      console.log(`   🎯 ETH recipient (targetAccount): ${tronEvent.ethTaker}`);
+      console.log(`   💰 Amount in SUN: ${tronEvent.amount}`);
+      console.log(`   🔐 Hashlock: ${tronEvent.hashlock}`);
+      console.log(`   📋 TRON maker: ${tronEvent.tronMaker}`);
+      console.log(`   📋 Order hash: ${tronEvent.orderHash}`);
+      console.log(`   📋 TRON TX: https://shasta.tronscan.org/#/transaction/${txHash}`);
+      
       // Emit event for bridge-resolver
       this.emit('tronEscrowCreated', tronEvent);
       

@@ -271,8 +271,8 @@ export class BridgeResolver extends EventEmitter {
   private async handleEthToTronBridge(event: any): Promise<void> {
     console.log('🔥 Processing ETH → TRON bridge - Auto-sending TRX...');
 
-    // Éviter les doublons
-    const dedupeKey = event.txHash || `${event.hashlock}-${event.escrow}`;
+    // Éviter les doublons - utiliser une clé plus spécifique
+    const dedupeKey = `eth-to-tron-${event.txHash}-${event.hashlock}`;
     if (this.processedTxHashes.has(dedupeKey)) {
       console.log(`⚠️ Event ${dedupeKey} already processed, skipping...`);
       return;
@@ -281,6 +281,25 @@ export class BridgeResolver extends EventEmitter {
 
     try {
       const bridgeId = this.generateBridgeId(event.hashlock, 'ETH_TO_TRON');
+
+      // Vérifier si un bridge avec ce hashlock existe déjà
+      const existingBridge = Array.from(this.activeBridges.values())
+        .find(b => b.hashlock === event.hashlock && b.type === 'ETH_TO_TRON');
+
+      if (existingBridge) {
+        console.log(`⚠️ Bridge with hashlock ${event.hashlock} already exists: ${existingBridge.id}`);
+        // Mettre à jour le bridge existant au lieu d'en créer un nouveau
+        existingBridge.ethTxHash = event.txHash;
+        existingBridge.escrowAddress = event.escrow;
+        this.activeBridges.set(existingBridge.id, existingBridge);
+        
+        // Continuer avec le traitement TRX si nécessaire
+        if (existingBridge.status === 'PENDING') {
+          console.log(`🔄 Existing bridge found, will process TRX sending if needed`);
+          // The existing bridge should already be processed, skip duplicate processing
+        }
+        return;
+      }
 
       // Create bridge tracking entry
       const bridgeEvent: BridgeEvent = {
@@ -326,6 +345,11 @@ export class BridgeResolver extends EventEmitter {
           const trxAmount = (parseFloat(ethAmountInEther) * ethToTrxRate).toFixed(6);
 
           console.log(`💱 Sending ${trxAmount} TRX (rate: ${ethToTrxRate} TRX/ETH)`);
+          console.log(`🔍 BRIDGE RESOLVER IDENTITY:`);
+          console.log(`   🤖 Resolver TRON address: ${this.tronFusionClient.getAddress()}`);
+          console.log(`   📋 Target recipient: ${event.tronAddress}`);
+          console.log(`   🎯 ETH event from: ${event.from || 'unknown'}`);
+          console.log(`   🔐 Hashlock: ${event.hashlock}`);
 
           // Envoyer directement les TRX sans escrow
           const tronTxResult = await this.tronFusionClient.sendTRX(
@@ -907,6 +931,14 @@ export class BridgeResolver extends EventEmitter {
         return;
       }
 
+      // 🔥 Éviter les doublons par txHash + hashlock
+      const dedupeKey = `${event.transactionHash}-${hashlock}`;
+      if (this.processedTxHashes.has(dedupeKey)) {
+        console.log(`⚠️ Event ${dedupeKey} already processed, skipping...`);
+        return;
+      }
+      this.processedTxHashes.add(dedupeKey);
+
       // Vérifier que c'est bien un bridge vers TRON (destinationChain = 1) ou NEAR (destinationChain = 0)
       const chainId = Number(destinationChain);
       if (chainId !== 1 && chainId !== 0) {
@@ -1349,6 +1381,14 @@ export class BridgeResolver extends EventEmitter {
       console.log(`📋 Target user: ${event.ethTaker}`);
       console.log(`📋 Amount: ${ethAmount} ETH (${ethAmountWei.toString()} wei)`);
 
+      // 🔍 DIAGNOSTIC: Vérifier si l'adresse de destination est correcte
+      console.log(`🔍 DIAGNOSTIC - TRON to ETH Bridge:`);
+      console.log(`   🎯 ETH destination address: ${event.ethTaker}`);
+      console.log(`   💰 Amount to send: ${ethAmount} ETH`);
+      console.log(`   🔐 Hashlock: ${hashlock}`);
+      console.log(`   📋 TRON sender: ${event.tronMaker}`);
+      console.log(`   📋 TRON tx hash: ${event.txHash}`);
+
       // Send ETH directly to the user (this is the completion of TRON→ETH bridge)
       const tx = await this.resolverSigner.sendTransaction({
         to: event.ethTaker,
@@ -1369,6 +1409,13 @@ export class BridgeResolver extends EventEmitter {
       console.log(`🔐 Hashlock: ${hashlock}`);
       console.log(`⛽ Gas used: ${receipt.gasUsed}`);
       console.log(`📊 Block number: ${receipt.blockNumber}`);
+      
+      // 🔍 DIAGNOSTIC: Log détaillé de la transaction ETH
+      console.log(`🔍 DETAILED ETH TRANSACTION:`);
+      console.log(`   📋 From: ${receipt.from}`);
+      console.log(`   📋 To: ${receipt.to}`);
+      console.log(`   💰 Value: ${ethAmount} ETH`);
+      console.log(`   🔗 Explorer: https://sepolia.etherscan.io/tx/${receipt.hash}`);
 
       // Find and update the existing bridge by hashlock
       const normalizeHashlock = (hl: string) => hl.replace(/^0x/, '').toLowerCase();
