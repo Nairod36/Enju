@@ -10,12 +10,18 @@ interface WelcomeNewUserProps {
   onDismiss: () => void;
   userName?: string;
   islandName?: string;
+  treeCount?: number;
+  bridgeCount?: number;
+  memberSince?: string;
 }
 
 export const WelcomeNewUser: React.FC<WelcomeNewUserProps> = ({
   onDismiss,
   userName,
   islandName = "Your First Island",
+  treeCount = 0,
+  bridgeCount = 0,
+  memberSince,
 }) => {
   const { address, isConnected } = useAccount();
   const { signMessage } = useSignMessage();
@@ -196,6 +202,37 @@ export const WelcomeNewUser: React.FC<WelcomeNewUserProps> = ({
               </Button>
             </div>
 
+
+            {/* Island Stats Preview */}
+            <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
+              <h3 className="text-sm font-semibold text-gray-900 mb-3">
+                Island Properties
+              </h3>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-gray-600">
+                    Trees Planted
+                  </span>
+                  <span className="text-sm font-bold text-emerald-600">{treeCount}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-gray-600">
+                    Bridges Completed
+                  </span>
+                  <span className="text-sm font-bold text-blue-600">{bridgeCount}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-gray-600">
+                    Member Since
+                  </span>
+                  <span className="text-sm text-gray-900">
+                    {memberSince || new Date().toLocaleDateString("en-US", {
+                      month: "short",
+                      year: "numeric",
+                    })}
+                  </span>
+                </div>
+
             {/* Auth Info */}
             {showAuthInfo && (
               <div className="mt-4 p-4 bg-emerald-50 rounded-lg text-sm text-gray-700">
@@ -206,6 +243,7 @@ export const WelcomeNewUser: React.FC<WelcomeNewUserProps> = ({
                   <li>• Cela garantit que seul le propriétaire du wallet peut créer un pseudo</li>
                   <li>• Les signatures sont optionnelles mais recommandées pour la sécurité</li>
                 </ul>
+
               </div>
             )}
 

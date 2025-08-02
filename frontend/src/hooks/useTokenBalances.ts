@@ -30,7 +30,7 @@ export function useTokenBalances() {
     const fetchTokenBalance = async (tokenAddress: string, decimals: number = 18): Promise<TokenBalance | null> => {
         if (!address) return null;
 
-        console.log(`🔍 Fetching balance for token ${tokenAddress} (${decimals} decimals) for address ${address}`);
+        //console.log(`🔍 Fetching balance for token ${tokenAddress} (${decimals} decimals) for address ${address}`);
 
         try {
             // Handle ETH (native token)
@@ -86,7 +86,6 @@ export function useTokenBalances() {
                 });
 
                 const result = await response.json();
-                console.log(`📊 Token ${tokenAddress} result:`, result);
 
                 // If direct RPC failed and this is REWARD token, try backend as fallback
                 if (tryDirectRpc && (!result.result || result.error)) {
@@ -125,7 +124,7 @@ export function useTokenBalances() {
                 if (result.result && result.result !== '0x') {
                     const balance = BigInt(result.result);
                     const formatted = formatUnits(balance, decimals);
-                    console.log(`💰 Token ${tokenAddress} balance: ${formatted} (raw: ${result.result})`);
+                    //console.log(`💰 Token ${tokenAddress} balance: ${formatted} (raw: ${result.result})`);
 
                     return {
                         formatted,
@@ -168,9 +167,7 @@ export function useTokenBalances() {
         try {
 
             const balancePromises = commonTokens.map(async (token) => {
-                console.log(`🎯 Processing token: ${token.address}`);
                 const balance = await fetchTokenBalance(token.address, token.decimals);
-                console.log(`✅ Got balance for ${token.address}:`, balance);
                 return { address: token.address, balance };
             });
 

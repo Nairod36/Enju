@@ -69,12 +69,14 @@ export const FloatingIsland = React.forwardRef<
   const [chests, setChests] = useState<ChestData[]>([]);
   const [currentIslandId, setCurrentIslandId] = useState<string | null>(null);
   const [treeCount, setTreeCount] = useState(0);
+  const [isLoadedFromDB, setIsLoadedFromDB] = useState(false);
 
   // État de l'île (initiale ou agrandie)
   const [islandData, setIslandData] = useState<any>(null);
 
   // Fonction helper pour créer les arbres manquants
   const createMissingTrees = (count: number) => {
+    console.log(`🔧 createMissingTrees appelée pour créer ${count} arbres, arbres actuels: ${userTrees.length}`);
     for (let i = 0; i < count; i++) {
       setTimeout(() => {
         if (!islandData?.landTiles || islandData.landTiles.length === 0) {
@@ -133,6 +135,7 @@ export const FloatingIsland = React.forwardRef<
           };
 
           setUserTrees((prev) => [...prev, newTree]);
+          setTreeCount((prev) => prev + 1); // Synchroniser le compteur
           return new Set(currentUsedTiles).add(tile.key);
         });
       }, i * 300); // Délai entre chaque arbre
@@ -192,15 +195,18 @@ export const FloatingIsland = React.forwardRef<
     }
   }, [seed, preloadedIslandData]);
 
-  // Génération automatique des arbres après la création de l'île
+  // Génération automatique des arbres après la création de l'île (seulement pour les nouvelles îles)
   useEffect(() => {
-    if (islandData && initialTreeCount > 0) {
+    if (islandData && initialTreeCount > 0 && userTrees.length === 0 && !isLoadedFromDB) {
+      console.log(`🆕 Nouvelle île détectée (pas de DB), création de ${initialTreeCount} arbres initiaux`);
       // Attendre un peu que l'île soit bien initialisée
       setTimeout(() => {
         createMissingTrees(initialTreeCount);
       }, 100);
+    } else if (isLoadedFromDB) {
+      console.log(`📀 Île chargée depuis DB, ignorer la création d'arbres initiaux`);
     }
-  }, [islandData, initialTreeCount]);
+  }, [islandData, initialTreeCount, userTrees.length, isLoadedFromDB]);
 
   // Données actuelles à utiliser
   const currentIslandData = islandData || {
@@ -214,10 +220,12 @@ export const FloatingIsland = React.forwardRef<
 
   useImperativeHandle(ref, () => ({
     addRandomTree: () => {
+      console.log(`🌱 addRandomTree appelée - arbres actuels: ${userTrees.length}`);
       if (
         !currentIslandData.landTiles ||
         currentIslandData.landTiles.length === 0
       ) {
+        console.log(`❌ Pas de landTiles disponibles pour planter un arbre`);
         return;
       }
 
@@ -371,6 +379,12 @@ export const FloatingIsland = React.forwardRef<
     },
     loadFromDatabase: (dbIsland: any) => {
       try {
+        console.log(`🗄️ loadFromDatabase appelée pour l'île ${dbIsland.id}, déjà chargée: ${isLoadedFromDB}`);
+        
+        if (isLoadedFromDB && currentIslandId === dbIsland.id) {
+          console.log(`⚠️ Île déjà chargée, ignorer le rechargement`);
+          return true;
+        }
         // Vérifier si l'île a des données générées
         const hasGeneratedData =
           dbIsland.islandData &&
@@ -400,18 +414,27 @@ export const FloatingIsland = React.forwardRef<
         );
 
         if (validTrees.length > 0) {
+          console.log(`🔄 Chargement de ${validTrees.length} arbres depuis la DB:`, validTrees.map(t => t.id));
           setUserTrees(validTrees);
         } else {
+          console.log(`🔍 Aucun arbre valide trouvé dans la DB, réinitialisation`);
           setUserTrees([]); // Nettoyer les tableaux vides
         }
 
-        // Créer les arbres manquants basé sur les arbres valides vs totalTrees
+        // Créer des arbres manquants SEULEMENT si la DB indique qu'il devrait y en avoir
+        // mais qu'aucun n'a été trouvé (corruption de données)
         const missingTreesCount = totalTreesExpected - validTrees.length;
-        if (missingTreesCount > 0) {
-          // Utiliser un état temporaire pour créer les arbres manquants
+        console.log(`🌳 Arbres chargés depuis la DB: ${validTrees.length}, totalTrees attendu: ${totalTreesExpected}, manquants: ${missingTreesCount}`);
+        
+        // Ne jamais créer d'arbres manquants si on charge depuis la DB
+        // Les arbres en DB sont la seule source de vérité
+        if (missingTreesCount > 0 && validTrees.length === 0 && totalTreesExpected > 0) {
+          console.log(`🔧 Aucun arbre trouvé mais ${totalTreesExpected} attendus, recréation pour corruption de données...`);
           setTimeout(() => {
             createMissingTrees(missingTreesCount);
-          }, 2000);
+          }, 1000);
+        } else if (validTrees.length > 0) {
+          console.log(`✅ ${validTrees.length} arbres chargés depuis la DB, pas de recréation nécessaire`);
         }
 
         // Restaurer les coffres
@@ -424,13 +447,13 @@ export const FloatingIsland = React.forwardRef<
           setUsedTiles(new Set(dbIsland.usedTiles));
         }
 
-        // Restaurer le nombre d'arbres
-        if (dbIsland.treeCount !== undefined) {
-          setTreeCount(dbIsland.treeCount);
-        }
+        // Le treeCount sera mis à jour automatiquement par les arbres restaurés et manquants
+        // Initialiser d'abord avec les arbres valides restaurés
+        setTreeCount(validTrees.length);
 
-        // Mettre à jour l'ID de l'île courante
+        // Mettre à jour l'ID de l'île courante et marquer comme chargée
         setCurrentIslandId(dbIsland.id);
+        setIsLoadedFromDB(true);
 
         return true;
       } catch (error) {
@@ -449,6 +472,7 @@ export const FloatingIsland = React.forwardRef<
 
   // Reset seulement au changement de seed
   useEffect(() => {
+    console.log(`🔄 Reset de l'île pour le nouveau seed: ${seed}`);
     setAnimatedTiles(0);
     setShowDecorations(false);
     setUserTrees([]);
@@ -458,6 +482,7 @@ export const FloatingIsland = React.forwardRef<
     setCharacter(null);
     setCurrentIslandId(null);
     setTreeCount(0);
+    setIsLoadedFromDB(false); // Permettre le rechargement pour le nouveau seed
   }, [seed]);
 
   useEffect(() => {
@@ -594,6 +619,7 @@ export const FloatingIsland = React.forwardRef<
       )}
 
       {/* Arbres ajoutés par l'utilisateur */}
+      {console.log(`🌲 Rendu arbres: ${userTrees.length} arbres dans le state:`, userTrees.map(t => t?.id || 'invalid'))}
       {userTrees
         .filter((tree) => tree && tree.id && tree.position) // Filtrer les arbres valides
         .map((tree) => (
