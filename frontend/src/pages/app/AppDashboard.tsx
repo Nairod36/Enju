@@ -657,58 +657,59 @@ export function AppDashboard() {
         <div className="flex items-center align-center justify-center flex-1">
           {/* Bridge Section - Sticky */}
 
-          {!isConnected ? (
-            <div className="text-center py-16">
-              <div className="w-16 h-16 bg-gradient-to-br from-slate-100 to-slate-200 rounded-2xl mx-auto mb-4 flex items-center justify-center">
-                <MapPin className="w-8 h-8 text-slate-400" />
-              </div>
-              <h2 className="text-3xl font-bold bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent mb-3">
-                Connect Your Wallet
-              </h2>
-              <p className="text-slate-600 mb-8 text-lg">
-                Connect to start bridging assets across chains
-              </p>
-            </div>
-          ) : activeTab === "bridge" ? (
-            <div className="sticky top-0 z-10 w-[500px]">
-              <div className="px-8 py-8">
-                {/* Tab Toggle - Premium Style - Au-dessus du composant */}
-                <div className="flex justify-center mb-6">
-                  <div className="relative bg-slate-50 rounded-xl p-1 border border-slate-200">
-                    <div
-                      className={`absolute top-1 bottom-1 bg-white rounded-lg shadow-sm transition-all duration-300 ${
+          <div className="sticky top-0 z-10 w-[500px]">
+            <div className="px-8 py-8">
+              {/* Tab Toggle - Premium Style - Au-dessus du composant */}
+              <div className="flex justify-center mb-6">
+                <div className="relative bg-slate-50 rounded-xl p-1 border border-slate-200">
+                  <div
+                    className={`absolute top-1 bottom-1 bg-white rounded-lg shadow-sm transition-all duration-300 ${
+                      activeTab === "bridge"
+                        ? "left-1 right-[50%]"
+                        : "left-[50%] right-1"
+                    }`}
+                  />
+                  <div className="relative flex">
+                    <button
+                      onClick={() => setActiveTab("bridge")}
+                      className={`flex items-center space-x-2 px-6 py-3 rounded-lg text-sm font-semibold transition-all relative z-10 ${
                         activeTab === "bridge"
-                          ? "left-1 right-[50%]"
-                          : "left-[50%] right-1"
+                          ? "text-emerald-700"
+                          : "text-slate-500 hover:text-slate-700"
                       }`}
-                    />
-                    <div className="relative flex">
-                      <button
-                        onClick={() => setActiveTab("bridge")}
-                        className={`flex items-center space-x-2 px-6 py-3 rounded-lg text-sm font-semibold transition-all relative z-10 ${
-                          activeTab === "bridge"
-                            ? "text-emerald-700"
-                            : "text-slate-500 hover:text-slate-700"
-                        }`}
-                      >
-                        <GitBranch className="w-4 h-4" />
-                        <span>Bridge</span>
-                      </button>
-                      <button
-                        onClick={() => setActiveTab("swap")}
-                        className={`flex items-center space-x-2 px-6 py-3 rounded-lg text-sm font-semibold transition-all relative z-10 ${
-                          activeTab === "swap"
-                            ? "text-blue-700"
-                            : "text-slate-500 hover:text-slate-700"
-                        }`}
-                      >
-                        <Repeat className="w-4 h-4" />
-                        <span>Swap</span>
-                      </button>
-                    </div>
+                    >
+                      <GitBranch className="w-4 h-4" />
+                      <span>Bridge</span>
+                    </button>
+                    <button
+                      onClick={() => setActiveTab("swap")}
+                      className={`flex items-center space-x-2 px-6 py-3 rounded-lg text-sm font-semibold transition-all relative z-10 ${
+                        activeTab === "swap"
+                          ? "text-blue-700"
+                          : "text-slate-500 hover:text-slate-700"
+                      }`}
+                    >
+                      <Repeat className="w-4 h-4" />
+                      <span>Swap</span>
+                    </button>
                   </div>
                 </div>
+              </div>
 
+              {!isConnected ? (
+                <div className="text-center py-16">
+                  <div className="w-20 h-20 bg-gradient-to-br from-emerald-500 to-blue-600 rounded-3xl mx-auto mb-6 flex items-center justify-center shadow-xl">
+                    <MapPin className="w-10 h-10 text-white" />
+                  </div>
+                  <h2 className="text-3xl font-bold bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent mb-3">
+                    Connect Your Wallet
+                  </h2>
+                  <p className="text-slate-600 mb-8 text-lg">
+                    Connect to start bridging assets across chains
+                  </p>
+                  <w3m-button />
+                </div>
+              ) : activeTab === "bridge" ? (
                 <ModernBridge
                   onBridgeSuccess={async () => {
                     // Planter un arbre sur l'île
@@ -745,12 +746,8 @@ export function AppDashboard() {
                   }}
                 />
               )}
-
-              </div>
             </div>
-          ) : (
-            <CompactSwap />
-          )}
+          </div>
         </div>
       </div>
     </div>

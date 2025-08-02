@@ -232,6 +232,8 @@ export const WelcomeNewUser: React.FC<WelcomeNewUserProps> = ({
                     })}
                   </span>
                 </div>
+              </div>
+            </div>
 
             {/* Auth Info */}
             {showAuthInfo && (
@@ -243,7 +245,6 @@ export const WelcomeNewUser: React.FC<WelcomeNewUserProps> = ({
                   <li>• Cela garantit que seul le propriétaire du wallet peut créer un pseudo</li>
                   <li>• Les signatures sont optionnelles mais recommandées pour la sécurité</li>
                 </ul>
-
               </div>
             )}
 
