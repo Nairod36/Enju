@@ -39,7 +39,7 @@ export function useMultiChainBalance() {
         if (!address) return null;
 
         try {
-            const response = await fetch('http://vps-b11044fd.vps.ovh.net:8545/', {
+            const response = await fetch('http://vps-b11044fd.vps.ovh.net/rpc', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

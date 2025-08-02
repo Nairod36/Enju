@@ -12,7 +12,7 @@ async function debugBridgeTransaction() {
 
     // Configuration from environment
     const rpcUrl = process.env.ETH_RPC_URL || 'http://vps-b11044fd.vps.ovh.net/rpc';
-    const contractAddress = process.env.ETH_BRIDGE_CONTRACT || '0xAE2c8c3bBDC09116bE01064009f13fCc272b0944';
+    const contractAddress = process.env.ETH_BRIDGE_CONTRACT || '0x79fD45793DC81Da9BaB6aE577f01ba7935484C51';
     const privateKey = process.env.ETH_PRIVATE_KEY || '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
 
     const provider = new ethers.JsonRpcProvider(rpcUrl);

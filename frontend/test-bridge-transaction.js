@@ -16,7 +16,7 @@ async function testBridgeTransaction() {
       "event EscrowCreated(address indexed escrow, bytes32 indexed hashlock, uint8 indexed destinationChain, string destinationAccount, uint256 amount)"
     ];
     
-    const contractAddress = '0xAE2c8c3bBDC09116bE01064009f13fCc272b0944';
+    const contractAddress = '0x79fD45793DC81Da9BaB6aE577f01ba7935484C51';
     const contract = new ethers.Contract(contractAddress, contractABI, signer);
     
     // Generate a test secret and hashlock

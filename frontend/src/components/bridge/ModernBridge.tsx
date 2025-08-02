@@ -5,20 +5,35 @@ import {
   ArrowRightLeft,
   ChevronDown,
   Zap,
-  Shield,
   Clock,
-  TrendingUp,
 } from "lucide-react";
 import { BridgeModal } from "./BridgeModal";
 import { useAccount } from "wagmi";
 import { useWalletSelector } from "@near-wallet-selector/react-hook";
 import { ethers } from "ethers";
-import { BRIDGE_CONFIG } from "@/config/networks";
+import { BRIDGE_CONFIG, FORK_MAINNET_CONFIG } from "@/config/networks";
 import { useConversion } from "@/hooks/usePriceOracle";
 import { useTronWallet } from "@/hooks/useTronWallet";
 
+interface BridgeData {
+  fromAmount: string;
+  fromChain: "ethereum" | "near" | "tron";
+  toChain: "ethereum" | "near" | "tron";
+  logs: string[];
+  status: "pending" | "success" | "error" | "ready-to-complete";
+  txHash: string;
+  secret: string;
+  hashlock: string;
+  convertedAmount?: string;
+  swapId?: string;
+  escrow?: string;
+  partialFillsEnabled?: boolean;
+  contractId?: string;
+  ethTxHash?: string;
+}
+
 interface ModernBridgeProps {
-  onBridgeSuccess?: (bridgeData: any) => void;
+  onBridgeSuccess?: (bridgeData: BridgeData) => void;
 }
 
 interface BridgeStats {
@@ -78,7 +93,7 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
   const conversion = useConversion(fromAmount, fromChain, toChain);
   // Remove nearAccount state as it will come from wallet
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [bridgeData, setBridgeData] = useState(null);
+  const [bridgeData, setBridgeData] = useState<BridgeData | null>(null);
   const bridgeLogsRef = useRef<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [currentSwapId, setCurrentSwapId] = useState<string | null>(null);
@@ -148,15 +163,139 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
   };
 
   const handleBridge = async () => {
+    console.log("🚀 handleBridge called");
+    
     // Check required connections based on bridge direction
     const needsEthWallet = fromChain === "ethereum" || toChain === "ethereum";
     const needsNearWallet = fromChain === "near" || toChain === "near";
     const needsTronWallet = fromChain === "tron" || toChain === "tron";
 
-    if (needsEthWallet && !isConnected) return;
-    if (needsNearWallet && !nearConnected) return;
-    if (needsTronWallet && !tronConnected) return;
-    if (!fromAmount) return;
+    console.log("🔍 Connection checks:", {
+      needsEthWallet,
+      needsNearWallet, 
+      needsTronWallet,
+      isConnected,
+      nearConnected,
+      tronConnected,
+      fromAmount
+    });
+
+    if (needsEthWallet && !isConnected) {
+      console.log("❌ ETH wallet needed but not connected");
+      return;
+    }
+    if (needsNearWallet && !nearConnected) {
+      console.log("❌ NEAR wallet needed but not connected");
+      return;
+    }
+    if (needsTronWallet && !tronConnected) {
+      console.log("❌ TRON wallet needed but not connected");
+      return;
+    }
+    if (!fromAmount) {
+      console.log("❌ No amount specified");
+      return;
+    }
+
+    // Check network if Ethereum is involved
+    if (needsEthWallet) {
+      console.log("🔍 Checking Ethereum network...");
+      try {
+        // First check the current network via wallet
+        const currentChainId = await window.ethereum.request({ method: 'eth_chainId' });
+        const currentChainIdDecimal = parseInt(currentChainId, 16);
+        console.log(`🔍 Current network: chainId ${currentChainIdDecimal}`);
+        updateBridgeLog(`🔍 Wallet network: chainId ${currentChainIdDecimal}`);
+        
+        // Check if we need to switch to the correct network
+        const expectedChainId = FORK_MAINNET_CONFIG.chainId; // 1 for mainnet fork
+        
+        if (currentChainIdDecimal !== expectedChainId) {
+          console.log(`⚠️ Wrong network: ${currentChainIdDecimal}, expected: ${expectedChainId}`);
+          updateBridgeLog(`⚠️ Wrong network detected. Current: ${currentChainIdDecimal}, Expected: ${expectedChainId}`);
+          updateBridgeLog(`🔄 Attempting to switch to the correct network...`);
+          
+          try {
+            // Try to switch to the correct network
+            await window.ethereum.request({
+              method: 'wallet_switchEthereumChain',
+              params: [{ chainId: `0x${expectedChainId.toString(16)}` }],
+            });
+            updateBridgeLog(`✅ Successfully switched to chainId ${expectedChainId}`);
+          } catch (switchError: any) {
+            console.log("❌ Switch network error:", switchError);
+            console.log("❌ Switch error details:", {
+              code: switchError.code,
+              message: switchError.message,
+              data: switchError.data
+            });
+            updateBridgeLog(`❌ Switch error: ${switchError.message || switchError}`);
+            updateBridgeLog(`❌ Error code: ${switchError.code || 'unknown'}`);
+            
+            // If the network doesn't exist, show manual instructions
+            if (switchError.code === 4902) {
+              updateBridgeLog(`❌ Network not found in MetaMask - trying to add it...`);
+              
+              try {
+                // Try to add the network automatically
+                await window.ethereum.request({
+                  method: 'wallet_addEthereumChain',
+                  params: [{
+                    chainId: `0x${expectedChainId.toString(16)}`,
+                    chainName: FORK_MAINNET_CONFIG.name,
+                    nativeCurrency: FORK_MAINNET_CONFIG.nativeCurrency,
+                    rpcUrls: [FORK_MAINNET_CONFIG.rpcUrl],
+                    blockExplorerUrls: null
+                  }],
+                });
+                updateBridgeLog(`✅ Network added successfully! Please try bridge again.`);
+                setIsLoading(false);
+                return;
+              } catch (addError: any) {
+                console.log("❌ Failed to add network:", addError);
+                updateBridgeLog(`❌ Failed to add network automatically: ${addError.message}`);
+                updateBridgeLog(`📋 Please add the fork network manually:`);
+                updateBridgeLog(`   1. Open MetaMask → Settings → Networks → Add Network`);
+                updateBridgeLog(`   2. Network Name: ${FORK_MAINNET_CONFIG.name}`);
+                updateBridgeLog(`   3. RPC URL: ${FORK_MAINNET_CONFIG.rpcUrl}`);
+                updateBridgeLog(`   4. Chain ID: ${expectedChainId}`);
+                updateBridgeLog(`   5. Currency: ETH`);
+                updateBridgeLog(`   6. Save and switch to this network`);
+              }
+            } else if (switchError.code === 4001) {
+              updateBridgeLog(`❌ User rejected network switch`);
+            } else {
+              updateBridgeLog(`❌ Failed to switch network automatically`);
+              updateBridgeLog(`📋 Please switch manually to chainId ${expectedChainId}`);
+            }
+            
+            setIsLoading(false);
+            return;
+          }
+        } else {
+          console.log(`✅ Correct network: chainId ${currentChainIdDecimal}`);
+          updateBridgeLog(`✅ Correct network detected: chainId ${currentChainIdDecimal}`);
+          
+          // Additional verification: test if we can connect to the fork RPC
+          try {
+            updateBridgeLog(`🔍 Verifying fork mainnet connectivity...`);
+            const provider = new ethers.providers.Web3Provider(window.ethereum as any, "any");
+            const network = await provider.getNetwork();
+            console.log("🔍 Network details:", network);
+            updateBridgeLog(`✅ Fork mainnet verified: chainId ${network.chainId}`);
+          } catch (verifyError) {
+            console.log("⚠️ Network verification warning:", verifyError);
+            updateBridgeLog(`⚠️ Network verification warning: ${verifyError}`);
+            updateBridgeLog(`🔄 Continuing with bridge anyway...`);
+          }
+        }
+        
+      } catch (error) {
+        console.log("❌ Network check error:", error);
+        updateBridgeLog(`❌ Network check failed: ${error}`);
+        return;
+      }
+    }
 
     // Reset logs ref for new bridge
     bridgeLogsRef.current = [];
@@ -199,7 +338,10 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
     } catch (error) {
       console.error("Bridge failed:", error);
       updateBridgeLog(`❌ Bridge failed: ${error}`);
-      setBridgeData((prev) => (prev ? { ...prev, status: "error" } : null));
+      setBridgeData((prev) => {
+        if (!prev) return null;
+        return { ...prev, status: "error" };
+      });
       setIsLoading(false);
     }
   };
@@ -254,26 +396,27 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
     updateBridgeLog(`📋 NEAR destination: ${nearAccountId}`);
     updateBridgeLog(`📝 You need to sign with MetaMask...`);
 
-    // Create ETH HTLC
-    const provider = new ethers.providers.Web3Provider(window.ethereum as any);
+    // Create ETH HTLC using CrossChainCore contract
+    const provider = new ethers.providers.Web3Provider(window.ethereum as any, "any");
+    
+    // Request accounts to ensure connection
+    await provider.send("eth_requestAccounts", []);
     const signer = provider.getSigner();
 
-    // Use new CrossChainResolver contract (simplified version)
-    const resolverContract = new ethers.Contract(
+    // Use new CrossChainCore contract
+    const crossChainContract = new ethers.Contract(
       BRIDGE_CONFIG.contractAddress,
       [
-        // Simplified CrossChainResolver ABI
+        // CrossChainCore ABI
         "function createETHToNEARBridge(bytes32 hashlock, string calldata nearAccount) external payable returns (address escrow)",
         "event EscrowCreated(address indexed escrow, bytes32 indexed hashlock, uint8 indexed destinationChain, string destinationAccount, uint256 amount)",
         "event EscrowCreatedLegacy(address indexed escrow, bytes32 indexed hashlock, string nearAccount, uint256 amount)",
-        "function getSwap(bytes32 swapId) external view returns (address srcEscrow, address dstEscrow, address user, uint256 totalAmount, uint256 filledAmount, uint256 remainingAmount, bytes32 hashlock, uint8 destinationChain, string memory destinationAccount, bool completed, uint256 createdAt, uint256 fillCount)",
-        "function getSwapProgress(bytes32 swapId) external view returns (uint256 totalAmount, uint256 filledAmount, uint256 remainingAmount, uint256 fillCount, bool completed, uint256 fillPercentage)",
       ],
       signer
     );
 
-    // Call the simplified createETHToNEARBridge function
-    const tx = await resolverContract.createETHToNEARBridge(
+    // Call the createETHToNEARBridge function
+    const tx = await crossChainContract.createETHToNEARBridge(
       hashlock,
       nearAccountId,
       {
@@ -369,7 +512,7 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
         const parsedLogs = receipt.logs
           .map((log) => {
             try {
-              return bridgeContract.interface.parseLog(log);
+              return crossChainContract.interface.parseLog(log);
             } catch (e) {
               return null;
             }
@@ -953,24 +1096,26 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
     updateBridgeLog(`📋 TRON destination: ${tronAddress}`);
     updateBridgeLog(`📝 You need to sign with MetaMask...`);
 
-    // Create ETH HTLC using simplified approach like NEAR bridge
-    const provider = new ethers.providers.Web3Provider(window.ethereum as any);
+    // Create ETH HTLC using CrossChainCore contract
+    const provider = new ethers.providers.Web3Provider(window.ethereum as any, "any");
+    
+    // Request accounts to ensure connection
+    await provider.send("eth_requestAccounts", []);
     const signer = provider.getSigner();
 
-    // Use new CrossChainCore contract (simplified version)
-    const resolverContract = new ethers.Contract(
+    // Use new CrossChainCore contract
+    const crossChainContract = new ethers.Contract(
       BRIDGE_CONFIG.contractAddress,
       [
-        // Simplified CrossChainCore ABI
+        // CrossChainCore ABI
         "function createETHToTRONBridge(bytes32 hashlock, string calldata tronAddress) external payable returns (address escrow)",
         "event EscrowCreated(address indexed escrow, bytes32 indexed hashlock, uint8 indexed destinationChain, string destinationAccount, uint256 amount)",
-        "function getSwap(bytes32 swapId) external view returns (address srcEscrow, address user, uint256 amount, bytes32 hashlock, uint8 destinationChain, string memory destinationAccount, bool completed, uint256 createdAt)",
       ],
       signer
     );
 
     // Call the createETHToTRONBridge function
-    const tx = await resolverContract.createETHToTRONBridge(
+    const tx = await crossChainContract.createETHToTRONBridge(
       hashlock,
       tronAddress,
       {
@@ -1003,14 +1148,15 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
 
       updateBridgeLog(`📦 ETH HTLC created: ${escrow.substring(0, 14)}...`);
       updateBridgeLog(
-        `🔄 Bridge resolver will automatically create TRON HTLC...`
+        `🔄 Bridge-listener will automatically create TRON HTLC...`
       );
       updateBridgeLog(
         `✅ Bridge ready! ETH side locked, TRON side being created automatically.`
       );
       updateBridgeLog(`⏳ Bridge-listener will monitor and auto-complete...`);
+      updateBridgeLog(`🎯 TRON destination: ${tronAccount}`);
 
-      // Generate swapId for tracking
+      // Generate swapId for tracking (TRON is DestinationChain(1) in contract)
       const swapId = ethers.utils.keccak256(
         ethers.utils.solidityPack(
           ["address", "bytes32", "uint256", "string", "uint256"],
@@ -1019,7 +1165,7 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
             hashlock,
             1, // DestinationChain.TRON = 1
             tronAccount,
-            receipt.blockNumber || Date.now(), // Use block number or timestamp
+            receipt.blockNumber || Date.now(),
           ]
         )
       );
@@ -1038,17 +1184,30 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
       loadBridgeStats();
     } else {
       updateBridgeLog("❌ No EscrowCreated event found in transaction");
-      updateBridgeLog("⚠️  Bridge may have failed - check transaction details");
+      updateBridgeLog("⚠️ Bridge may have failed - check transaction details");
+      updateBridgeLog(`🔍 Transaction hash: ${tx.hash}`);
       throw new Error("Bridge transaction completed but no escrow event found");
     }
   };
 
   const handleTronToEthBridge = async (bridgeData: any) => {
+    // Validation
+    const amount = parseFloat(fromAmount);
+    if (!fromAmount || amount <= 0) {
+      updateBridgeLog(`❌ Invalid amount: ${fromAmount}`);
+      setBridgeData((prev) => {
+        if (!prev) return null;
+        return { ...prev, status: "error" };
+      });
+      setIsLoading(false);
+      return;
+    }
+
     updateBridgeLog("🔑 Generating secret and hashlock...");
 
     // Generate secret and hashlock
     const secret = ethers.utils.hexlify(ethers.utils.randomBytes(32));
-    // Use SHA256 for NEAR compatibility (NEAR contract uses sha2::Sha256)
+    // Use SHA256 for cross-chain compatibility
     const hashlock = ethers.utils.sha256(secret);
 
     bridgeData.secret = secret;
@@ -1056,24 +1215,85 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
 
     updateBridgeLog(`🔒 Generated hashlock: ${hashlock.substring(0, 14)}...`);
     updateBridgeLog(`🚀 Initiating TRON → ETHEREUM bridge...`);
-    updateBridgeLog(`💰 Amount: ${fromAmount} TRON`);
+    updateBridgeLog(`💰 Amount: ${fromAmount} TRX`);
     updateBridgeLog(`📋 ETH destination: ${address}`);
-    updateBridgeLog(`📝 You need to sign with TronLink...`);
-
-    // Create TRON HTLC
-    const tronAmount = tronWeb.toSun(fromAmount);
-    await createTronHTLC(address!, hashlock, tronAmount.toString());
-
-    updateBridgeLog(`✅ TRON HTLC created successfully!`);
     updateBridgeLog(
-      `⏳ Bridge-listener will create ETH escrow automatically...`
+      `🔄 Bridge-listener will create TRON HTLC automatically...`
     );
 
-    setBridgeData((prev) => (prev ? { ...prev, status: "success" } : null));
-    setIsLoading(false);
+    try {
+      updateBridgeLog(`📝 You need to create TRON HTLC with your wallet...`);
 
-    onBridgeSuccess?.(bridgeData);
-    loadBridgeStats();
+      // Create TRON HTLC using user's wallet (similar to NEAR flow)
+      const tronAmount = tronWeb.toSun(fromAmount);
+      const result = await createTronHTLC(
+        address!, // ETH address as destination
+        hashlock,
+        tronAmount.toString()
+      );
+
+      updateBridgeLog(`✅ TRON HTLC created successfully!`);
+
+      // Extract contract ID or transaction details from result
+      let contractId = "";
+      try {
+        if (result?.txid) {
+          contractId = result.txid;
+          updateBridgeLog(`📋 TRON Transaction ID: ${contractId}`);
+        }
+      } catch (error) {
+        updateBridgeLog(`⚠️ Could not extract transaction ID: ${error}`);
+      }
+
+      // Now notify bridge-listener to create ETH escrow
+      updateBridgeLog(`📡 Notifying bridge-listener to create ETH escrow...`);
+
+      const bridgeRequest = {
+        type: "TRON_TO_ETH",
+        amount: fromAmount.toString(),
+        tronAddress: tronAddress,
+        ethRecipient: address,
+        secret: secret,
+        hashlock: hashlock,
+        timelock: Date.now() + 24 * 60 * 60 * 1000,
+        contractId: contractId,
+      };
+
+      const response = await fetch(
+        `${BRIDGE_CONFIG.listenerApi}/bridges/initiate`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(bridgeRequest),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`Bridge API call failed: ${response.status}`);
+      }
+
+      const apiResult = await response.json();
+      updateBridgeLog(`✅ ETH escrow will be created automatically`);
+      updateBridgeLog(`⏳ You can now complete the TRON HTLC to get your ETH`);
+
+      // Store bridge ID for monitoring
+      setCurrentSwapId(apiResult.bridgeId);
+
+      // Monitor for bridge completion
+      setBridgeData((prev) => (prev ? { ...prev, status: "pending" } : null));
+      setIsLoading(false);
+      monitorBridgeCompletion(bridgeData);
+    } catch (error) {
+      console.error("Failed to initiate TRON → ETH bridge:", error);
+      updateBridgeLog(`❌ Failed to initiate bridge: ${error}`);
+      setBridgeData((prev) => {
+        if (!prev) return null;
+        return { ...prev, status: "error" };
+      });
+      setIsLoading(false);
+    }
   };
 
   const createTronHTLC = async (
