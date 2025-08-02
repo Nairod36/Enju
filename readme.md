@@ -66,26 +66,13 @@
 |------|----|-----------| --------|--------|
 | ETH | TRX | Auto price | 0.1 ETH → ~1120 TRX | ✅ Live |
 | TRX | ETH | Auto price | 1000 TRX → ~0.089 ETH | ✅ Live |
-| ETH | NEAR | Auto price | 0.1 ETH → ~140 NEAR | 🚧 Coming Soon |
-| NEAR | ETH | Auto price | 100 NEAR → ~0.071 ETH | 🚧 Coming Soon |
-| NEAR | TRX | Auto price | 100 NEAR → ~800 TRX | 🚧 Coming Soon |
-| TRX | NEAR | Auto price | 1000 TRX → ~125 NEAR | 🚧 Coming Soon |
-
-**Current Features**: 
-- 🌉 ETH ↔ TRON bridge fully operational
-- 💰 Real-time price conversion
-- 🎮 3D visualization for every swap
-- 📈 Level progression system
-- 🎁 Reward system (coming soon)
+| ETH | NEAR | Auto price | 0.1 ETH → ~140 NEAR | ✅ Live |
+| NEAR | ETH | Auto price | 100 NEAR → ~0.071 ETH |✅ Live |
 
 **Fees**: 0.3% bridge fee + gas costs
 
 ## 🔧 Technical Components
 
-### Smart Contracts
-- **InchDirectBridge.sol** - Ethereum HTLC with 1inch integration
-- **TronDirectBridge.sol** - Tron HTLC with TRX handling  
-- **lib.rs** - NEAR cross-chain HTLC contract
 
 ### Backend Services
 - **Price Oracle** - Real-time ETH/NEAR/TRX rates with CoinGecko/Binance APIs
@@ -122,187 +109,56 @@
 - **Owner Controls**: Emergency functions protected
 - **Event Logging**: Full audit trail
 
-## 📊 Testing
+## 📊 Testing Links: 
 
-### Ethereum Tests
-```bash
-cd eth-contracts
-forge test -vv
-
-# Test specific scenarios
-forge test --match-test testAuthorizeResolver
-forge test --match-test testRegisterNEARSwap
-```
-
-### NEAR Tests
-```bash
-cd near-contracts/htlc-near
-cargo test
-
-# Test cross-chain functionality
-cargo test test_cross_chain_htlc
-```
-
-## 🌐 Deployment Addresses
-
-### Ethereum Mainnet/Testnets
-- **Official EscrowFactory**: `0xa7bcb4eac8964306f9e3764f67db6a7af6ddf99a`
-- **Cross-Chain Resolver**: [Deploy using script]
-
-### NEAR Protocol
-- **Contract Account**: [Deploy using build script]
-
-## 📋 Integration Guide
-
-### For Developers
-1. **Import Interfaces**: Use provided contract interfaces
-2. **Authorize Resolvers**: Register trusted resolver addresses
-3. **Monitor Events**: Listen for swap initiation/completion
-4. **Handle Errors**: Implement proper error handling for timeouts
-
-### For Resolvers
-1. **Register**: Get authorized by contract owner
-2. **Monitor**: Watch for cross-chain swap events
-3. **Execute**: Coordinate between Ethereum and NEAR
-4. **Verify**: Ensure atomic completion or reversion
-
-## 🎮 Enju - Gamified DeFi Experience
-
-### Immersive Bridge Interface
-- **Dynamic 3D Island** - Your personal floating ecosystem that grows with every transaction
-- **Chain-Specific Animals** - Meet your blockchain companions:
-  - 🐘 **Ethereum Elephant** - Majestic and powerful, representing ETH's strength
-  - 🐅 **TRON Tiger** - Fast and agile, embodying TRON's speed
-  - 🦊 **NEAR Fox** - Clever and adaptable, symbolizing NEAR's innovation
-- **Transaction Visualization** - Bridge swaps spawn trees, chests, and island expansions  
-- **Level Progression System** - Your island grows as you level up through bridging activity
-- **Interactive Elements** - Click on animals, decorations, and environmental features
-- **Persistent State** - Island configuration saves/loads with your wallet connection
-
-### Gamification Features (Current & Upcoming)
-- ✅ **Level System** - Gain XP and levels through successful bridge transactions
-- ✅ **3D Asset Integration** - Beautiful chain-specific animal models enhance the experience
-- 🔄 **Tree Planting** - Each swap/bridge plants a new tree on your island (coming soon)
-- 🎁 **Reward Tokens** - Earn platform tokens for completing bridges (coming soon)
-- 🏪 **NFT Marketplace** - Spend reward tokens on island decorations and upgrades (future)
-- 🏆 **Achievement System** - Unlock rare decorations through milestone completion (future)
-
-### Technical Implementation
-- **React Three Fiber** - WebGL-powered 3D rendering optimized for browsers
-- **Three.js** - Advanced 3D graphics, animations, and model loading
-- **Procedural Generation** - Islands uniquely generated from wallet address seeds
-- **Multi-Wallet Integration** - Seamless Web3 wallet connections across all chains
-- **Real-time Updates** - Island state updates immediately after successful transactions
-
-### User Experience Innovation
-- **Gamified Bridging** - Transform complex DeFi operations into engaging gameplay
-- **Visual Transaction History** - Your entire DeFi journey displayed in beautiful 3D space
-- **Educational Value** - Learn about different blockchains through their animal representatives
-- **Social Elements** - Shareable island screenshots and achievement bragging rights
-- **Mobile Responsive** - Optimized 3D rendering works across all device types
-
-## 🏆 Why Enju Stands Out
-
-### 🔧 Technical Excellence  
-- **1inch Fusion+ Integration** - Built on battle-tested infrastructure with proven security
-- **Real-Time Price Oracle** - Automatic conversions using CoinGecko/Binance with 30s cache
-- **Cross-Chain HTLC Security** - SHA256 hashlock + timelock guarantees for atomic swaps
-- **Production Ready** - Fully deployed contracts on ETH mainnet fork and TRON Shasta
-- **Event-Driven Architecture** - Reliable cross-chain transaction monitoring and execution
-
-### 🎮 User Experience Innovation
-- **World-First Gamified Bridge** - Transform DeFi into an immersive 3D gaming experience  
-- **Educational Blockchain Representation** - Learn chains through beautiful animal companions
-- **Progressive Rewards System** - Level up and earn tokens through actual DeFi usage
-- **Visual Transaction History** - See your entire bridging journey in personalized 3D space
-- **Seamless Multi-Wallet UX** - One interface for MetaMask, TronLink, and NEAR Wallet
-
-### 🌍 Ecosystem Impact & Innovation
-- **DeFi Accessibility** - Make complex cross-chain operations intuitive through gamification
-- **Liquidity Bridge** - Connect ETH, TRON, and NEAR ecosystems with automatic price discovery
-- **Community Building** - Shareable achievements and island customizations foster engagement
-- **Educational Value** - Demystify blockchain technology through interactive 3D representations
-- **Future-Ready Architecture** - Extensible platform ready for NFT marketplace and more chains
-
-### 🎯 What Makes Us Different
-- **Not Just Another Bridge** - We're building the future of DeFi user experience
-- **Gaming Meets Finance** - First platform to successfully gamify cross-chain swaps
-- **Real Utility** - Every game element serves actual DeFi functionality
-- **Judge-Ready Demo** - Fully functional ETH ↔ TRON bridge with stunning 3D interface
-
-## 🌟 Live Demo Features
-
-### 🎮 Currently Playable
-1. **Connect Your Wallets** - MetaMask (ETH) + TronLink (TRON) 
-2. **Experience 3D Island** - Your personal floating world generated from wallet address
-3. **Meet Your Animals** - Interact with Ethereum Elephant and TRON Tiger
-4. **Execute Real Bridges** - Swap ETH ↔ TRX with live price conversion
-5. **Watch Island Grow** - See trees and decorations spawn after successful swaps
-6. **Level Up** - Your user level increases with bridge activity and volume
-
-### 🎯 3D Transaction Visualization
-```typescript
-// Every bridge transaction grows your island
-const transaction = await executeBridge({
-  fromAmount: '0.1',
-  fromChain: 'ethereum', 
-  toChain: 'tron'
-});
-
-// Island automatically responds with:
-island.addRandomTree();     // New tree spawns
-island.updateLevel();       // XP and level increase  
-island.playAnimation();     // Animals celebrate
-island.saveState();         // Progress persisted
-```
-
-### 🏝️ Dynamic World Generation
-- **Hex-tile Islands** - Uniquely generated from your wallet address seed
-- **Chain Animals** - Ethereum Elephant and TRON Tiger with smooth animations
-- **Progressive Growth** - Trees, chests, and decorations spawn with transactions
-- **Floating Animation** - Islands gently bob in realistic 3D space with water effects
-- **Interactive Elements** - Click animals and objects for delightful responses
-- **Persistent State** - Your island configuration saves across browser sessions
-
-### 🎁 Reward & Progression System (Ready for Extension)
-- **XP System** - Gain experience points based on transaction volume
-- **Level Progression** - Visual level indicators with milestone celebrations  
-- **Future Rewards** - Token earning system ready for activation
-- **NFT Integration** - Marketplace architecture prepared for island upgrades
-- **Achievement Tracking** - Foundation laid for unlockable content
-
-## 📞 Support & Resources
-
-- **GitHub**: [Repository Link]
-- **Documentation**: See `/docs` folder
-- **Discord**: 1inch Community
-- **Testnet Faucets**:
-  - NEAR: https://wallet.testnet.near.org/
-  - Tron: https://shasta.tronex.io/
 
 ---
 
 ## 🏅 ETHGlobal Submission Highlights
 
-### ✅ **Fully Functional Demo Ready**
-- Live ETH ↔ TRON bridge with real transactions
-- Complete 3D gamified interface with chain-specific animals  
-- Multi-wallet integration (MetaMask + TronLink)
+### ✅ Fully Functional Demo Ready
+- Live **ETH ↔ TRON** and **ETH ↔ NEAR** bridge with real transactions
+- Complete **3D gamified interface** with chain-specific animated companions
+- Multi-wallet integration (MetaMask + TronLink + NEAR Wallet)
 - Real-time price oracle with automatic conversions
-- Level progression system responding to actual DeFi usage
+- Level progression + island growth tied to swap/bridge activity
+- Token rewards system activated after bridge operations
 
-### 🎯 **Innovation Beyond Traditional Bridges**
-- **First-of-its-kind gamified cross-chain experience**
-- **Educational blockchain representations through 3D animals**
-- **Progressive reward system architecture ready for token economy**
-- **Extensible NFT marketplace foundation**
-- **Visual transaction history in personalized 3D worlds**
+### 🥇 Submission Tracks Targeted
 
-### 🔧 **Built on Solid 1inch Infrastructure** 
-- Extends 1inch Fusion+ protocol with official EscrowFactory integration
-- HTLC atomic swap security with SHA256 hashlock + timelock
-- Production-ready smart contracts deployed and tested
-- Event-driven cross-chain architecture for reliable execution
+#### 🌐 Extend Fusion+ to NEAR — **$32,000 Prize Pool**
+- 🔁 Fully bidirectional ETH ↔ NEAR swaps with HTLC and coordinated timelocks
+- 🛡️ SHA256 hashlock preserved across EVM ↔ non-EVM architecture
+- 📡 Onchain execution demonstrated during live demo
+- 🎮 Stretch goals met:
+  - Immersive 3D UI integrated with actual bridge flow
+  - Dynamic user feedback after bridge actions (tree planting, animal animations)
+
+---
+
+#### 🌐 Extend Fusion+ to TRON — **$32,000 Prize Pool**
+- 🔁 Bidirectional ETH ↔ TRON swaps using HTLC-compatible contracts
+- 🛡️ Full support for hashlock/timelock logic across Ethereum and TRON
+- 🚀 TronLink wallet integration, live swaps shown on Shasta testnet
+- 🎮 Stretch goals met:
+  - Interactive island growth and level up after each swap
+  - Real-time transaction visualization with 3D elements
+
+---
+
+#### 🧰 Build a Full Application using 1inch APIs — **$30,000 Prize Pool**
+- 🔄 Full swap functionality using **1inch Swap API** for ETH → any token
+- 📊 Real-time rates via **Price Feed API**
+- 🧠 Integrated wallet detection & balance display using 1inch Wallet APIs
+- 🎨 Frontend built with React + Three.js using 1inch APIs for all swaps
+
+---
+
+### 🎯 What Makes Enju Unique
+- **First gamified DeFi bridge** with real-time, cross-chain execution
+- **EVM ↔ non-EVM HTLC architecture** implemented for NEAR and TRON
+- **Real user actions = in-game growth**, making DeFi visual and intuitive
+- **Rewarded bridging**: token incentives, leveling system, and future NFTs
 
 ---
 
