@@ -59,57 +59,6 @@
     └─────────────────────────────┘
 ```
 
-## 🚀 Quick Start
-
-### 1. Clone and Install
-```bash
-git clone <repository>
-cd Enju
-pnpm install  # Install all dependencies
-```
-
-### 2. Environment Setup
-```bash
-# Backend (.env)
-cp backend/.env.example backend/.env
-
-# Add your configuration:
-TRON_PRIVATE_KEY=your_tron_private_key
-TRON_API_KEY=your_trongrid_api_key
-TRON_BRIDGE_CONTRACT=deployed_contract_address
-```
-
-### 3. Deploy Contracts
-
-#### Ethereum
-```bash
-cd eth-contracts
-forge script script/DeployInchDirectBridge.s.sol --broadcast
-```
-
-#### NEAR
-```bash
-cd near-contracts
-./build.sh && ./deploy.sh <account-id>
-```
-
-#### Tron
-```bash
-# Get energy first: https://shasta.tronex.io/
-TRON_PRIVATE_KEY=<key> tronbox migrate --network shasta
-```
-
-### 4. Start Services
-```bash
-# Backend API
-cd backend && npm run start:dev
-
-# Frontend
-cd frontend && npm run dev
-
-# Bridge Resolver
-cd cross-chain && npm run relayer
-```
 
 ## 💱 Supported Swaps
 
