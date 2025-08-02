@@ -40,7 +40,7 @@ async function bootstrap() {
   const port = process.env.PORT || 3001;
   await app.listen(port);
   console.log(`
-    🌳 Mokuen SwapForest API is running!
+    🌳 Enju SwapForest API is running!
     📍 Server: http://localhost:${port}
     📚 Swagger: http://localhost:${port}/api/v1/swagger
     🗄️  Database: NEON PostgreSQL

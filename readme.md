@@ -39,7 +39,7 @@
 ### 1. Clone and Install
 ```bash
 git clone <repository>
-cd UniteDeFi-Mokuen
+cd Enju
 pnpm install  # Install all dependencies
 ```
 

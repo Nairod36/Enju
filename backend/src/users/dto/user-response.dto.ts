@@ -22,7 +22,7 @@ export class UserResponseDto {
 
     @ApiPropertyOptional({
         description: 'Email (private)',
-        example: 'user@mokuen.com'
+        example: 'user@Enju.com'
     })
     email?: string;
 

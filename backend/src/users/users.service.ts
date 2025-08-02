@@ -37,7 +37,7 @@ export class UsersService {
     }
 
     const nonce = `nonce-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    const message = `Please sign this message to authenticate with Mokuen SwapForest: ${nonce}`;
+    const message = `Please sign this message to authenticate with Enju SwapForest: ${nonce}`;
 
     await this.prisma.user.upsert({
       where: { walletAddress: walletAddress.toLowerCase() },
@@ -68,11 +68,11 @@ export class UsersService {
       throw new NonceNotFoundException();
     }
 
-    const expectedMessage = `Please sign this message to authenticate with Mokuen SwapForest: ${user.nonce}`;
+    const expectedMessage = `Please sign this message to authenticate with Enju SwapForest: ${user.nonce}`;
     if (message !== expectedMessage) {
       // Si l'utilisateur est déjà connecté et le message semble valide (commence par le bon préfixe),
       // on peut accepter un ancien nonce pour éviter les problèmes de concurrence
-      const messagePrefix = 'Please sign this message to authenticate with Mokuen SwapForest: nonce-';
+      const messagePrefix = 'Please sign this message to authenticate with Enju SwapForest: nonce-';
       if (!user.isConnected || !message.startsWith(messagePrefix)) {
         throw new InvalidSignatureException('Invalid message');
       }

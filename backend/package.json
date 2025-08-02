@@ -1,7 +1,7 @@
 {
-  "name": "mokuen-swapforest-backend",
+  "name": "Enju-swapforest-backend",
   "version": "1.0.0",
-  "description": "Backend API for Mokuen SwapForest - A Web3 forest ecosystem where user activity makes trees grow",
+  "description": "Backend API for Enju SwapForest - A Web3 forest ecosystem where user activity makes trees grow",
   "main": "dist/main.js",
   "scripts": {
     "build": "tsc",
@@ -36,7 +36,7 @@
     "forest-ecosystem",
     "activity-based-growth"
   ],
-  "author": "Mokuen Team",
+  "author": "Enju Team",
   "license": "MIT",
   "dependencies": {
     "@nestjs/cli": "^11.0.7",
