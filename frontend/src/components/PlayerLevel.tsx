@@ -50,7 +50,32 @@ export function PlayerLevel({ user, className = '' }: PlayerLevelProps) {
   );
 }
 
-// Version compacte pour l'en-tête
+// Version ultra-compacte pour l'en-tête de navigation
+export function PlayerLevelMini({ user, className = '' }: PlayerLevelProps) {
+  const currentLevelXP = (user.level - 1) * 100;
+  const progressXP = user.experience - currentLevelXP;
+  const progressPercentage = Math.min((progressXP / 100) * 100, 100);
+
+  return (
+    <div className={`flex items-center gap-1.5 bg-white/90 backdrop-blur px-2 py-1 rounded-full border border-emerald-200 shadow-sm ${className}`}>
+      {/* Icône de niveau */}
+      <div className="flex items-center justify-center w-5 h-5 bg-gradient-to-r from-emerald-500 to-blue-500 rounded-full">
+        <Star className="w-2.5 h-2.5 text-white" fill="currentColor" />
+      </div>
+
+      {/* Niveau */}
+      <span className="text-xs font-semibold text-slate-700">Niv. {user.level}</span>
+
+      {/* Mini barre de progression */}
+      <div className="w-8 h-0.5 bg-slate-200 rounded-full overflow-hidden">
+        <div 
+          className="h-full bg-gradient-to-r from-emerald-400 to-blue-400 rounded-full transition-all duration-500 ease-out"
+          style={{ width: `${progressPercentage}%` }}
+        />
+      </div>
+    </div>
+  );
+}
 export function PlayerLevelCompact({ user, className = '' }: PlayerLevelProps) {
   const currentLevelXP = (user.level - 1) * 100;
   const progressXP = user.experience - currentLevelXP;
