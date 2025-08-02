@@ -847,6 +847,91 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
     }
   };
 
+  const monitorTronToEthBridgeCompletion = async (bridgeData: BridgeData) => {
+    const maxAttempts = 60; // 5 minutes  
+    let attempts = 0;
+
+    const checkCompletion = async () => {
+      try {
+        updateBridgeLog(`🔍 Checking bridge status... (${attempts + 1}/${maxAttempts})`);
+        
+        const response = await fetch(`${BRIDGE_CONFIG.listenerApi}/bridges`);
+        const result = await response.json();
+
+        if (result.success || Array.isArray(result)) {
+          const bridges = result.data || result;
+          
+          // Look for our TRON → ETH bridge by hashlock
+          const ourBridge = bridges.find((bridge: any) => 
+            bridge.hashlock === bridgeData.hashlock && 
+            bridge.type === "TRON_TO_ETH"
+          );
+
+          if (ourBridge) {
+            updateBridgeLog(`🎯 Found our bridge: ${ourBridge.id}`);
+            updateBridgeLog(`📊 Status: ${ourBridge.status}`);
+            
+            // Log detailed information
+            if (ourBridge.tronTxHash) {
+              updateBridgeLog(`✅ TRON HTLC created: ${ourBridge.tronTxHash}`);
+            }
+            
+            if (ourBridge.ethTxHash) {
+              updateBridgeLog(`✅ ETH escrow created: ${ourBridge.ethTxHash}`);
+            }
+            
+            if (ourBridge.error) {
+              updateBridgeLog(`❌ Bridge error: ${ourBridge.error}`);
+            }
+
+            // Check if completed
+            if (ourBridge.status === "COMPLETED") {
+              updateBridgeLog(`🎉 Bridge completed successfully!`);
+              updateBridgeLog(`💰 You should have received ${ourBridge.ethAmount || 'calculated'} ETH`);
+              
+              setBridgeData((prev) => (prev ? { ...prev, status: "success" } : null));
+              setIsLoading(false);
+              onBridgeSuccess?.(bridgeData);
+              return;
+            }
+            
+            // Check if failed
+            if (ourBridge.status === "FAILED" || ourBridge.status === "ERROR") {
+              updateBridgeLog(`❌ Bridge failed: ${ourBridge.error || 'Unknown error'}`);
+              setBridgeData((prev) => (prev ? { ...prev, status: "error" } : null));
+              setIsLoading(false);
+              return;
+            }
+            
+            // Still processing
+            updateBridgeLog(`⏳ Bridge still processing... Status: ${ourBridge.status}`);
+          } else {
+            updateBridgeLog(`🔍 Bridge not found yet, checking again...`);
+          }
+        }
+
+        attempts++;
+        if (attempts < maxAttempts) {
+          setTimeout(checkCompletion, 5000); // Check every 5 seconds
+        } else {
+          updateBridgeLog(`⏰ Timeout waiting for bridge completion`);
+          updateBridgeLog(`📞 Please check bridge-listener logs for more details`);
+          setBridgeData((prev) => (prev ? { ...prev, status: "error" } : null));
+          setIsLoading(false);
+        }
+      } catch (error) {
+        console.error("Error checking bridge completion:", error);
+        updateBridgeLog(`❌ Error checking bridge: ${error}`);
+        attempts++;
+        if (attempts < maxAttempts) {
+          setTimeout(checkCompletion, 5000);
+        }
+      }
+    };
+
+    setTimeout(checkCompletion, 2000); // Start checking after 2 seconds
+  };
+
   const monitorBridgeCompletion = async (bridgeData: any) => {
     const maxAttempts = 60; // 5 minutes
     let attempts = 0;
@@ -1383,10 +1468,13 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
       // Store bridge ID for monitoring
       setCurrentSwapId(apiResult.bridgeId);
 
-      // Monitor for bridge completion
+      // Monitor for bridge completion - show the user that we're waiting for ETH escrow
+      updateBridgeLog(`⏳ Waiting for bridge-listener to create ETH escrow...`);
+      updateBridgeLog(`🔍 Monitoring API: ${BRIDGE_CONFIG.listenerApi}/bridges`);
+      
       setBridgeData((prev) => (prev ? { ...prev, status: "pending" } : null));
       setIsLoading(false);
-      monitorBridgeCompletion(bridgeData);
+      monitorTronToEthBridgeCompletion(bridgeData);
     } catch (error) {
       console.error("Failed to initiate TRON → ETH bridge:", error);
       updateBridgeLog(`❌ Failed to initiate bridge: ${error}`);

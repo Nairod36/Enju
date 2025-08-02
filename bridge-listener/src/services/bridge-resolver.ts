@@ -937,25 +937,46 @@ export class BridgeResolver extends EventEmitter {
     this.processedTxHashes.add(dedupeKey);
 
     try {
-      const bridgeId = this.generateBridgeId(event.hashlock, 'TRON_TO_ETH');
+      // Ensure hashlock has 0x prefix for consistency
+      const hashlock = event.hashlock.startsWith('0x') ? event.hashlock : `0x${event.hashlock}`;
+      
+      // Find existing bridge with same hashlock instead of creating a new one
+      const normalizeHashlock = (hl: string) => hl.replace(/^0x/, '').toLowerCase();
+      const eventHashlockNormalized = normalizeHashlock(hashlock);
+      
+      let existingBridge = Array.from(this.activeBridges.values())
+        .find(b => {
+          const normalizedBridgeHashlock = normalizeHashlock(b.hashlock);
+          return normalizedBridgeHashlock === eventHashlockNormalized && b.type === 'TRON_TO_ETH';
+        });
 
-      // Create bridge tracking entry
-      const bridgeEvent: BridgeEvent = {
-        id: bridgeId,
-        type: 'TRON_TO_ETH',
-        status: 'PENDING',
-        tronTxHash: event.txHash,
-        amount: event.amount,
-        hashlock: event.hashlock,
-        ethRecipient: event.ethTaker, // ETH address from TRON event
-        tronSender: event.tronMaker,  // TRON address from event
-        createdAt: Date.now()
-      };
+      if (existingBridge) {
+        // Update existing bridge with TRON transaction details
+        console.log(`🔗 Found existing TRON → ETH bridge: ${existingBridge.id}`);
+        existingBridge.tronTxHash = event.txHash;
+        existingBridge.status = 'PROCESSING'; // Update status to processing
+        this.activeBridges.set(existingBridge.id, existingBridge);
+        
+        console.log(`✅ Updated existing TRON → ETH bridge: ${existingBridge.id}`);
+      } else {
+        // Create new bridge if none exists (fallback)
+        const bridgeId = this.generateBridgeId(hashlock, 'TRON_TO_ETH');
+        existingBridge = {
+          id: bridgeId,
+          type: 'TRON_TO_ETH',
+          status: 'PROCESSING',
+          tronTxHash: event.txHash,
+          amount: event.amount,
+          hashlock: hashlock,
+          ethRecipient: event.ethTaker,
+          tronSender: event.tronMaker,
+          createdAt: Date.now()
+        };
 
-      this.activeBridges.set(bridgeId, bridgeEvent);
-      this.emit('bridgeCreated', bridgeEvent);
-
-      console.log(`✅ TRON → ETH bridge created: ${bridgeId}`);
+        this.activeBridges.set(bridgeId, existingBridge);
+        this.emit('bridgeCreated', existingBridge);
+        console.log(`✅ Created new TRON → ETH bridge: ${bridgeId}`);
+      }
 
       // Process the swap
       await this.processTronToEthSwap(event);
@@ -1257,54 +1278,89 @@ export class BridgeResolver extends EventEmitter {
       const ethAmount = await this.priceOracle.convertTrxToEth(trxAmount);
       console.log(`💱 Converting ${trxAmount} TRX → ${ethAmount} ETH`);
 
-      // 2. Create ETH destination escrow with CrossChainResolver
-      const resolverContract = new ethers.Contract(
-        this.ETH_BRIDGE_CONTRACT,
-        [
-          'function deployDst(bytes32 hashlock, address recipient, uint256 amount) external payable returns (address escrow)'
-        ],
-        this.resolverSigner
-      );
+      // 2. Ensure hashlock has 0x prefix for ethers.js
+      const hashlock = event.hashlock.startsWith('0x') ? event.hashlock : `0x${event.hashlock}`;
+      console.log(`🔐 Using hashlock: ${hashlock}`);
 
+      // 3. Send ETH directly to user (TRON→ETH bridge completion)
       const ethAmountWei = ethers.parseEther(ethAmount);
-      console.log(`🔄 Deploying ETH escrow with ${ethAmount} ETH for recipient ${event.ethTaker}`);
+      console.log(`💰 Sending ${ethAmount} ETH directly to user ${event.ethTaker}`);
 
-      const tx = await resolverContract.deployDst(
-        event.hashlock,
-        event.ethTaker, // ETH recipient address from TRON event
-        ethAmountWei,
-        {
-          value: ethAmountWei, // ETH amount to lock
-          gasLimit: 500000
-        }
-      );
+      // Check bridge resolver has enough ETH
+      const resolverBalance = await this.ethProvider.getBalance(this.resolverSigner.address);
+      console.log(`💰 Bridge resolver balance: ${ethers.formatEther(resolverBalance)} ETH`);
+
+      if (resolverBalance < ethAmountWei) {
+        throw new Error(`Insufficient bridge resolver balance: need ${ethAmount} ETH, have ${ethers.formatEther(resolverBalance)} ETH`);
+      }
+
+      console.log(`📋 Bridge resolver address: ${this.resolverSigner.address}`);
+      console.log(`📋 Target user: ${event.ethTaker}`);
+      console.log(`📋 Amount: ${ethAmount} ETH (${ethAmountWei.toString()} wei)`);
+
+      // Send ETH directly to the user (this is the completion of TRON→ETH bridge)
+      const tx = await this.resolverSigner.sendTransaction({
+        to: event.ethTaker,
+        value: ethAmountWei,
+        gasLimit: 100000, // Increased gas limit for safety
+      });
 
       const receipt = await tx.wait();
-      console.log('✅ ETH escrow deployed successfully!');
+      
+      if (!receipt) {
+        throw new Error('Transaction receipt is null');
+      }
+      
+      console.log('✅ ETH sent successfully!');
       console.log(`📋 ETH transaction hash: ${receipt.hash}`);
-      console.log(`💰 Amount locked: ${ethAmount} ETH`);
+      console.log(`💰 Amount sent: ${ethAmount} ETH`);
       console.log(`🎯 Recipient: ${event.ethTaker}`);
-      console.log(`🔐 Hashlock: ${event.hashlock}`);
+      console.log(`🔐 Hashlock: ${hashlock}`);
+      console.log(`⛽ Gas used: ${receipt.gasUsed}`);
+      console.log(`📊 Block number: ${receipt.blockNumber}`);
 
-      // Update bridge status
-      const bridgeId = this.generateBridgeId(event.hashlock, 'TRON_TO_ETH');
-      const bridge = this.activeBridges.get(bridgeId);
+      // Find and update the existing bridge by hashlock
+      const normalizeHashlock = (hl: string) => hl.replace(/^0x/, '').toLowerCase();
+      const eventHashlockNormalized = normalizeHashlock(hashlock);
+      
+      const bridge = Array.from(this.activeBridges.values())
+        .find(b => {
+          const normalizedBridgeHashlock = normalizeHashlock(b.hashlock);
+          return normalizedBridgeHashlock === eventHashlockNormalized && b.type === 'TRON_TO_ETH';
+        });
+
       if (bridge) {
         bridge.status = 'COMPLETED';
         bridge.ethTxHash = receipt.hash;
         bridge.completedAt = Date.now();
+        this.activeBridges.set(bridge.id, bridge); // Update the bridge in the map
         this.emit('bridgeCompleted', bridge);
+        
+        console.log(`✅ TRON → ETH bridge completed: ${bridge.id}`);
+        console.log(`🎉 User has received their ETH! Bridge transaction complete.`);
+      } else {
+        console.log(`⚠️ No bridge found with hashlock ${hashlock} for completion update`);
       }
 
     } catch (error) {
       console.error('❌ TRON → ETH processing failed:', error);
 
-      // Update bridge status to failed
-      const bridgeId = this.generateBridgeId(event.hashlock, 'TRON_TO_ETH');
-      const bridge = this.activeBridges.get(bridgeId);
+      // Update bridge status to failed - find by hashlock
+      const hashlock = event.hashlock.startsWith('0x') ? event.hashlock : `0x${event.hashlock}`;
+      const normalizeHashlock = (hl: string) => hl.replace(/^0x/, '').toLowerCase();
+      const eventHashlockNormalized = normalizeHashlock(hashlock);
+      
+      const bridge = Array.from(this.activeBridges.values())
+        .find(b => {
+          const normalizedBridgeHashlock = normalizeHashlock(b.hashlock);
+          return normalizedBridgeHashlock === eventHashlockNormalized && b.type === 'TRON_TO_ETH';
+        });
+
       if (bridge) {
         bridge.status = 'FAILED';
         bridge.error = error instanceof Error ? error.message : 'Unknown error';
+        this.activeBridges.set(bridge.id, bridge);
+        this.emit('bridgeFailed', bridge);
       }
     }
   }
