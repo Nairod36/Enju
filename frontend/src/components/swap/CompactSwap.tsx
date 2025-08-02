@@ -403,12 +403,6 @@ export const CompactSwap: React.FC = () => {
               Connectez votre wallet pour continuer
             </p>
           )}
-
-          {address && !isAuthenticated && (
-            <p className="text-center text-orange-500 text-sm">
-              Authentification en cours...
-            </p>
-          )}
         </div>
       </div>
     </div>
