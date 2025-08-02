@@ -75,7 +75,7 @@ export class RewardsService {
         }
 
         // ABI pour la fonction mintReward(address to, uint256 amount)
-        const mintFunctionSignature = '0x40c10f19'; // mintReward(address,uint256)
+        const mintFunctionSignature = '0x9a49090e'; // mintReward(address,uint256)
         
         // Encoder les paramètres
         const paddedAddress = userAddress.slice(2).padStart(64, '0');
@@ -99,52 +99,34 @@ export class RewardsService {
             throw new Error('REWARD_TOKEN_OWNER_PRIVATE_KEY not configured');
         }
 
-        // Récupérer le nonce pour l'adresse du owner
-        const ownerAddress = '0x0fDE14b58A5C20BaADf927c23B58810D35F41703'; // Votre adresse owner
-
+        // Utiliser l'ethers.js pour signer et envoyer la transaction
+        const { ethers } = require('ethers');
+        
         try {
-            const nonceRequest = {
-                jsonrpc: '2.0',
-                method: 'eth_getTransactionCount',
-                params: [ownerAddress, 'latest'],
-                id: 1,
-            };
+            // Créer un provider et wallet (ethers v5 syntax)
+            const provider = new ethers.providers.JsonRpcProvider('http://vps-b11044fd.vps.ovh.net:8545/');
+            const privateKey = this.REWARD_OWNER_PRIVATE_KEY.startsWith('0x') ? this.REWARD_OWNER_PRIVATE_KEY : `0x${this.REWARD_OWNER_PRIVATE_KEY}`;
+            const wallet = new ethers.Wallet(privateKey, provider);
 
-            const nonceResponse = await this.rpcService.proxyToVpsRpc(nonceRequest);
-            const nonce = nonceResponse.result;
-
-            // Récupérer le gas price
-            const gasPriceRequest = {
-                jsonrpc: '2.0',
-                method: 'eth_gasPrice',
-                params: [],
-                id: 2,
-            };
-
-            const gasPriceResponse = await this.rpcService.proxyToVpsRpc(gasPriceRequest);
-            const gasPrice = gasPriceResponse.result;
-
-            // Construire la transaction complète
-            const fullTransaction = {
-                from: ownerAddress,
+            // Préparer la transaction
+            const txRequest = {
                 to: transaction.to,
                 data: transaction.data,
                 value: transaction.value,
-                gas: transaction.gas,
-                gasPrice: gasPrice,
-                nonce: nonce,
+                gasLimit: 200000, // Gas limit fixe pour éviter les erreurs d'estimation
             };
 
-            // Envoyer la transaction (le fork local devrait accepter eth_sendTransaction)
-            const sendRequest = {
-                jsonrpc: '2.0',
-                method: 'eth_sendTransaction',
-                params: [fullTransaction],
-                id: 3,
-            };
+            console.log('Sending mint transaction:', txRequest);
 
-            const result = await this.rpcService.proxyToVpsRpc(sendRequest);
-            return result.result;
+            // Envoyer la transaction signée
+            const txResponse = await wallet.sendTransaction(txRequest);
+            console.log('Transaction sent:', txResponse.hash);
+
+            // Attendre la confirmation
+            const receipt = await txResponse.wait();
+            console.log('Transaction confirmed:', receipt.hash);
+
+            return receipt.hash;
 
         } catch (error) {
             console.error('Failed to send mint transaction:', error);

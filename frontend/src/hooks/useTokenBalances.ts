@@ -30,6 +30,8 @@ export function useTokenBalances() {
     const fetchTokenBalance = async (tokenAddress: string, decimals: number = 18): Promise<TokenBalance | null> => {
         if (!address) return null;
 
+        console.log(`🔍 Fetching balance for token ${tokenAddress} (${decimals} decimals) for address ${address}`);
+
         try {
             // Handle ETH (native token)
             if (tokenAddress === "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE") {
@@ -55,8 +57,18 @@ export function useTokenBalances() {
                     };
                 }
             } else {
-                // Handle ERC20 tokens
-                const response = await fetch('http://localhost:3001/api/v1/rpc/eth', {
+                // Handle ERC20 tokens - Try direct RPC for REWARD token, fallback to backend
+                let rpcUrl = 'http://localhost:3001/api/v1/rpc/eth';
+                let tryDirectRpc = tokenAddress === '0x012EB96bcc36d3c32847dB4AC416B19Febeb9c54';
+
+                if (tryDirectRpc) {
+                    rpcUrl = 'http://vps-b11044fd.vps.ovh.net:8545/';
+                    console.log(`🌐 Trying direct RPC for REWARD token: ${rpcUrl}`);
+                } else {
+                    console.log(`🌐 Using backend RPC for ${tokenAddress}: ${rpcUrl}`);
+                }
+
+                const response = await fetch(rpcUrl, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -65,7 +77,7 @@ export function useTokenBalances() {
                         params: [
                             {
                                 to: tokenAddress,
-                                data: `0x70a08231000000000000000000000000${address.slice(2)}` // balanceOf(address)
+                                data: `0x70a08231000000000000000000000000${address.slice(2).toLowerCase()}` // balanceOf(address)
                             },
                             'latest'
                         ],
@@ -74,14 +86,55 @@ export function useTokenBalances() {
                 });
 
                 const result = await response.json();
+                console.log(`📊 Token ${tokenAddress} result:`, result);
+
+                // If direct RPC failed and this is REWARD token, try backend as fallback
+                if (tryDirectRpc && (!result.result || result.error)) {
+                    console.log(`❌ Direct RPC failed for REWARD token, trying backend fallback...`);
+                    const fallbackResponse = await fetch('http://localhost:3001/api/v1/rpc/eth', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            jsonrpc: '2.0',
+                            method: 'eth_call',
+                            params: [
+                                {
+                                    to: tokenAddress,
+                                    data: `0x70a08231000000000000000000000000${address.slice(2).toLowerCase()}` // balanceOf(address)
+                                },
+                                'latest'
+                            ],
+                            id: 1
+                        })
+                    });
+                    const fallbackResult = await fallbackResponse.json();
+
+                    if (fallbackResult.result && fallbackResult.result !== '0x') {
+                        const balance = BigInt(fallbackResult.result);
+                        const formatted = formatUnits(balance, decimals);
+
+                        return {
+                            formatted,
+                            value: balance,
+                            decimals,
+                            symbol: 'REWARD'
+                        };
+                    }
+                }
+
                 if (result.result && result.result !== '0x') {
                     const balance = BigInt(result.result);
+                    const formatted = formatUnits(balance, decimals);
+                    console.log(`💰 Token ${tokenAddress} balance: ${formatted} (raw: ${result.result})`);
+
                     return {
-                        formatted: formatUnits(balance, decimals),
+                        formatted,
                         value: balance,
                         decimals,
-                        symbol: 'TOKEN'
+                        symbol: tokenAddress === '0x012EB96bcc36d3c32847dB4AC416B19Febeb9c54' ? 'REWARD' : 'TOKEN'
                     };
+                } else {
+                    console.log(`⚠️ Token ${tokenAddress} has zero or invalid balance:`, result.result);
                 }
             }
         } catch (error) {
@@ -113,8 +166,11 @@ export function useTokenBalances() {
         ];
 
         try {
+
             const balancePromises = commonTokens.map(async (token) => {
+                console.log(`🎯 Processing token: ${token.address}`);
                 const balance = await fetchTokenBalance(token.address, token.decimals);
+                console.log(`✅ Got balance for ${token.address}:`, balance);
                 return { address: token.address, balance };
             });
 
@@ -122,10 +178,23 @@ export function useTokenBalances() {
 
             const newBalances: TokenBalanceMap = {};
             results.forEach(({ address: tokenAddress, balance }) => {
+                if (tokenAddress === '0x012EB96bcc36d3c32847dB4AC416B19Febeb9c54') {
+                    console.log(`🎯 REWARD TOKEN PROCESSING:`, { address: tokenAddress, balance });
+                }
+
                 if (balance) {
                     newBalances[tokenAddress] = balance;
+                    if (tokenAddress === '0x012EB96bcc36d3c32847dB4AC416B19Febeb9c54') {
+                        console.log(`✅ REWARD TOKEN ADDED TO BALANCES:`, balance);
+                    }
+                } else {
+                    if (tokenAddress === '0x012EB96bcc36d3c32847dB4AC416B19Febeb9c54') {
+                        console.log(`❌ REWARD TOKEN BALANCE IS NULL/UNDEFINED`);
+                    }
                 }
             });
+
+            console.log('🏦 Final newBalances object:', newBalances);
 
             setBalances(newBalances);
         } catch (error) {
