@@ -127,19 +127,35 @@ export class BridgeAPI {
         const request: SwapRequest = req.body;
         console.log('🚀 Bridge initiate request:', JSON.stringify(request, null, 2));
 
-        // Validate request
-        if (!request.type || !request.amount || !request.hashlock || !request.timelock || !request.ethRecipient || !request.nearAccount) {
-          console.log('❌ Validation failed - missing fields:', {
+        // Basic validation
+        if (!request.type || !request.amount || !request.hashlock || !request.timelock || !request.ethRecipient) {
+          console.log('❌ Validation failed - missing basic fields:', {
             type: !!request.type,
             amount: !!request.amount,
             hashlock: !!request.hashlock,
             timelock: !!request.timelock,
-            ethRecipient: !!request.ethRecipient,
-            nearAccount: !!request.nearAccount
+            ethRecipient: !!request.ethRecipient
           });
           return res.status(400).json({
             success: false,
-            error: 'Missing required fields: type, amount, hashlock, timelock, ethRecipient, nearAccount'
+            error: 'Missing required fields: type, amount, hashlock, timelock, ethRecipient'
+          });
+        }
+
+        // Chain-specific validation
+        if ((request.type === 'ETH_TO_NEAR' || request.type === 'NEAR_TO_ETH') && !request.nearAccount) {
+          console.log('❌ Validation failed - NEAR bridges require nearAccount');
+          return res.status(400).json({
+            success: false,
+            error: 'NEAR bridges require nearAccount field'
+          });
+        }
+
+        if ((request.type === 'ETH_TO_TRON' || request.type === 'TRON_TO_ETH') && !request.tronAddress) {
+          console.log('❌ Validation failed - TRON bridges require tronAddress');
+          return res.status(400).json({
+            success: false,
+            error: 'TRON bridges require tronAddress field'
           });
         }
 

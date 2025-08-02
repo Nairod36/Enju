@@ -45,14 +45,14 @@ module.exports = {
   networks: {
     shasta: {
       privateKey: process.env.TRON_PRIVATE_KEY,
-      userFeePercentage: 100,       // Max percentage for deployment
-      feeLimit: 15000 * 1e6,        // 15000 TRX limit!! (EXTREME MAX)
+      userFeePercentage: 30,        // Reasonable percentage for deployment
+      feeLimit: 1500 * 1e6,         // 1500 TRX limit (reasonable for current balance)
       fullHost: "https://api.shasta.trongrid.io",
       network_id: "2",
-      consume_user_resource_percent: 100,  // Use max user resources
+      consume_user_resource_percent: 30,  // Conservative resource usage
       name: 'shasta',
-      originEnergyLimit: 100000000,  // 100M energy limit (EXTREME MAX)
-      deployOriginEnergyLimit: 100000000,
+      originEnergyLimit: 10000000,  // 10M energy limit (TRON max allowed)
+      deployOriginEnergyLimit: 10000000,  // 10M energy limit (TRON max allowed)
       createAccountFee: 100000
     },
     development: {
@@ -69,7 +69,7 @@ module.exports = {
       version: "0.8.6",
       optimizer: {
         enabled: true,
-        runs: 1,                    // Most aggressive optimization for smaller bytecode
+        runs: 200,                  // Balanced optimization for gas vs size
         details: {
           yul: true,                // Enable Yul optimizer
           yulDetails: {
@@ -81,8 +81,9 @@ module.exports = {
       settings: {
         optimizer: {
           enabled: true,
-          runs: 1
-        }
+          runs: 200                 // Balanced optimization
+        },
+        evmVersion: "london"        // Use compatible EVM version
       }
     }
   }
@@ -115,10 +116,10 @@ const tronWeb = new TronWeb({
     const trxBalance = tronWeb.fromSun(balance);
     console.log('📊 Current TRX balance:', trxBalance, 'TRX');
     
-    if (parseFloat(trxBalance) < 15000) {
+    if (parseFloat(trxBalance) < 1500) {
       console.log('❌ INSUFFICIENT TRX balance for complex contract!');
       console.log('💰 Current balance:', trxBalance, 'TRX');
-      console.log('💰 Required minimum: 15000 TRX');
+      console.log('💰 Required minimum: 1500 TRX (adjusted for current contract)');
       console.log('💰 Get more TRX from faucet: https://shasta.tronex.io/');
       console.log('💰 You may need to request multiple times from faucet');
       console.log('⚠️ Deployment will likely FAIL with insufficient TRX!');
@@ -164,7 +165,7 @@ if [ -f "build/contracts/TronFusionBridge.json" ]; then
         const networks = contract.networks;
         const networkId = '2'; // Shasta chain ID
         networks[networkId] ? networks[networkId].address : 'Not found';
-    " 2>/dev/null || echo "TA879tNjuFCd8w57V3BHNhsshehKn1Ks86")
+    " 2>/dev/null || echo "TPtAi88ucyJDGjY6fHTkvqVtipcKuovxMM")
     
     if [ "$FUSION_ADDRESS" != "Not found" ] && [ -n "$FUSION_ADDRESS" ]; then
         echo "🎉 TronFusionBridge deployed successfully!"

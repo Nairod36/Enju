@@ -35,11 +35,11 @@ export const forkedMainnet: AppKitNetwork = defineChain({
   },
   rpcUrls: {
     default: {
-      http: ["http://vps-b11044fd.vps.ovh.net:8545"],
+      http: ["http://vps-b11044fd.vps.ovh.net/rpc"],
       webSocket: [],
     },
     public: {
-      http: ["http://vps-b11044fd.vps.ovh.net:8545"],
+      http: ["http://vps-b11044fd.vps.ovh.net/rpc"],
       webSocket: [],
     },
   },

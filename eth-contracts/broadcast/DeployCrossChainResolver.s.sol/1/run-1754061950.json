@@ -4,7 +4,7 @@
       "hash": "0x4c25e4215e91d4e7dadfb2b7b8e072e6031a6e89dc51b508523a06bd55c277dd",
       "transactionType": "CREATE",
       "contractName": "CrossChainResolver",
-      "contractAddress": "0xae2c8c3bbdc09116be01064009f13fcc272b0944",
+      "contractAddress": "0x79fD45793DC81Da9BaB6aE577f01ba7935484C51",
       "function": null,
       "arguments": [
         "0xa7bCb4EAc8964306F9e3764f67Db6A7af6DdF99A",
@@ -28,7 +28,7 @@
       "cumulativeGasUsed": "0x46f204",
       "logs": [
         {
-          "address": "0xae2c8c3bbdc09116be01064009f13fcc272b0944",
+          "address": "0x79fD45793DC81Da9BaB6aE577f01ba7935484C51",
           "topics": [
             "0x8be0079c531659141344cd1fd0a4f28419497f9722a3daafe3b4186f6b6457e0",
             "0x0000000000000000000000000000000000000000000000000000000000000000",
@@ -55,7 +55,7 @@
       "blobGasPrice": "0x1",
       "from": "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
       "to": null,
-      "contractAddress": "0xae2c8c3bbdc09116be01064009f13fcc272b0944"
+      "contractAddress": "0x79fD45793DC81Da9BaB6aE577f01ba7935484C51"
     }
   ],
   "libraries": [],

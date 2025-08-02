@@ -32,7 +32,7 @@ async function startResolver() {
   // Configuration du resolver
   const config = {
     ethRpcUrl: process.env.ETH_RPC_URL!,
-    ethBridgeContract: process.env.ETH_BRIDGE_CONTRACT || '0xAE2c8c3bBDC09116bE01064009f13fCc272b0944',
+    ethBridgeContract: process.env.ETH_BRIDGE_CONTRACT || '0x79fD45793DC81Da9BaB6aE577f01ba7935484C51',
     ethPrivateKey: process.env.ETH_PRIVATE_KEY!,
     nearNetworkId: process.env.NEAR_NETWORK_ID || 'testnet',
     nearRpcUrl: process.env.NEAR_RPC_URL || 'https://rpc.testnet.fastnear.com',
@@ -98,7 +98,7 @@ async function testConfiguration() {
   try {
     const config = {
       ethRpcUrl: process.env.ETH_RPC_URL!,
-      ethBridgeContract: process.env.ETH_BRIDGE_CONTRACT || '0xAE2c8c3bBDC09116bE01064009f13fCc272b0944',
+      ethBridgeContract: process.env.ETH_BRIDGE_CONTRACT || '0x79fD45793DC81Da9BaB6aE577f01ba7935484C51',
       ethPrivateKey: process.env.ETH_PRIVATE_KEY!,
       nearNetworkId: process.env.NEAR_NETWORK_ID || 'testnet',
       nearRpcUrl: process.env.NEAR_RPC_URL || 'https://rpc.testnet.fastnear.com',

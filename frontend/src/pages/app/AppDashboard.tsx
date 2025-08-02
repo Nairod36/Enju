@@ -16,6 +16,7 @@ import {
 import { useAccount, useBalance, useChainId } from "wagmi";
 import { useBridge } from "../../hooks/useBridge";
 import { useBridgeHistory } from "../../hooks/useBridgeHistory";
+import { useTronWallet } from "../../hooks/useTronWallet";
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import { FloatingIsland, FloatingIslandRef } from "./island/island";
@@ -66,6 +67,13 @@ export function AppDashboard() {
     isLoading: isLoadingBalances,
     error: balanceError,
   } = useMultiChainBalance();
+  
+  // TRON wallet hook for direct balance access
+  const {
+    balance: tronBalance,
+    isConnected: tronConnected,
+    isLoading: tronLoading
+  } = useTronWallet();
   const {
     executeBridge,
     isLoading: isBridging,
@@ -324,14 +332,14 @@ export function AppDashboard() {
                 {/* TRON Balance */}
                 <div className="text-right">
                   <div className="text-lg font-bold text-gray-900">
-                    {isLoadingBalances ? (
+                    {tronLoading ? (
                       <span className="animate-pulse text-blue-500">
                         ⟳ Loading...
                       </span>
-                    ) : balanceError ? (
-                      <span className="text-red-500">Error</span>
-                    ) : balances.tron ? (
-                      `${balances.tron.formatted} TRX`
+                    ) : !tronConnected ? (
+                      <span className="text-gray-400">Not connected</span>
+                    ) : tronBalance ? (
+                      `${parseFloat(tronBalance).toFixed(2)} TRX`
                     ) : (
                       "0.00 TRX"
                     )}

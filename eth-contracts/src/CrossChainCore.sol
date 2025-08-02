@@ -113,6 +113,57 @@ contract CrossChainCore is Ownable {
     }
     
     /**
+     * @dev Create ETH to TRON bridge
+     */
+    function createETHToTRONBridge(
+        bytes32 hashlock,
+        string calldata tronAddress
+    ) external payable returns (address escrow) {
+        require(msg.value > 0, "Amount must be greater than 0");
+        require(hashlock != bytes32(0), "Invalid hashlock");
+        require(bytes(tronAddress).length > 0, "TRON address required");
+        require(_isValidTronAddress(tronAddress), "Invalid TRON address format");
+        
+        // Create 1inch-compatible Immutables
+        IBaseEscrow.Immutables memory immutables = IBaseEscrow.Immutables({
+            orderHash: keccak256(abi.encodePacked(msg.sender, hashlock, block.timestamp)),
+            hashlock: hashlock,
+            maker: Address.wrap(uint160(msg.sender)),
+            taker: Address.wrap(uint160(address(this))),
+            token: Address.wrap(uint160(address(0))), // ETH
+            amount: msg.value,
+            safetyDeposit: 0,
+            timelocks: _createTimelocks()
+        });
+        
+        uint256 srcCancellationTimestamp = block.timestamp + 24 hours;
+        
+        try ESCROW_FACTORY.createDstEscrow{value: msg.value}(immutables, srcCancellationTimestamp) {
+            escrow = ESCROW_FACTORY.addressOfEscrowDst(immutables);
+        } catch {
+            escrow = address(this);
+        }
+        
+        // Create swap tracking
+        bytes32 swapId = keccak256(abi.encodePacked(
+            escrow, hashlock, uint256(DestinationChain.TRON), tronAddress, block.timestamp
+        ));
+        
+        swaps[swapId] = CrossChainSwap({
+            srcEscrow: escrow,
+            user: msg.sender,
+            amount: msg.value,
+            hashlock: hashlock,
+            destinationChain: DestinationChain.TRON,
+            destinationAccount: tronAddress,
+            completed: false,
+            createdAt: block.timestamp
+        });
+        
+        emit EscrowCreated(escrow, hashlock, DestinationChain.TRON, tronAddress, msg.value);
+    }
+    
+    /**
      * @dev Create timelocks for 1inch
      */
     function _createTimelocks() internal view returns (Timelocks) {
@@ -143,6 +194,38 @@ contract CrossChainCore is Ownable {
                 return false;
             }
         }
+        return true;
+    }
+    
+    /**
+     * @dev Validate TRON address format (Base58 encoding, 34 chars, starts with T)
+     */
+    function _isValidTronAddress(string memory tronAddress) internal pure returns (bool) {
+        bytes memory addr = bytes(tronAddress);
+        
+        // TRON addresses can be 34 or 35 characters and must start with 'T'
+        if ((addr.length != 34 && addr.length != 35) || addr[0] != 'T') {
+            return false;
+        }
+        
+        // Base58 includes: 123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz
+        // Excludes: 0 (zero), O (capital o), I (capital i), l (lowercase L)
+        for (uint i = 1; i < addr.length; i++) {
+            bytes1 char = addr[i];
+            
+            // Check if character is NOT in Base58 character set
+            if (char == '0' || char == 'O' || char == 'I' || char == 'l') {
+                return false;
+            }
+            
+            // Check if character IS in valid Base58 range
+            if (!((char >= '1' && char <= '9') || 
+                  (char >= 'A' && char <= 'Z') || 
+                  (char >= 'a' && char <= 'z'))) {
+                return false;
+            }
+        }
+        
         return true;
     }
     

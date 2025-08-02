@@ -2,8 +2,8 @@ export const FORK_MAINNET_CONFIG = {
   chainId: 1, // Mainnet fork chain ID
   name: 'Forked Mainnet',
   rpcUrl: process.env.NODE_ENV === 'development'
-    ? 'http://vps-b11044fd.vps.ovh.net/rpc'
-    : 'http://vps-b11044fd.vps.ovh.net/rpc',
+    ? 'http://vps-b11044fd.vps.ovh.net:8545'
+    : 'http://vps-b11044fd.vps.ovh.net:8545',
   nativeCurrency: {
     name: 'Ethereum',
     symbol: 'ETH',
@@ -14,8 +14,8 @@ export const FORK_MAINNET_CONFIG = {
 
 export const BRIDGE_CONFIG = {
   // CrossChainResolver contract (deployed with partial fills - fixed version)
-  contractAddress: '0x6Ee53D43330c1BbdEDe31A8C12f5A32a2073Aca9',
-  rpcUrl: 'http://vps-b11044fd.vps.ovh.net:8545/',
+  contractAddress: '0x79fD45793DC81Da9BaB6aE577f01ba7935484C51',
+  rpcUrl: 'http://vps-b11044fd.vps.ovh.net:8545',
   listenerApi: 'http://localhost:3002',
   nearContract: 'sharknadok.testnet',
 
@@ -24,7 +24,7 @@ export const BRIDGE_CONFIG = {
   inchLimitOrderProtocol: '0x111111125421cA6dc452d289314280a0f8842A65',
 
   tron: {
-    contractAddress: 'TA879tNjuFCd8w57V3BHNhsshehKn1Ks86',
+    contractAddress: 'TPtAi88ucyJDGjY6fHTkvqVtipcKuovxMM',
     network: 'shasta',
     rpcUrl: 'https://api.shasta.trongrid.io',
     apiKey: '5e8b38e2-9828-4737-af16-11b935808aca'
