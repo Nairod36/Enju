@@ -16,9 +16,20 @@ interface TronWalletState {
   tronWeb: any | null;
   isLoading: boolean;
   error: string | null;
+  manuallyDisconnected: boolean;
 }
 
 export function useTronWallet() {
+  // Check localStorage for manual disconnection state
+  const getInitialDisconnectedState = () => {
+    if (typeof window === 'undefined') return false;
+    try {
+      return localStorage.getItem('tron-wallet-manually-disconnected') === 'true';
+    } catch {
+      return false;
+    }
+  };
+
   const [state, setState] = useState<TronWalletState>({
     address: null,
     isConnected: false,
@@ -26,10 +37,11 @@ export function useTronWallet() {
     tronWeb: null,
     isLoading: false,
     error: null,
+    manuallyDisconnected: getInitialDisconnectedState(),
   });
 
-  // Check if TronLink is installed and initialize connection
-  const checkTronLink = useCallback(async () => {
+  // Check if TronLink is installed and initialize connection (only after user permission)
+  const checkTronLink = useCallback(async (requestPermission: boolean = false) => {
     if (typeof window === 'undefined') return;
 
     setState(prev => ({ ...prev, isLoading: true, error: null }));
@@ -40,25 +52,50 @@ export function useTronWallet() {
         throw new Error('TronLink extension not found');
       }
 
+      // If requestPermission is true, ask for user permission first
+      if (requestPermission) {
+        try {
+          console.log('🔐 Requesting TronLink permission...');
+          const result = await window.tronLink.request({ method: 'tron_requestAccounts' });
+          console.log('📋 TronLink permission result:', result);
+          
+          if (result.code !== 200) {
+            throw new Error(`Connection denied by user (code: ${result.code})`);
+          }
+          // Wait a bit for TronLink to properly inject TronWeb with account
+          await new Promise(resolve => setTimeout(resolve, 500));
+        } catch (requestError) {
+          console.error('❌ TronLink permission request failed:', requestError);
+          throw new Error('User denied connection or TronLink request failed');
+        }
+      }
+
       // Wait for TronWeb to be ready
       let attempts = 0;
-      const maxAttempts = 30; // Reduced attempts
+      const maxAttempts = 20; // Reduced attempts for faster response
 
       const waitForTronWeb = (): Promise<any> => {
         return new Promise((resolve, reject) => {
           const check = () => {
             attempts++;
 
-            // Check if TronWeb is available and has default address
-            if (window.tronWeb && window.tronWeb.defaultAddress && window.tronWeb.defaultAddress.base58) {
-              resolve(window.tronWeb);
-            } else if (window.tronWeb && !window.tronWeb.defaultAddress.base58) {
-              // TronWeb exists but no account connected
-              reject(new Error('Please unlock your TronLink wallet'));
-            } else if (attempts >= maxAttempts) {
-              reject(new Error('TronLink not ready. Please refresh and try again.'));
+            // If we're requesting permission, we need to wait for TronWeb with account
+            if (requestPermission) {
+              if (window.tronWeb && window.tronWeb.defaultAddress && window.tronWeb.defaultAddress.base58) {
+                resolve(window.tronWeb);
+              } else if (attempts >= maxAttempts) {
+                reject(new Error('TronLink connection timed out. Please try again.'));
+              } else {
+                setTimeout(check, 150);
+              }
             } else {
-              setTimeout(check, 200);
+              // If not requesting permission, just check if TronWeb exists and has connected account
+              if (window.tronWeb && window.tronWeb.defaultAddress && window.tronWeb.defaultAddress.base58) {
+                resolve(window.tronWeb);
+              } else {
+                reject(new Error('TronLink wallet not connected'));
+              }
+              return; // Don't retry if not requesting permission
             }
           };
           check();
@@ -96,9 +133,17 @@ export function useTronWallet() {
         tronWeb,
         isLoading: false,
         error: null,
+        manuallyDisconnected: false,
       });
 
-      console.log('🔴 TRON wallet connected:', { address, balance: balanceInTrx });
+      // Clear manual disconnection state from localStorage
+      try {
+        localStorage.removeItem('tron-wallet-manually-disconnected');
+      } catch (error) {
+        console.warn('Failed to clear disconnection state from localStorage:', error);
+      }
+
+      console.log('✅ TRON wallet connected:', { address, balance: balanceInTrx });
 
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to connect to TRON wallet';
@@ -110,6 +155,7 @@ export function useTronWallet() {
         address: null,
         balance: null,
         tronWeb: null,
+        manuallyDisconnected: false,
       }));
       console.warn('⚠️ TRON wallet connection failed:', errorMessage);
     }
@@ -119,44 +165,32 @@ export function useTronWallet() {
   const connectTronWallet = useCallback(async () => {
     if (typeof window === 'undefined') return;
 
-    setState(prev => ({ ...prev, isLoading: true, error: null }));
-
     try {
-      // Check if TronLink is installed
-      if (!window.tronLink) {
-        throw new Error('TronLink extension not found. Please install TronLink.');
-      }
-
-      // Try to request account access
-      try {
-        const result = await window.tronLink.request({ method: 'tron_requestAccounts' });
-
-        if (result.code === 200) {
-          // Wait a bit for TronLink to update
-          setTimeout(() => checkTronLink(), 1000);
-        } else {
-          throw new Error(`Connection failed with code: ${result.code}`);
-        }
-      } catch (requestError) {
-        console.warn('tron_requestAccounts failed, trying direct connection:', requestError);
-
-        // Fallback: try direct connection
-        await checkTronLink();
-      }
-
+      // Request connection with user permission
+      await checkTronLink(true); // Pass true to request permission
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to connect to TRON wallet';
-      setState(prev => ({
-        ...prev,
-        isLoading: false,
-        error: errorMessage,
-      }));
-      console.error('❌ TRON wallet connection failed:', errorMessage);
+      console.error('❌ TRON wallet connection failed:', error);
     }
   }, [checkTronLink]);
 
   // Disconnect wallet
-  const disconnectTronWallet = useCallback(() => {
+  const disconnectTronWallet = useCallback(async () => {
+    console.log('🔄 Disconnecting TRON wallet...');
+    
+    try {
+      // Try to disconnect from TronLink if available
+      if (window.tronLink && typeof window.tronLink.request === 'function') {
+        try {
+          await window.tronLink.request({ method: 'tron_disconnect' });
+        } catch (disconnectError) {
+          console.warn('⚠️ TronLink disconnect failed:', disconnectError);
+        }
+      }
+    } catch (error) {
+      console.warn('⚠️ Error during TronLink disconnect:', error);
+    }
+    
+    // Always reset state regardless of TronLink response
     setState({
       address: null,
       isConnected: false,
@@ -164,8 +198,17 @@ export function useTronWallet() {
       tronWeb: null,
       isLoading: false,
       error: null,
+      manuallyDisconnected: true, // Mark as manually disconnected
     });
-    console.log('🔴 TRON wallet disconnected');
+    
+    // Persist manual disconnection state
+    try {
+      localStorage.setItem('tron-wallet-manually-disconnected', 'true');
+    } catch (error) {
+      console.warn('Failed to save disconnection state to localStorage:', error);
+    }
+    
+    console.log('✅ TRON wallet disconnected');
   }, []);
 
   // Send transaction
@@ -278,38 +321,77 @@ export function useTronWallet() {
     }
   }, [state.tronWeb, state.isConnected, state.address]);
 
+  // Force reconnection
+  const reconnectTronWallet = useCallback(async () => {
+    console.log('🔄 Force reconnecting TRON wallet...');
+    
+    // Clear manual disconnection state from localStorage
+    try {
+      localStorage.removeItem('tron-wallet-manually-disconnected');
+    } catch (error) {
+      console.warn('Failed to clear disconnection state from localStorage:', error);
+    }
+    
+    // Reset state first
+    setState(prev => ({ ...prev, isConnected: false, address: null, error: null, manuallyDisconnected: false }));
+    
+    // Wait a bit then reconnect
+    setTimeout(() => {
+      checkTronLink();
+    }, 500);
+  }, [checkTronLink]);
+
   // Auto-check connection on mount and when TronLink changes
   useEffect(() => {
-    checkTronLink();
+    // Only auto-check if user was previously connected (not on first visit)
+    // This prevents automatic connection on page load without user consent
+    if (!state.isConnected && !state.error && !state.manuallyDisconnected) {
+      // Check if TronLink is available and already has an account connected
+      // but don't automatically connect - just update the UI state
+      if (window.tronWeb && window.tronWeb.defaultAddress && window.tronWeb.defaultAddress.base58) {
+        // User was already connected, safe to reconnect
+        checkTronLink();
+      }
+    }
 
     // Listen for account changes using TronWeb events (if available)
     const handleAccountsChanged = () => {
-      setTimeout(checkTronLink, 1000); // Delay to let TronLink update
+      // Only reconnect if we were previously connected and not manually disconnected
+      if (state.isConnected && !state.manuallyDisconnected) {
+        console.log('🔄 TRON account changed, reconnecting...');
+        setTimeout(() => checkTronLink(), 1000); // Delay to let TronLink update
+      }
     };
 
     // Try different event listeners for TronLink
+    let pollInterval: NodeJS.Timeout | null = null;
+    
     if (window.tronLink) {
       // Method 1: Try addEventListener if available
       if (typeof window.tronLink.addEventListener === 'function') {
         window.tronLink.addEventListener('accountsChanged', handleAccountsChanged);
       }
-      // Note: Removed tronWeb.eventServer.on() as it's not supported in current TronLink versions
+      
+      // Only start polling if connected and not manually disconnected
+      if (state.isConnected && !state.manuallyDisconnected) {
+        // Polling fallback - check connection every 5 seconds (reduced frequency)
+        pollInterval = setInterval(() => {
+          if (window.tronWeb && window.tronWeb.defaultAddress && window.tronWeb.defaultAddress.base58 !== state.address) {
+            handleAccountsChanged();
+          }
+        }, 5000);
+      }
     }
 
-    // Polling fallback - check connection every 3 seconds
-    const pollInterval = setInterval(() => {
-      if (window.tronWeb && window.tronWeb.defaultAddress.base58 !== state.address) {
-        handleAccountsChanged();
-      }
-    }, 3000);
-
     return () => {
-      clearInterval(pollInterval);
+      if (pollInterval) {
+        clearInterval(pollInterval);
+      }
       if (window.tronLink && typeof window.tronLink.removeEventListener === 'function') {
         window.tronLink.removeEventListener('accountsChanged', handleAccountsChanged);
       }
     };
-  }, [checkTronLink, state.address]);
+  }, [checkTronLink, state.address, state.isConnected, state.error, state.manuallyDisconnected]);
 
   return {
     // State
@@ -323,6 +405,7 @@ export function useTronWallet() {
     // Actions  
     connectTronWallet,
     disconnectTronWallet,
+    reconnectTronWallet,
     sendTransaction,
     callContract,
 
