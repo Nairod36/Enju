@@ -38,8 +38,12 @@ export function useMultiChainBalance() {
     const fetchEthBalance = async () => {
         if (!address) return null;
 
+        console.log('Fetching ETH balance for address:', address);
+        console.log('Using chainId:', chainId);
+
         try {
-            const response = await fetch('http://vps-b11044fd.vps.ovh.net/rpc', {
+            // Utilise le backend comme proxy pour éviter les problèmes CORS
+            const response = await fetch('http://localhost:3001/api/v1/rpc/eth', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -51,16 +55,18 @@ export function useMultiChainBalance() {
             });
 
             const result = await response.json();
+
             if (result.result) {
                 const balanceWei = BigInt(result.result);
                 const balanceEth = Number(balanceWei) / 1e18;
-
                 return {
                     formatted: balanceEth.toFixed(4),
                     symbol: 'ETH',
                     value: balanceWei,
                     decimals: 18
                 };
+            } else {
+                console.error('No result in ETH balance response:', result);
             }
         } catch (err) {
             console.error('Failed to fetch ETH balance:', err);

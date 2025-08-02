@@ -5,6 +5,8 @@ import { UsersModule } from './users/users.module';
 import { TransactionsModule } from './transactions/transactions.module';
 import { IslandsModule } from './islands/islands.module';
 import { BridgeModule } from './bridge/bridge.module';
+import { OneInchModule } from './oneinch/oneinch.module';
+import { RpcModule } from './rpc/rpc.module';
 import { HealthController } from './health/health.controller';
 import { HealthCronService } from './health/health-cron.service';
 
@@ -17,7 +19,9 @@ import { HealthCronService } from './health/health-cron.service';
     UsersModule,
     TransactionsModule,
     IslandsModule,
-    BridgeModule
+    BridgeModule,
+    OneInchModule,
+    RpcModule
   ],
   controllers: [HealthController],
   providers: [PrismaService, HealthCronService],

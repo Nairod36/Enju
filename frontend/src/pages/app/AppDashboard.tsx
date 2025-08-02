@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { ModernBridge } from "../../components/bridge/ModernBridge";
+import { CompactSwap } from "../../components/swap/CompactSwap";
 import { Button } from "../../components/ui/button";
 import {
   ArrowRightLeft,
@@ -12,6 +13,8 @@ import {
   Shield,
   Clock,
   Zap,
+  Repeat,
+  GitBranch,
 } from "lucide-react";
 import { useAccount, useBalance, useChainId } from "wagmi";
 import { useBridge } from "../../hooks/useBridge";
@@ -67,12 +70,11 @@ export function AppDashboard() {
     isLoading: isLoadingBalances,
     error: balanceError,
   } = useMultiChainBalance();
-  
   // TRON wallet hook for direct balance access
   const {
     balance: tronBalance,
     isConnected: tronConnected,
-    isLoading: tronLoading
+    isLoading: tronLoading,
   } = useTronWallet();
   const {
     executeBridge,
@@ -106,6 +108,7 @@ export function AppDashboard() {
   const [islandSeed, setIslandSeed] = useState<number | null>(null);
   const [mintLoading, setMintLoading] = useState(false);
   const [showWelcome, setShowWelcome] = useState(false);
+  const [activeTab, setActiveTab] = useState<"bridge" | "swap">("bridge");
 
   // Bridge statistics
   const [bridgeStats, setBridgeStats] = useState({
@@ -247,7 +250,7 @@ export function AppDashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-emerald-50/30">
       {/* Welcome overlay for new users */}
       {showWelcome && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
@@ -256,13 +259,15 @@ export function AppDashboard() {
       )}
 
       {/* Header */}
-      <div className="bg-gray-50 border-b border-gray-200">
-        <div className="max-w-full pr-8 py-4 pl-20">
+      <div className="bg-white border-b border-gray-100">
+        <div className="max-w-full pr-8 py-6 pl-20">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">Bridge</h1>
-              <p className="text-sm text-gray-500 mt-1">
-                Cross-chain asset transfers
+              <h1 className="text-2xl font-bold text-black">
+                Bridge / Swap Platform
+              </h1>
+              <p className="text-slate-600 mt-1">
+                Seamless cross-chain asset transfers and token swapping
               </p>
             </div>
             {isConnected && (
@@ -354,24 +359,30 @@ export function AppDashboard() {
 
       <div className="flex h-[calc(85vh-80px)]">
         {/* Left Sidebar - Island Viewer */}
-        <div className="w-[40%] bg-white border-r border-gray-200 flex flex-col">
+        <div className="w-[40%] bg-white border-r border-slate-200 flex flex-col shadow-sm">
           {/* Island Viewer */}
           <div className="flex-1 flex flex-col">
-            <div className="pr-8 py-4 pl-20 border-b border-gray-200">
-              <h3 className="text-md font-semibold text-gray-900">
+            <div className="pr-8 py-6 pl-20 border-b border-slate-100 bg-gradient-to-r from-white to-slate-50">
+              <h3 className="text-lg font-bold text-slate-900">
                 #{islandSeed || "..."} Island
               </h3>
+              <p className="text-sm text-slate-500 mt-1">
+                Your personal ecosystem
+              </p>
             </div>
 
             <div className="flex-1">
               {!isConnected ? (
                 <div className="h-full flex items-center justify-center p-8">
                   <div className="text-center">
-                    <div className="w-12 h-12 bg-gray-100 rounded-xl mx-auto mb-4 flex items-center justify-center">
-                      <MapPin className="w-6 h-6 text-gray-400" />
+                    <div className="w-16 h-16 bg-gradient-to-br from-slate-100 to-slate-200 rounded-2xl mx-auto mb-4 flex items-center justify-center">
+                      <MapPin className="w-8 h-8 text-slate-400" />
                     </div>
-                    <p className="text-sm text-gray-500">
-                      Connect wallet to view your island
+                    <h4 className="text-lg font-semibold text-slate-900 mb-2">
+                      Connect Wallet
+                    </h4>
+                    <p className="text-sm text-slate-500">
+                      Connect your wallet to explore your island
                     </p>
                   </div>
                 </div>
@@ -413,37 +424,46 @@ export function AppDashboard() {
           </div>
 
           {/* Island Stats */}
-          <div className="bg-gray-50 border-t border-gray-200 pr-8 py-6 pl-20">
-            <div className="space-y-4">
+          <div className="bg-gradient-to-br from-slate-50 to-white border-t border-slate-100 pr-8 py-6 pl-20">
+            <div className="space-y-5">
               <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-gray-600">
+                <span className="text-sm font-medium text-slate-600">
                   Island Seed
                 </span>
-                <span className="font-mono text-sm font-bold text-gray-900">
+                <span className="font-mono text-sm font-bold text-slate-900 bg-slate-100 px-2 py-1 rounded-lg">
                   #{islandSeed || "..."}
                 </span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-gray-600">
+                <span className="text-sm font-medium text-slate-600">
                   Trees Planted
                 </span>
-                <span className="text-sm font-bold text-emerald-600">
-                  {userIslandData?.totalTrees || 0}
-                </span>
+                <div className="flex items-center space-x-2">
+                  <div className="w-2 h-2 bg-emerald-500 rounded-full"></div>
+                  <span className="text-sm font-bold text-emerald-700">
+                    {userIslandData?.totalTrees || 0}
+                  </span>
+                </div>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-gray-600">
+                <span className="text-sm font-medium text-slate-600">
                   Bridges Completed
                 </span>
-                <span className="text-sm font-bold text-blue-600">
-                  {bridgeHistory.filter((b) => b.status === "COMPLETED").length}
-                </span>
+                <div className="flex items-center space-x-2">
+                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                  <span className="text-sm font-bold text-blue-700">
+                    {
+                      bridgeHistory.filter((b) => b.status === "COMPLETED")
+                        .length
+                    }
+                  </span>
+                </div>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-gray-600">
+                <span className="text-sm font-medium text-slate-600">
                   Member Since
                 </span>
-                <span className="text-sm text-gray-900">
+                <span className="text-sm font-semibold text-slate-900">
                   {userIslandData?.createdAt
                     ? new Date(userIslandData.createdAt).toLocaleDateString(
                         "en-US",
@@ -456,27 +476,29 @@ export function AppDashboard() {
                 </span>
               </div>
               {address && (
-                <div className="flex items-center justify-between pt-2 border-t border-gray-200">
-                  <span className="text-sm font-medium text-gray-600">
-                    Wallet
-                  </span>
-                  <div className="flex items-center space-x-2">
-                    <span className="font-mono text-sm font-bold text-gray-900 pt-1">
-                      {address.slice(0, 4)}...{address.slice(-4)}
+                <div className="pt-4 border-t border-slate-200">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-slate-600">
+                      Wallet Address
                     </span>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 w-8 p-0 hover:bg-gray-200"
-                      onClick={() =>
-                        window.open(
-                          `https://etherscan.io/address/${address}`,
-                          "_blank"
-                        )
-                      }
-                    >
-                      <ExternalLink className="w-2 h-2" />
-                    </Button>
+                    <div className="flex items-center space-x-2">
+                      <span className="font-mono text-sm font-semibold text-slate-900 bg-slate-100 px-2 py-1 rounded-lg">
+                        {address.slice(0, 6)}...{address.slice(-4)}
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 w-8 p-0 hover:bg-slate-200 rounded-lg"
+                        onClick={() =>
+                          window.open(
+                            `https://etherscan.io/address/${address}`,
+                            "_blank"
+                          )
+                        }
+                      >
+                        <ExternalLink className="w-3 h-3 text-slate-400" />
+                      </Button>
+                    </div>
                   </div>
                 </div>
               )}
@@ -485,24 +507,61 @@ export function AppDashboard() {
         </div>
 
         {/* Main Content - Bridge & Activity */}
-        <div className="flex-1 bg-white flex flex-col">
+        <div className="flex items-center align-center justify-center flex-1">
           {/* Bridge Section - Sticky */}
-          <div className="sticky top-0 z-10 bg-white border-b border-gray-200 shadow-sm">
+          <div className="sticky top-0 z-10 w-[500px]">
             <div className="px-8 py-8">
+              {/* Tab Toggle - Premium Style - Au-dessus du composant */}
+              <div className="flex justify-center mb-6">
+                <div className="relative bg-slate-50 rounded-xl p-1 border border-slate-200">
+                  <div
+                    className={`absolute top-1 bottom-1 bg-white rounded-lg shadow-sm transition-all duration-300 ${
+                      activeTab === "bridge"
+                        ? "left-1 right-[50%]"
+                        : "left-[50%] right-1"
+                    }`}
+                  />
+                  <div className="relative flex">
+                    <button
+                      onClick={() => setActiveTab("bridge")}
+                      className={`flex items-center space-x-2 px-6 py-3 rounded-lg text-sm font-semibold transition-all relative z-10 ${
+                        activeTab === "bridge"
+                          ? "text-emerald-700"
+                          : "text-slate-500 hover:text-slate-700"
+                      }`}
+                    >
+                      <GitBranch className="w-4 h-4" />
+                      <span>Bridge</span>
+                    </button>
+                    <button
+                      onClick={() => setActiveTab("swap")}
+                      className={`flex items-center space-x-2 px-6 py-3 rounded-lg text-sm font-semibold transition-all relative z-10 ${
+                        activeTab === "swap"
+                          ? "text-blue-700"
+                          : "text-slate-500 hover:text-slate-700"
+                      }`}
+                    >
+                      <Repeat className="w-4 h-4" />
+                      <span>Swap</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
               {!isConnected ? (
                 <div className="text-center py-16">
-                  <div className="w-16 h-16 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl mx-auto mb-6 flex items-center justify-center shadow-lg">
-                    <MapPin className="w-8 h-8 text-white" />
+                  <div className="w-20 h-20 bg-gradient-to-br from-emerald-500 to-blue-600 rounded-3xl mx-auto mb-6 flex items-center justify-center shadow-xl">
+                    <MapPin className="w-10 h-10 text-white" />
                   </div>
-                  <h2 className="text-2xl font-bold text-gray-900 mb-3">
+                  <h2 className="text-3xl font-bold bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent mb-3">
                     Connect Your Wallet
                   </h2>
-                  <p className="text-gray-500 mb-6">
+                  <p className="text-slate-600 mb-8 text-lg">
                     Connect to start bridging assets across chains
                   </p>
                   <w3m-button />
                 </div>
-              ) : (
+              ) : activeTab === "bridge" ? (
                 <ModernBridge
                   onBridgeSuccess={() => {
                     setTreeCount((prev) => prev + 1);
@@ -511,164 +570,9 @@ export function AppDashboard() {
                     }, 5000);
                   }}
                 />
+              ) : (
+                <CompactSwap />
               )}
-            </div>
-          </div>
-
-          {/* Recent Activity */}
-          <div className="flex-1 flex flex-col overflow-hidden">
-            <div className="px-8 py-6 border-b border-gray-200 bg-gray-50">
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-gray-900">
-                  Recent Activity
-                </h3>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={refreshHistory}
-                  disabled={isLoadingHistory}
-                  className="text-gray-500 hover:text-gray-700"
-                >
-                  {isLoadingHistory ? "Loading..." : "Refresh"}
-                </Button>
-              </div>
-            </div>
-
-            <div className="flex-1 overflow-y-auto bg-white">
-              <div className="px-8 py-4">
-                {isLoadingHistory ? (
-                  <div className="flex items-center justify-center py-12">
-                    <div className="flex items-center">
-                      <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mr-3"></div>
-                      <span className="text-gray-600">Loading...</span>
-                    </div>
-                  </div>
-                ) : bridgeHistory.length === 0 ? (
-                  <div className="text-center py-12">
-                    <div className="w-12 h-12 bg-gray-100 rounded-xl mx-auto mb-4 flex items-center justify-center">
-                      <ArrowRightLeft className="w-6 h-6 text-gray-400" />
-                    </div>
-                    <h4 className="text-sm font-medium text-gray-900 mb-2">
-                      No transactions yet
-                    </h4>
-                    <p className="text-xs text-gray-500">
-                      {!isConnected
-                        ? "Connect your wallet to view transactions"
-                        : "Start bridging to see your activity here"}
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {bridgeHistory.map((bridge) => (
-                      <div
-                        key={bridge.id}
-                        className="bg-white border border-gray-200 rounded-xl p-4 hover:shadow-md transition-all duration-200 hover:border-gray-300"
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center space-x-4">
-                            <div
-                              className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-sm ${
-                                bridge.status === "COMPLETED"
-                                  ? "bg-emerald-50 border border-emerald-200"
-                                  : bridge.status === "PENDING"
-                                  ? "bg-amber-50 border border-amber-200"
-                                  : "bg-red-50 border border-red-200"
-                              }`}
-                            >
-                              {bridge.status === "COMPLETED" && (
-                                <CheckCircle className="w-5 h-5 text-emerald-600" />
-                              )}
-                              {bridge.status === "PENDING" && (
-                                <Activity className="w-5 h-5 text-amber-600 animate-pulse" />
-                              )}
-                              {bridge.status === "FAILED" && (
-                                <AlertCircle className="w-5 h-5 text-red-600" />
-                              )}
-                            </div>
-                            <div>
-                              <div className="flex items-center space-x-2">
-                                <span className="text-sm font-semibold text-gray-900">
-                                  {formatAmount(bridge.amount).toFixed(4)}{" "}
-                                  {bridge.fromChain === "ethereum"
-                                    ? "ETH"
-                                    : "NEAR"}
-                                </span>
-                                <div
-                                  className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                    bridge.status === "COMPLETED"
-                                      ? "bg-emerald-100 text-emerald-800"
-                                      : bridge.status === "PENDING"
-                                      ? "bg-amber-100 text-amber-800"
-                                      : "bg-red-100 text-red-800"
-                                  }`}
-                                >
-                                  {bridge.status === "COMPLETED" &&
-                                    "✓ Complete"}
-                                  {bridge.status === "PENDING" && "⏳ Pending"}
-                                  {bridge.status === "FAILED" && "✗ Failed"}
-                                </div>
-                              </div>
-                              <div className="flex items-center space-x-2 mt-1">
-                                <span className="text-xs text-gray-500">
-                                  {bridge.fromChain === "ethereum"
-                                    ? "🔷 Ethereum"
-                                    : "🔺 NEAR"}{" "}
-                                  →{" "}
-                                  {bridge.toChain === "ethereum"
-                                    ? "🔷 Ethereum"
-                                    : "🔺 NEAR"}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            <div className="text-sm font-semibold text-gray-900">
-                              $
-                              {(
-                                formatAmount(bridge.amount) * 2500
-                              ).toLocaleString("en-US", {
-                                maximumFractionDigits: 0,
-                              })}
-                            </div>
-                            <div className="flex items-center space-x-1 mt-1 justify-end">
-                              {bridge.ethTxHash && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-6 w-6 p-0 hover:bg-gray-100"
-                                  onClick={() =>
-                                    window.open(
-                                      `https://etherscan.io/tx/${bridge.ethTxHash}`,
-                                      "_blank"
-                                    )
-                                  }
-                                >
-                                  <ExternalLink className="w-3 h-3 text-gray-400" />
-                                </Button>
-                              )}
-                              {bridge.nearTxHash && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-6 w-6 p-0 hover:bg-gray-100"
-                                  onClick={() =>
-                                    window.open(
-                                      `https://testnet.nearblocks.io/txns/${bridge.nearTxHash}`,
-                                      "_blank"
-                                    )
-                                  }
-                                >
-                                  <ExternalLink className="w-3 h-3 text-gray-400" />
-                                </Button>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
             </div>
           </div>
         </div>

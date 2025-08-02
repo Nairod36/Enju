@@ -7,9 +7,26 @@ import React, {
 } from "react";
 import * as THREE from "three";
 import { useFrame } from "@react-three/fiber";
-import { TreeData, CharacterData, ChestData, SavedIslandState } from "./island.types";
-import { HexTile, WaterTile, AnimatedTree, Rock, House, GenericMale, Chest } from "./island.components";
-import { generateIsland, generateIslandFromShape, enlargeIsland } from "./island.generators.utils";
+import {
+  TreeData,
+  CharacterData,
+  ChestData,
+  SavedIslandState,
+} from "./island.types";
+import {
+  HexTile,
+  WaterTile,
+  AnimatedTree,
+  Rock,
+  House,
+  GenericMale,
+  Chest,
+} from "./island.components";
+import {
+  generateIsland,
+  generateIslandFromShape,
+  enlargeIsland,
+} from "./island.generators.utils";
 import { generateIslandShape, enlargeIslandShape } from "./island.generators";
 import { IslandStorageService } from "./island.storage";
 
@@ -42,12 +59,6 @@ export const FloatingIsland = React.forwardRef<
   FloatingIslandRef,
   FloatingIslandProps
 >(({ seed, initialTreeCount = 0, preloadedIslandData }, ref) => {
-  console.log('🏝️ FloatingIsland component rendering with:', { 
-    seed, 
-    initialTreeCount, 
-    preloadedIslandData: !!preloadedIslandData 
-  });
-  
   const groupRef = useRef<THREE.Group>(null);
   const [animatedTiles, setAnimatedTiles] = useState(0);
   const [showDecorations, setShowDecorations] = useState(false);
@@ -71,48 +82,54 @@ export const FloatingIsland = React.forwardRef<
         }
 
         // Obtenir les tuiles utilisées actuelles + positions des maisons
-        setUsedTiles(currentUsedTiles => {
+        setUsedTiles((currentUsedTiles) => {
           // Calculer les positions occupées par les maisons
           const houseOccupiedTiles = new Set<string>();
           if (islandData.houses) {
             islandData.houses.forEach((house: any) => {
               // Trouver la tuile la plus proche de la maison
-              const closestTile = islandData.landTiles.reduce((closest: any, tile: any) => {
-                const houseDist = Math.sqrt(
-                  Math.pow(house.position[0] - tile.position[0], 2) +
-                  Math.pow(house.position[2] - tile.position[2], 2)
-                );
-                const closestDist = Math.sqrt(
-                  Math.pow(house.position[0] - closest.position[0], 2) +
-                  Math.pow(house.position[2] - closest.position[2], 2)
-                );
-                return houseDist < closestDist ? tile : closest;
-              });
+              const closestTile = islandData.landTiles.reduce(
+                (closest: any, tile: any) => {
+                  const houseDist = Math.sqrt(
+                    Math.pow(house.position[0] - tile.position[0], 2) +
+                      Math.pow(house.position[2] - tile.position[2], 2)
+                  );
+                  const closestDist = Math.sqrt(
+                    Math.pow(house.position[0] - closest.position[0], 2) +
+                      Math.pow(house.position[2] - closest.position[2], 2)
+                  );
+                  return houseDist < closestDist ? tile : closest;
+                }
+              );
               houseOccupiedTiles.add(closestTile.key);
             });
           }
 
           const availableTiles = islandData.landTiles.filter(
-            (tile: any) => !currentUsedTiles.has(tile.key) && 
-                          !houseOccupiedTiles.has(tile.key) && 
-                          tile.height > 0.5
+            (tile: any) =>
+              !currentUsedTiles.has(tile.key) &&
+              !houseOccupiedTiles.has(tile.key) &&
+              tile.height > 0.5
           );
 
           if (availableTiles.length === 0) {
             return currentUsedTiles;
           }
 
-          const tile = availableTiles[Math.floor(Math.random() * availableTiles.length)];
+          const tile =
+            availableTiles[Math.floor(Math.random() * availableTiles.length)];
 
           const newTree: TreeData = {
-            id: `missing-tree-${Date.now()}-${Math.random().toString(36).substr(2, 9)}-${i}`,
+            id: `missing-tree-${Date.now()}-${Math.random()
+              .toString(36)
+              .substr(2, 9)}-${i}`,
             position: [
               tile.position[0] + (Math.random() - 0.5) * 0.3,
               tile.position[1] + tile.height / 2,
               tile.position[2] + (Math.random() - 0.5) * 0.3,
             ],
             scale: 0.6 + Math.random() * 0.4,
-            birthTime: Date.now() - (1000 * 60 * 60 * 24), // Arbre "mature"
+            birthTime: Date.now() - 1000 * 60 * 60 * 24, // Arbre "mature"
           };
 
           setUserTrees((prev) => [...prev, newTree]);
@@ -124,37 +141,52 @@ export const FloatingIsland = React.forwardRef<
 
   // Génération initiale - utiliser le système original COMPLET
   useEffect(() => {
-    console.log('🔄 Generating island with seed:', seed, 'preloadedIslandData:', !!preloadedIslandData);
-    
+    console.log(
+      "🔄 Generating island with seed:",
+      seed,
+      "preloadedIslandData:",
+      !!preloadedIslandData
+    );
+
     // Validate preloaded data - it should have landTiles and waterTiles
-    const isValidPreloadedData = preloadedIslandData && 
-                                preloadedIslandData.landTiles && 
-                                preloadedIslandData.landTiles.length > 0;
-    
-    console.log('🔍 Is preloaded data valid?', isValidPreloadedData);
-    
+    const isValidPreloadedData =
+      preloadedIslandData &&
+      preloadedIslandData.landTiles &&
+      preloadedIslandData.landTiles.length > 0;
+
+    console.log("🔍 Is preloaded data valid?", isValidPreloadedData);
+
     // Use preloaded island data if valid, otherwise generate new
-    const island = isValidPreloadedData ? preloadedIslandData : generateIsland(seed);
-    console.log('🏝️ Using island data from:', isValidPreloadedData ? 'database' : 'generator');
-    console.log('🏝️ Final island data:', island);
-    console.log('🏝️ Island landTiles length:', island?.landTiles?.length || 0);
-    console.log('🏝️ Island waterTiles length:', island?.waterTiles?.length || 0);
+    const island = isValidPreloadedData
+      ? preloadedIslandData
+      : generateIsland(seed);
+    console.log(
+      "🏝️ Using island data from:",
+      isValidPreloadedData ? "database" : "generator"
+    );
+    console.log("🏝️ Final island data:", island);
+    console.log("🏝️ Island landTiles length:", island?.landTiles?.length || 0);
+    console.log(
+      "🏝️ Island waterTiles length:",
+      island?.waterTiles?.length || 0
+    );
     setIslandData(island);
 
     // Créer le personnage GenericMale au centre de l'île
     if (island.landTiles.length > 0) {
-      const centerTile = island.landTiles[Math.floor(island.landTiles.length / 2)];
+      const centerTile =
+        island.landTiles[Math.floor(island.landTiles.length / 2)];
       const characterData: CharacterData = {
         id: `character-${Date.now()}`,
         position: [
           0, // Position au centre de l'île
           centerTile.position[1] + centerTile.height / 2 + 0.5, // Juste au-dessus du terrain
-          0
+          0,
         ],
         speed: 1.5,
         direction: 0,
-        state: 'idle',
-        lastPositionUpdate: Date.now()
+        state: "idle",
+        lastPositionUpdate: Date.now(),
       };
       setCharacter(characterData);
     }
@@ -171,11 +203,21 @@ export const FloatingIsland = React.forwardRef<
   }, [islandData, initialTreeCount]);
 
   // Données actuelles à utiliser
-  const currentIslandData = islandData || { landTiles: [], waterTiles: [], rocks: [], houses: [], totalTiles: 0, waterColor: "#1e88e5" };
+  const currentIslandData = islandData || {
+    landTiles: [],
+    waterTiles: [],
+    rocks: [],
+    houses: [],
+    totalTiles: 0,
+    waterColor: "#1e88e5",
+  };
 
   useImperativeHandle(ref, () => ({
     addRandomTree: () => {
-      if (!currentIslandData.landTiles || currentIslandData.landTiles.length === 0) {
+      if (
+        !currentIslandData.landTiles ||
+        currentIslandData.landTiles.length === 0
+      ) {
         return;
       }
 
@@ -184,25 +226,28 @@ export const FloatingIsland = React.forwardRef<
       if (currentIslandData.houses) {
         currentIslandData.houses.forEach((house: any) => {
           // Trouver la tuile la plus proche de la maison
-          const closestTile = currentIslandData.landTiles.reduce((closest: any, tile: any) => {
-            const houseDist = Math.sqrt(
-              Math.pow(house.position[0] - tile.position[0], 2) +
-              Math.pow(house.position[2] - tile.position[2], 2)
-            );
-            const closestDist = Math.sqrt(
-              Math.pow(house.position[0] - closest.position[0], 2) +
-              Math.pow(house.position[2] - closest.position[2], 2)
-            );
-            return houseDist < closestDist ? tile : closest;
-          });
+          const closestTile = currentIslandData.landTiles.reduce(
+            (closest: any, tile: any) => {
+              const houseDist = Math.sqrt(
+                Math.pow(house.position[0] - tile.position[0], 2) +
+                  Math.pow(house.position[2] - tile.position[2], 2)
+              );
+              const closestDist = Math.sqrt(
+                Math.pow(house.position[0] - closest.position[0], 2) +
+                  Math.pow(house.position[2] - closest.position[2], 2)
+              );
+              return houseDist < closestDist ? tile : closest;
+            }
+          );
           houseOccupiedTiles.add(closestTile.key);
         });
       }
 
       const availableTiles = currentIslandData.landTiles.filter(
-        (tile) => !usedTiles.has(tile.key) && 
-                  !houseOccupiedTiles.has(tile.key) && 
-                  tile.height > 0.5
+        (tile) =>
+          !usedTiles.has(tile.key) &&
+          !houseOccupiedTiles.has(tile.key) &&
+          tile.height > 0.5
       );
 
       if (availableTiles.length === 0) {
@@ -229,21 +274,24 @@ export const FloatingIsland = React.forwardRef<
     },
     enlargeIsland: () => {
       if (isEnlarging || !islandData) return;
-      
+
       setIsEnlarging(true);
-      
+
       // Utiliser l'agrandissement complet qui préserve toutes les features
       const enlargedIsland = enlargeIsland(seed, islandData);
-      
+
       // Mettre à jour l'état
       setIslandData(enlargedIsland);
-      
+
       setTimeout(() => {
         setIsEnlarging(false);
       }, 200);
     },
     spawnChest: () => {
-      if (!currentIslandData.landTiles || currentIslandData.landTiles.length === 0) {
+      if (
+        !currentIslandData.landTiles ||
+        currentIslandData.landTiles.length === 0
+      ) {
         return;
       }
 
@@ -256,22 +304,23 @@ export const FloatingIsland = React.forwardRef<
         return;
       }
 
-      const tile = availableTiles[Math.floor(Math.random() * availableTiles.length)];
-      
+      const tile =
+        availableTiles[Math.floor(Math.random() * availableTiles.length)];
+
       const newChest: ChestData = {
         id: `chest-${Date.now()}-${Math.random()}`,
         position: [
           tile.position[0],
           tile.position[1] + tile.height / 2 + 0.15,
-          tile.position[2]
+          tile.position[2],
         ],
         rotation: Math.random() * Math.PI * 2,
         scale: 0.8 + Math.random() * 0.4,
-        isOpen: false
+        isOpen: false,
       };
 
-      setChests(prev => [...prev, newChest]);
-      setUsedTiles(prev => new Set(prev).add(tile.key));
+      setChests((prev) => [...prev, newChest]);
+      setUsedTiles((prev) => new Set(prev).add(tile.key));
     },
     saveIsland: (customName?: string) => {
       if (!islandData) {
@@ -308,7 +357,7 @@ export const FloatingIsland = React.forwardRef<
         setUsedTiles(new Set(savedIsland.usedTiles));
         setTreeCount(savedIsland.treeCount);
         setCurrentIslandId(id);
-        
+
         // Réinitialiser les animations
         setAnimatedTiles(0);
         setShowDecorations(false);
@@ -322,12 +371,12 @@ export const FloatingIsland = React.forwardRef<
     },
     loadFromDatabase: (dbIsland: any) => {
       try {
-        
         // Vérifier si l'île a des données générées
-        const hasGeneratedData = dbIsland.islandData && 
-          dbIsland.islandData.landTiles && 
+        const hasGeneratedData =
+          dbIsland.islandData &&
+          dbIsland.islandData.landTiles &&
           dbIsland.islandData.landTiles.length > 0;
-        
+
         if (hasGeneratedData) {
           // L'île a déjà des données générées, les restaurer
           setIslandData(dbIsland.islandData);
@@ -335,27 +384,27 @@ export const FloatingIsland = React.forwardRef<
           // L'île n'a pas de données générées, garder les données actuelles (générées)
           // Ne pas écraser islandData si elle est déjà générée
         }
-        
+
         // Restaurer les arbres utilisateur
         const treesToRestore = dbIsland.userTrees || [];
         const totalTreesExpected = dbIsland.totalTrees || 0;
-        
+
         // Vérifier si les arbres sont valides (pas des tableaux vides)
-        const validTrees = treesToRestore.filter(tree => 
-          tree && 
-          typeof tree === 'object' && 
-          tree.id && 
-          tree.position && 
-          tree.position.length === 3
+        const validTrees = treesToRestore.filter(
+          (tree) =>
+            tree &&
+            typeof tree === "object" &&
+            tree.id &&
+            tree.position &&
+            tree.position.length === 3
         );
-        
-        
+
         if (validTrees.length > 0) {
           setUserTrees(validTrees);
         } else {
           setUserTrees([]); // Nettoyer les tableaux vides
         }
-        
+
         // Créer les arbres manquants basé sur les arbres valides vs totalTrees
         const missingTreesCount = totalTreesExpected - validTrees.length;
         if (missingTreesCount > 0) {
@@ -364,25 +413,25 @@ export const FloatingIsland = React.forwardRef<
             createMissingTrees(missingTreesCount);
           }, 2000);
         }
-        
+
         // Restaurer les coffres
         if (dbIsland.chests && dbIsland.chests.length > 0) {
           setChests(dbIsland.chests);
         }
-        
+
         // Restaurer les tuiles utilisées
         if (dbIsland.usedTiles && dbIsland.usedTiles.length > 0) {
           setUsedTiles(new Set(dbIsland.usedTiles));
         }
-        
+
         // Restaurer le nombre d'arbres
         if (dbIsland.treeCount !== undefined) {
           setTreeCount(dbIsland.treeCount);
         }
-        
+
         // Mettre à jour l'ID de l'île courante
         setCurrentIslandId(dbIsland.id);
-        
+
         return true;
       } catch (error) {
         return false;
@@ -394,8 +443,8 @@ export const FloatingIsland = React.forwardRef<
       userTrees,
       chests,
       usedTiles,
-      treeCount
-    })
+      treeCount,
+    }),
   }));
 
   // Reset seulement au changement de seed
@@ -419,50 +468,59 @@ export const FloatingIsland = React.forwardRef<
 
   // Calculer les obstacles pour le personnage
   const obstacles = useMemo(() => {
-    const obstacleList: Array<{ position: [number, number, number]; radius: number }> = [];
-    
+    const obstacleList: Array<{
+      position: [number, number, number];
+      radius: number;
+    }> = [];
+
     // Ajouter les rochers comme obstacles
-    currentIslandData.rocks?.forEach(rock => {
+    currentIslandData.rocks?.forEach((rock) => {
       obstacleList.push({
         position: rock.position,
-        radius: rock.scale * 0.3
+        radius: rock.scale * 0.3,
       });
     });
-    
+
     // Ajouter les maisons comme obstacles
-    currentIslandData.houses?.forEach(house => {
+    currentIslandData.houses?.forEach((house) => {
       obstacleList.push({
         position: house.position,
-        radius: 0.5
+        radius: 0.5,
       });
     });
-    
+
     // Ajouter les arbres comme obstacles
-    userTrees.forEach(tree => {
+    userTrees.forEach((tree) => {
       obstacleList.push({
         position: tree.position,
-        radius: tree.scale * 0.4
+        radius: tree.scale * 0.4,
       });
     });
-    
+
     // Ajouter les coffres comme obstacles
-    chests.forEach(chest => {
+    chests.forEach((chest) => {
       obstacleList.push({
         position: chest.position,
-        radius: chest.scale * 0.3
+        radius: chest.scale * 0.3,
       });
     });
-    
+
     // Ajouter les tuiles d'eau comme obstacles
-    currentIslandData.waterTiles?.forEach(waterTile => {
+    currentIslandData.waterTiles?.forEach((waterTile) => {
       obstacleList.push({
         position: waterTile.position,
-        radius: 0.6
+        radius: 0.6,
       });
     });
-    
+
     return obstacleList;
-  }, [currentIslandData.rocks, currentIslandData.houses, currentIslandData.waterTiles, userTrees, chests]);
+  }, [
+    currentIslandData.rocks,
+    currentIslandData.houses,
+    currentIslandData.waterTiles,
+    userTrees,
+    chests,
+  ]);
 
   // Gestionnaire de mise à jour du personnage
   const handleCharacterUpdate = (updatedCharacter: CharacterData) => {
@@ -471,11 +529,9 @@ export const FloatingIsland = React.forwardRef<
 
   // Gestionnaire de clic sur coffre
   const handleChestClick = (chestId: string) => {
-    setChests(prev => 
-      prev.map(chest => 
-        chest.id === chestId 
-          ? { ...chest, isOpen: !chest.isOpen }
-          : chest
+    setChests((prev) =>
+      prev.map((chest) =>
+        chest.id === chestId ? { ...chest, isOpen: !chest.isOpen } : chest
       )
     );
   };
@@ -517,7 +573,7 @@ export const FloatingIsland = React.forwardRef<
           {/* Rochers */}
           {currentIslandData.rocks.map((rock, index) => (
             <Rock
-              key={`rock-${index}-${rock.position.join('-')}`}
+              key={`rock-${index}-${rock.position.join("-")}`}
               position={rock.position}
               scale={rock.scale}
               color={rock.color}
@@ -528,7 +584,7 @@ export const FloatingIsland = React.forwardRef<
           {/* Maisons */}
           {currentIslandData.houses.map((house, index) => (
             <House
-              key={`house-${index}-${house.position.join('-')}`}
+              key={`house-${index}-${house.position.join("-")}`}
               position={house.position}
               scale={house.scale}
               rotation={house.rotation}
@@ -539,7 +595,7 @@ export const FloatingIsland = React.forwardRef<
 
       {/* Arbres ajoutés par l'utilisateur */}
       {userTrees
-        .filter(tree => tree && tree.id && tree.position) // Filtrer les arbres valides
+        .filter((tree) => tree && tree.id && tree.position) // Filtrer les arbres valides
         .map((tree) => (
           <AnimatedTree
             key={tree.id}
@@ -550,14 +606,9 @@ export const FloatingIsland = React.forwardRef<
           />
         ))}
 
-
       {/* Coffres */}
       {chests.map((chest) => (
-        <Chest
-          key={chest.id}
-          chest={chest}
-          onChestClick={handleChestClick}
-        />
+        <Chest key={chest.id} chest={chest} onChestClick={handleChestClick} />
       ))}
     </group>
   );
