@@ -2,8 +2,8 @@ export const FORK_MAINNET_CONFIG = {
   chainId: 1, // Mainnet fork chain ID
   name: 'Forked Mainnet',
   rpcUrl: process.env.NODE_ENV === 'development'
-    ? 'http://vps-b11044fd.vps.ovh.net/rpc'
-    : 'http://vps-b11044fd.vps.ovh.net/rpc',
+    ? 'https://vps-b11044fd.vps.ovh.net/rpc'
+    : 'https://vps-b11044fd.vps.ovh.net/rpc',
   nativeCurrency: {
     name: 'Ethereum',
     symbol: 'ETH',
@@ -15,7 +15,7 @@ export const FORK_MAINNET_CONFIG = {
 export const BRIDGE_CONFIG = {
   // CrossChainResolver contract (deployed with partial fills - fixed version)
   contractAddress: '0x79fD45793DC81Da9BaB6aE577f01ba7935484C51',
-  rpcUrl: 'http://vps-b11044fd.vps.ovh.net/rpc',
+  rpcUrl: 'https://vps-b11044fd.vps.ovh.net/rpc',
   listenerApi: 'http://localhost:3002',
   nearContract: 'sharknadok.testnet',
 

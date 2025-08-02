@@ -1,7 +1,7 @@
 {
   "transactions": [
     {
-      "rpc": "http://vps-b11044fd.vps.ovh.net/rpc"
+      "rpc": "https://vps-b11044fd.vps.ovh.net/rpc"
     }
   ]
 }

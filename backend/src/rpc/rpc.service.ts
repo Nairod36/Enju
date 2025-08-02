@@ -2,7 +2,7 @@ import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
 
 @Injectable()
 export class RpcService {
-    private readonly VPS_RPC_URL = 'http://vps-b11044fd.vps.ovh.net/rpc';
+    private readonly VPS_RPC_URL = 'https://vps-b11044fd.vps.ovh.net/rpc';
 
     async proxyToVpsRpc(rpcRequest: any): Promise<any> {
         try {
