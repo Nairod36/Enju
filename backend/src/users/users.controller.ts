@@ -4,6 +4,7 @@ import {
   Post,
   Body,
   Param,
+  Query,
   ParseIntPipe,
   NotFoundException,
   UseGuards,
@@ -18,6 +19,16 @@ import { ConnectWalletDto, UpdateUserProfileDto } from './dto';
 @Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) { }
+
+  @Get('check-exists')
+  @ApiOperation({
+    summary: 'Check if user exists',
+    description: 'Check if a user exists by wallet address'
+  })
+  @ApiResponse({ status: 200, description: 'User existence check completed' })
+  async checkUserExists(@Query('address') address: string) {
+    return this.usersService.checkUserExists(address);
+  }
 
   @Get('me')
   @ApiBearerAuth()

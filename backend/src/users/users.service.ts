@@ -31,6 +31,32 @@ export class UsersService {
     private usersUtils: UsersUtils,
   ) { }
 
+  async checkUserExists(address: string) {
+    if (!address) {
+      return { exists: false, user: null };
+    }
+
+    try {
+      const user = await this.prisma.user.findUnique({
+        where: { walletAddress: address.toLowerCase() },
+        select: {
+          id: true,
+          walletAddress: true,
+          username: true,
+          createdAt: true,
+        }
+      });
+
+      return {
+        exists: !!user,
+        user: user || null
+      };
+    } catch (error) {
+      console.error('Error checking user existence:', error);
+      return { exists: false, user: null };
+    }
+  }
+
   async generateNonce(walletAddress: string): Promise<NonceResponseDto> {
     if (!ethers.utils.isAddress(walletAddress)) {
       throw new InvalidWalletAddressException();

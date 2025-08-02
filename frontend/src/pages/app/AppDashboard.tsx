@@ -82,12 +82,7 @@ export function AppDashboard() {
     isConnected: tronConnected,
     isLoading: tronLoading,
   } = useTronWallet();
-  const {
-    executeBridge,
-    isLoading: isBridging,
-    error: bridgeError,
-    clearError,
-  } = useBridge();
+
   const {
     bridges: bridgeHistory,
     isLoading: isLoadingHistory,
@@ -95,6 +90,7 @@ export function AppDashboard() {
   } = useBridgeHistory();
 
   const islandRef = useRef<FloatingIslandRef>(null);
+
 
   // Fonction helper pour augmenter l'expérience utilisateur
   const levelUpUser = async (experienceGain: number) => {
@@ -205,14 +201,11 @@ export function AppDashboard() {
 
   const [isInitialized, setIsInitialized] = useState(false);
 
-  const [showLoadDialog, setShowLoadDialog] = useState(false);
-  const [swapStatus, setSwapStatus] = useState<
-    "idle" | "creating" | "monitoring" | "completed" | "failed"
-  >("idle");
   const [treeCount, setTreeCount] = useState(0);
   const [islandSeed, setIslandSeed] = useState<number | null>(null);
   const [mintLoading, setMintLoading] = useState(false);
   const [showWelcome, setShowWelcome] = useState(false);
+  const [hasCheckedUserStatus, setHasCheckedUserStatus] = useState(false);
   const [activeTab, setActiveTab] = useState<"bridge" | "swap">("bridge");
 
   // Bridge statistics
@@ -233,6 +226,34 @@ export function AppDashboard() {
   } = useIslands();
 
 
+  // Vérifier le statut utilisateur pour détecter les nouveaux utilisateurs
+  const checkUserStatus = async () => {
+    if (!address || hasCheckedUserStatus) return;
+
+    try {
+      // Vérifier si l'utilisateur existe déjà dans la base
+      const response = await fetch(
+        `http://localhost:3001/api/v1/users/check-exists?address=${address}`
+      );
+      const data = await response.json();
+
+      console.log("User check result:", data);
+
+      // Si l'utilisateur n'existe pas OU n'a pas de pseudo, afficher le welcome
+      if (!data.exists || !data.user?.username) {
+        console.log(
+          "New user detected or user without username, showing welcome"
+        );
+        setShowWelcome(true);
+      }
+
+      setHasCheckedUserStatus(true);
+    } catch (error) {
+      console.error("Failed to check user status:", error);
+      setHasCheckedUserStatus(true);
+    }
+  };
+
   useEffect(() => {
     const initializeUserIsland = async () => {
       if (isAuthenticated && isConnected && !isInitialized && !islandsLoading) {
@@ -248,20 +269,6 @@ export function AppDashboard() {
               userIsland.userTrees?.length || 0
             );
 
-            // Check if this is a newly created island
-            const isNewUser =
-              !userIsland.islandData ||
-              !userIsland.islandData.landTiles ||
-              userIsland.islandData.landTiles.length === 0;
-
-            if (isNewUser) {
-              setShowWelcome(true);
-              // Auto-hide welcome message after 8 seconds
-              setTimeout(() => {
-                setShowWelcome(false);
-              }, 8000);
-            }
-
             setIslandSeed(parseInt(userIsland.seed));
             setTreeCount(userIsland.totalTrees || 0);
             setUserIslandData(userIsland);
@@ -270,12 +277,6 @@ export function AppDashboard() {
             setTimeout(async () => {
               if (islandRef.current) {
                 islandRef.current.loadFromDatabase(userIsland);
-
-                // Si l'île n'a pas de données générées, sauvegarder les données actuelles
-                const hasGeneratedData =
-                  userIsland.islandData &&
-                  userIsland.islandData.landTiles &&
-                  userIsland.islandData.landTiles.length > 0;
               }
             }, 1000); // Délai pour s'assurer que l'île est rendue
 
@@ -289,6 +290,22 @@ export function AppDashboard() {
 
     initializeUserIsland();
   }, [isAuthenticated, isInitialized, islandsLoading]); // Retiré ensureUserHasIsland des deps
+
+  // Effet séparé pour vérifier le statut utilisateur
+  useEffect(() => {
+    if (isConnected && address) {
+      checkUserStatus();
+    }
+  }, [isConnected, address]);
+
+  // Réinitialiser les états quand l'utilisateur se déconnecte
+  useEffect(() => {
+    if (!isConnected) {
+      setHasCheckedUserStatus(false);
+      setShowWelcome(false);
+      setIsInitialized(false);
+    }
+  }, [isConnected]);
 
   // Load bridge statistics
   useEffect(() => {
@@ -639,59 +656,59 @@ export function AppDashboard() {
         {/* Main Content - Bridge & Activity */}
         <div className="flex items-center align-center justify-center flex-1">
           {/* Bridge Section - Sticky */}
-          <div className="sticky top-0 z-10 w-[500px]">
-            <div className="px-8 py-8">
-              {/* Tab Toggle - Premium Style - Au-dessus du composant */}
-              <div className="flex justify-center mb-6">
-                <div className="relative bg-slate-50 rounded-xl p-1 border border-slate-200">
-                  <div
-                    className={`absolute top-1 bottom-1 bg-white rounded-lg shadow-sm transition-all duration-300 ${
-                      activeTab === "bridge"
-                        ? "left-1 right-[50%]"
-                        : "left-[50%] right-1"
-                    }`}
-                  />
-                  <div className="relative flex">
-                    <button
-                      onClick={() => setActiveTab("bridge")}
-                      className={`flex items-center space-x-2 px-6 py-3 rounded-lg text-sm font-semibold transition-all relative z-10 ${
-                        activeTab === "bridge"
-                          ? "text-emerald-700"
-                          : "text-slate-500 hover:text-slate-700"
-                      }`}
-                    >
-                      <GitBranch className="w-4 h-4" />
-                      <span>Bridge</span>
-                    </button>
-                    <button
-                      onClick={() => setActiveTab("swap")}
-                      className={`flex items-center space-x-2 px-6 py-3 rounded-lg text-sm font-semibold transition-all relative z-10 ${
-                        activeTab === "swap"
-                          ? "text-blue-700"
-                          : "text-slate-500 hover:text-slate-700"
-                      }`}
-                    >
-                      <Repeat className="w-4 h-4" />
-                      <span>Swap</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
 
-              {!isConnected ? (
-                <div className="text-center py-16">
-                  <div className="w-20 h-20 bg-gradient-to-br from-emerald-500 to-blue-600 rounded-3xl mx-auto mb-6 flex items-center justify-center shadow-xl">
-                    <MapPin className="w-10 h-10 text-white" />
+          {!isConnected ? (
+            <div className="text-center py-16">
+              <div className="w-16 h-16 bg-gradient-to-br from-slate-100 to-slate-200 rounded-2xl mx-auto mb-4 flex items-center justify-center">
+                <MapPin className="w-8 h-8 text-slate-400" />
+              </div>
+              <h2 className="text-3xl font-bold bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent mb-3">
+                Connect Your Wallet
+              </h2>
+              <p className="text-slate-600 mb-8 text-lg">
+                Connect to start bridging assets across chains
+              </p>
+            </div>
+          ) : activeTab === "bridge" ? (
+            <div className="sticky top-0 z-10 w-[500px]">
+              <div className="px-8 py-8">
+                {/* Tab Toggle - Premium Style - Au-dessus du composant */}
+                <div className="flex justify-center mb-6">
+                  <div className="relative bg-slate-50 rounded-xl p-1 border border-slate-200">
+                    <div
+                      className={`absolute top-1 bottom-1 bg-white rounded-lg shadow-sm transition-all duration-300 ${
+                        activeTab === "bridge"
+                          ? "left-1 right-[50%]"
+                          : "left-[50%] right-1"
+                      }`}
+                    />
+                    <div className="relative flex">
+                      <button
+                        onClick={() => setActiveTab("bridge")}
+                        className={`flex items-center space-x-2 px-6 py-3 rounded-lg text-sm font-semibold transition-all relative z-10 ${
+                          activeTab === "bridge"
+                            ? "text-emerald-700"
+                            : "text-slate-500 hover:text-slate-700"
+                        }`}
+                      >
+                        <GitBranch className="w-4 h-4" />
+                        <span>Bridge</span>
+                      </button>
+                      <button
+                        onClick={() => setActiveTab("swap")}
+                        className={`flex items-center space-x-2 px-6 py-3 rounded-lg text-sm font-semibold transition-all relative z-10 ${
+                          activeTab === "swap"
+                            ? "text-blue-700"
+                            : "text-slate-500 hover:text-slate-700"
+                        }`}
+                      >
+                        <Repeat className="w-4 h-4" />
+                        <span>Swap</span>
+                      </button>
+                    </div>
                   </div>
-                  <h2 className="text-3xl font-bold bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent mb-3">
-                    Connect Your Wallet
-                  </h2>
-                  <p className="text-slate-600 mb-8 text-lg">
-                    Connect to start bridging assets across chains
-                  </p>
-                  <w3m-button />
                 </div>
-              ) : activeTab === "bridge" ? (
+
                 <ModernBridge
                   onBridgeSuccess={async () => {
                     // Planter un arbre sur l'île
@@ -728,8 +745,12 @@ export function AppDashboard() {
                   }}
                 />
               )}
+
+              </div>
             </div>
-          </div>
+          ) : (
+            <CompactSwap />
+          )}
         </div>
       </div>
     </div>

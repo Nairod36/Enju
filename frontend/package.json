@@ -16,6 +16,7 @@
     "@near-wallet-selector/my-near-wallet": "^9.2.0",
     "@near-wallet-selector/react-hook": "^9.2.0",
     "@radix-ui/react-dialog": "^1.1.14",
+    "@radix-ui/react-label": "^2.1.7",
     "@radix-ui/react-progress": "^1.1.7",
     "@radix-ui/react-slot": "^1.2.3",
     "@react-three/drei": "^9.114.3",

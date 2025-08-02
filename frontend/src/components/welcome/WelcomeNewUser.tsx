@@ -1,6 +1,10 @@
-import React from "react";
+import React, { useState } from "react";
+import { useAccount, useSignMessage } from 'wagmi';
 import { Button } from "../ui/button";
-import { Sparkles, MapPin, X, TreePine } from "lucide-react";
+import { Input } from "../ui/input";
+import { Label } from "../ui/label";
+import { Sparkles, MapPin, X, TreePine, User, Edit3, Info } from "lucide-react";
+import { DualWalletButton } from '../DualWalletButton';
 
 interface WelcomeNewUserProps {
   onDismiss: () => void;
@@ -19,19 +23,130 @@ export const WelcomeNewUser: React.FC<WelcomeNewUserProps> = ({
   bridgeCount = 0,
   memberSince,
 }) => {
+  const { address, isConnected } = useAccount();
+  const { signMessage } = useSignMessage();
+  const [username, setUsername] = useState('');
+  const [isCreatingUsername, setIsCreatingUsername] = useState(false);
+  const [showAuthInfo, setShowAuthInfo] = useState(false);
+
+  const handleCreateUsername = async () => {
+    if (!username.trim() || !address) return;
+
+    setIsCreatingUsername(true);
+    try {
+      // Message à signer pour prouver la propriété du wallet
+      const message = `Enju - Création de pseudo: ${username.trim()}\\nAdresse: ${address}\\nTimestamp: ${Date.now()}`;
+      
+      // Signer le message (optionnel mais recommandé)
+      const signature = await signMessage({ message });
+
+      // Appeler l'API backend
+      const response = await fetch('http://localhost:3001/api/v1/auth/connect', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          address,
+          signature,
+          message,
+        }),
+      });
+
+      if (response.ok) {
+        // Mettre à jour le username
+        const updateResponse = await fetch('http://localhost:3001/api/v1/auth/update-username', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            address,
+            username: username.trim(),
+            signature,
+            message: `Enju - Mise à jour pseudo: ${username.trim()}\\nAdresse: ${address}\\nTimestamp: ${Date.now()}`,
+          }),
+        });
+
+        if (updateResponse.ok) {
+          alert('Pseudo créé avec succès!');
+          setUsername('');
+          // Recharger la page pour mettre à jour le statut utilisateur
+          window.location.reload();
+        } else {
+          const error = await updateResponse.json();
+          alert(`Erreur: ${error.message || 'Impossible de créer le pseudo'}`);
+        }
+      }
+    } catch (error) {
+      console.error('Erreur lors de la création du pseudo:', error);
+      alert('Erreur lors de la signature ou de la création du pseudo');
+    } finally {
+      setIsCreatingUsername(false);
+    }
+  };
+
+  // Si pas connecté, afficher la connexion wallet
+  if (!isConnected) {
+    return (
+      <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 max-w-lg w-full overflow-hidden">
+          {/* Header */}
+          <div className="bg-white border-b border-gray-200">
+            <div className="px-8 py-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+                    <User className="h-6 w-6 text-emerald-600" />
+                    Bienvenue sur Enju
+                  </h1>
+                  <p className="text-sm text-gray-500 mt-1">
+                    Connectez votre wallet pour commencer votre aventure DeFi
+                  </p>
+                </div>
+                <button
+                  onClick={onDismiss}
+                  className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+                >
+                  <X className="w-5 h-5 text-gray-400" />
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Content */}
+          <div className="p-8">
+            <div className="flex justify-center mb-6">
+              <DualWalletButton />
+            </div>
+            
+            <div className="flex items-center justify-center gap-2 text-sm text-gray-500">
+              <Info className="h-4 w-4" />
+              <span>
+                Vous devrez signer 2 fois: une fois pour vous connecter, une fois pour prouver votre identité
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Si connecté, afficher la création de pseudo
   return (
     <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 max-w-lg w-full overflow-hidden">
-        {/* Header - Following AppDashboard style */}
+        {/* Header */}
         <div className="bg-white border-b border-gray-200">
           <div className="px-8 py-6">
             <div className="flex items-center justify-between">
               <div>
-                <h1 className="text-2xl font-bold text-gray-900">
-                  Welcome to Enju! 🎉
+                <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+                  <Edit3 className="h-6 w-6 text-emerald-600" />
+                  Créer votre pseudo
                 </h1>
                 <p className="text-sm text-gray-500 mt-1">
-                  Your island has been created successfully
+                  Choisissez un nom d'utilisateur unique pour votre profil
                 </p>
               </div>
               <button
@@ -44,52 +159,49 @@ export const WelcomeNewUser: React.FC<WelcomeNewUserProps> = ({
           </div>
         </div>
 
-        {/* Content - Following AppDashboard layout */}
+        {/* Content */}
         <div className="p-8">
-          <div className="space-y-6">
-            {/* Island Created Card */}
-            <div className="bg-white border border-gray-200 rounded-xl p-4 hover:shadow-md transition-all duration-200">
-              <div className="flex items-center space-x-4">
-                <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center">
-                  <TreePine className="w-5 h-5 text-emerald-600" />
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center space-x-2">
-                    <span className="text-sm font-semibold text-gray-900">
-                      Island Created
-                    </span>
-                    <div className="px-2 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">
-                      ✓ Complete
-                    </div>
-                  </div>
-                  <div className="text-xs text-gray-500 mt-1">
-                    🏝️ {islandName} • Ready for exploration
-                  </div>
-                </div>
-              </div>
+          <div className="space-y-4">
+            {/* Pseudo Input */}
+            <div className="space-y-2">
+              <Label htmlFor="username">Pseudo</Label>
+              <Input
+                id="username"
+                type="text"
+                placeholder="Entrez votre pseudo..."
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                className="border-emerald-200 focus:border-emerald-500"
+                minLength={3}
+                maxLength={20}
+              />
+              <p className="text-xs text-gray-500">
+                Minimum 3 caractères, doit être unique
+              </p>
             </div>
 
-            {/* Start Bridging Card */}
-            <div className="bg-white border border-gray-200 rounded-xl p-4 hover:shadow-md transition-all duration-200">
-              <div className="flex items-center space-x-4">
-                <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-200 flex items-center justify-center">
-                  <Sparkles className="w-5 h-5 text-blue-600" />
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center space-x-2">
-                    <span className="text-sm font-semibold text-gray-900">
-                      Start Bridging
-                    </span>
-                    <div className="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                      Ready
-                    </div>
-                  </div>
-                  <div className="text-xs text-gray-500 mt-1">
-                    🌉 Transfer assets between chains to grow your island
-                  </div>
-                </div>
-              </div>
+            {/* Create Button */}
+            <Button
+              onClick={handleCreateUsername}
+              disabled={!username.trim() || username.trim().length < 3 || isCreatingUsername}
+              className="w-full bg-emerald-600 hover:bg-emerald-700"
+            >
+              {isCreatingUsername ? 'Création...' : 'Créer mon pseudo'}
+            </Button>
+
+            {/* Auth Info Toggle */}
+            <div className="text-center">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowAuthInfo(!showAuthInfo)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <Info className="h-4 w-4 mr-1" />
+                Pourquoi 2 signatures ?
+              </Button>
             </div>
+
 
             {/* Island Stats Preview */}
             <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
@@ -120,19 +232,25 @@ export const WelcomeNewUser: React.FC<WelcomeNewUserProps> = ({
                     })}
                   </span>
                 </div>
-              </div>
-            </div>
-          </div>
 
-          {/* Action Button */}
-          <div className="mt-8">
-            <Button
-              onClick={onDismiss}
-              className="w-full h-12 bg-gray-50 text-dark font-semibold border border-gray-200 rounded-xl transition-all duration-200"
-            >
-              <MapPin className="w-4 h-4 mr-2" />
-              Explore My Island
-            </Button>
+            {/* Auth Info */}
+            {showAuthInfo && (
+              <div className="mt-4 p-4 bg-emerald-50 rounded-lg text-sm text-gray-700">
+                <p className="font-medium text-emerald-800 mb-2">Authentification sécurisée :</p>
+                <ul className="space-y-1 text-gray-600">
+                  <li>• <strong>1ère signature</strong> : Connexion à l'application</li>
+                  <li>• <strong>2ème signature</strong> : Preuve de propriété du wallet pour créer le pseudo</li>
+                  <li>• Cela garantit que seul le propriétaire du wallet peut créer un pseudo</li>
+                  <li>• Les signatures sont optionnelles mais recommandées pour la sécurité</li>
+                </ul>
+
+              </div>
+            )}
+
+            {/* Wallet Address */}
+            <div className="text-center text-sm text-gray-500">
+              Wallet connecté: <code className="bg-gray-100 px-2 py-1 rounded">{address}</code>
+            </div>
           </div>
         </div>
       </div>

@@ -30,22 +30,22 @@ export function AppHeader() {
               Bridge
             </Link>
             <Link
-              to="/app/game"
-              className="text-slate-700 hover:text-slate-900 transition-colors px-3 py-2 rounded-lg hover:bg-emerald-50"
-            >
-              Game
-            </Link>
-            <Link
-              to="/app/rewards"
-              className="text-slate-700 hover:text-slate-900 transition-colors px-3 py-2 rounded-lg hover:bg-emerald-50"
-            >
-              Rewards
-            </Link>
-            <Link
               to="/app/explorer"
               className="text-slate-700 hover:text-slate-900 transition-colors px-3 py-2 rounded-lg hover:bg-emerald-50"
             >
               Island Explorer
+            </Link>
+            <Link
+              to="/docs"
+              className="text-slate-700 hover:text-slate-900 transition-colors px-3 py-2 rounded-lg hover:bg-emerald-50"
+            >
+              Documentation
+            </Link>
+            <Link
+              to="/app"
+              className="text-slate-700 hover:text-slate-900 transition-colors px-3 py-2 rounded-lg hover:bg-emerald-50"
+            >
+              Support
             </Link>
           </nav>
 
@@ -58,13 +58,15 @@ export function AppHeader() {
             
             <DualWalletButton />
 
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-slate-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-full"
-            >
-              <User size={16} />
-            </Button>
+            <Link to="/app/profile">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-slate-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-full"
+              >
+                <User size={16} />
+              </Button>
+            </Link>
 
             <Button
               variant="ghost"
