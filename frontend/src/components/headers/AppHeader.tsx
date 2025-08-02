@@ -3,8 +3,12 @@ import { Button } from "../ui/button";
 import { User, Settings } from "lucide-react";
 import FluidLogo from "../FluidLogo";
 import { DualWalletButton } from "../DualWalletButton";
+import { PlayerLevelMini } from "../PlayerLevel";
+import { useAuth } from "../../hooks/useAuth";
 
 export function AppHeader() {
+  const { user, isAuthenticated } = useAuth();
+  
   return (
     <header className="top-0 left-0 right-0 z-50 backdrop-blur">
       <div className="max-w-full mx-auto">
@@ -53,6 +57,11 @@ export function AppHeader() {
 
           {/* Actions */}
           <div className="flex items-center gap-3">
+            {/* Affichage du niveau si l'utilisateur est connecté */}
+            {isAuthenticated && user && (
+              <PlayerLevelMini user={user} />
+            )}
+            
             <DualWalletButton />
 
             <Link to="/app/profile">

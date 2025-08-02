@@ -17,9 +17,11 @@ export interface UpdateIslandRequest {
   name?: string;
   islandData?: any;
   treeCount?: number;
+  totalTrees?: number;
   userTrees?: any[];
   chests?: any[];
   usedTiles?: string[];
+  healthScore?: number;
 }
 
 export type IslandResponse = any;
@@ -165,6 +167,8 @@ class IslandsService {
   }
 
   async autoSaveIsland(id: string, updateData: UpdateIslandRequest): Promise<IslandResponse> {
+    console.log('🔄 Calling auto-save API with:', { id, updateData });
+    
     const response = await fetch(`${API_BASE_URL}/islands/${id}/auto-save`, {
       method: 'PUT',
       headers: this.getAuthHeaders(),
@@ -172,10 +176,14 @@ class IslandsService {
     });
 
     if (!response.ok) {
-      throw new Error('Failed to auto-save island');
+      const errorText = await response.text();
+      console.error('Auto-save failed:', response.status, errorText);
+      throw new Error(`Failed to auto-save island: ${response.status} ${errorText}`);
     }
 
-    return response.json();
+    const result = await response.json();
+    console.log('✅ Auto-save API response:', result);
+    return result;
   }
 
   // Migration depuis localStorage

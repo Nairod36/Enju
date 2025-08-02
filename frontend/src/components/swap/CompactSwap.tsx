@@ -86,7 +86,11 @@ const TOKENS: Record<string, Token> = {
   },
 };
 
-export const CompactSwap: React.FC = () => {
+interface CompactSwapProps {
+  onSwapSuccess?: (txHash: string) => void;
+}
+
+export const CompactSwap: React.FC<CompactSwapProps> = ({ onSwapSuccess }) => {
   const { address } = useAccount();
   const { data: walletClient } = useWalletClient();
   const publicClient = usePublicClient();
@@ -237,6 +241,11 @@ export const CompactSwap: React.FC = () => {
       setTxHash(hash);
       setFromAmount("");
       setToAmount("");
+
+      // Appeler le callback de succès si fourni
+      if (onSwapSuccess) {
+        onSwapSuccess(hash);
+      }
 
       // Les balances se mettront à jour automatiquement via le hook
     } catch (err) {

@@ -10,12 +10,18 @@ interface WelcomeNewUserProps {
   onDismiss: () => void;
   userName?: string;
   islandName?: string;
+  treeCount?: number;
+  bridgeCount?: number;
+  memberSince?: string;
 }
 
 export const WelcomeNewUser: React.FC<WelcomeNewUserProps> = ({
   onDismiss,
   userName,
   islandName = "Your First Island",
+  treeCount = 0,
+  bridgeCount = 0,
+  memberSince,
 }) => {
   const { address, isConnected } = useAccount();
   const { signMessage } = useSignMessage();
@@ -194,6 +200,39 @@ export const WelcomeNewUser: React.FC<WelcomeNewUserProps> = ({
                 <Info className="h-4 w-4 mr-1" />
                 Pourquoi 2 signatures ?
               </Button>
+            </div>
+
+
+            {/* Island Stats Preview */}
+            <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
+              <h3 className="text-sm font-semibold text-gray-900 mb-3">
+                Island Properties
+              </h3>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-gray-600">
+                    Trees Planted
+                  </span>
+                  <span className="text-sm font-bold text-emerald-600">{treeCount}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-gray-600">
+                    Bridges Completed
+                  </span>
+                  <span className="text-sm font-bold text-blue-600">{bridgeCount}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-gray-600">
+                    Member Since
+                  </span>
+                  <span className="text-sm text-gray-900">
+                    {memberSince || new Date().toLocaleDateString("en-US", {
+                      month: "short",
+                      year: "numeric",
+                    })}
+                  </span>
+                </div>
+              </div>
             </div>
 
             {/* Auth Info */}

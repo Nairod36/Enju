@@ -94,4 +94,26 @@ export class UsersController {
   async updateProfile(@Request() req, @Body() updateUserDto: UpdateUserProfileDto) {
     return this.usersService.updateProfile(req.user.id, updateUserDto);
   }
+
+  @Post('me/level-up')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({
+    summary: 'Increase user level',
+    description: 'Increase user level and experience from bridge/swap activity'
+  })
+  @ApiResponse({ status: 200, description: 'Level increased successfully' })
+  async levelUp(@Request() req, @Body() body: { experience: number; activityBonus?: number }) {
+    return this.usersService.levelUp(req.user.id, body.experience, body.activityBonus);
+  }
+
+  @Post('level-up-by-address')
+  @ApiOperation({
+    summary: 'Increase user level by wallet address',
+    description: 'Increase user level and experience from bridge/swap activity using wallet address'
+  })
+  @ApiResponse({ status: 200, description: 'Level increased successfully' })
+  async levelUpByAddress(@Body() body: { walletAddress: string; experience: number; activityBonus?: number }) {
+    return this.usersService.levelUpByAddress(body.walletAddress, body.experience, body.activityBonus);
+  }
 }
