@@ -189,19 +189,22 @@ export class EthereumListener extends EventEmitter {
   private async handleNewEscrowCreated(
     escrow: string,
     hashlock: string,
-    destinationChain: number,
+    destinationChain: any, // Accept BigInt or number
     destinationAccount: string,
     amount: bigint,
     event: ethers.EventLog
   ): Promise<void> {
     const eventId = `${event.transactionHash}-${event.index}`;
 
+    // Convert BigInt to number for comparison
+    const destinationChainNum = typeof destinationChain === 'bigint' ? Number(destinationChain) : destinationChain;
+
     console.log(`🔥 INCOMING ETH EVENT: New EscrowCreated detected!`);
     console.log(`📋 Event details:`, {
       eventId,
       escrow,
       hashlock,
-      destinationChain,
+      destinationChain: destinationChainNum,
       destinationAccount,
       amount: ethers.formatEther(amount),
       txHash: event.transactionHash,
@@ -210,8 +213,8 @@ export class EthereumListener extends EventEmitter {
     });
 
     // Process NEAR (0) and TRON (1) destinations
-    if (destinationChain !== 0 && destinationChain !== 1) {
-      console.log(`⚠️ Skipping unsupported destination chain: ${destinationChain}`);
+    if (destinationChainNum !== 0 && destinationChainNum !== 1) {
+      console.log(`⚠️ Skipping unsupported destination chain: ${destinationChainNum}`);
       return;
     }
 
@@ -245,7 +248,7 @@ export class EthereumListener extends EventEmitter {
       sender: senderAddress
     });
 
-    if (destinationChain === 0) {
+    if (destinationChainNum === 0) {
       // ETH → NEAR bridge
       const bridgeEvent: EthEscrowCreatedEvent = {
         escrow,
@@ -260,7 +263,7 @@ export class EthereumListener extends EventEmitter {
       console.log(`🚀 Emitting 'escrowCreated' event to bridge-resolver:`, bridgeEvent);
       this.emit('escrowCreated', bridgeEvent);
       console.log(`✅ Event emitted successfully to bridge-resolver`);
-    } else if (destinationChain === 1) {
+    } else if (destinationChainNum === 1) {
       // ETH → TRON bridge
       console.log(`🔥 ETH → TRON bridge detected, emitting 'ethToTronBridge' event:`, {
         escrow,
