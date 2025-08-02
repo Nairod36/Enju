@@ -14,6 +14,7 @@ import {
   Wrench,
 } from "lucide-react";
 import FluidLogo from "@/components/FluidLogo";
+import { AppFooter } from "@/components/layout/AppFooter";
 
 export default function DocumentationPage() {
   return (
@@ -326,45 +327,7 @@ export default function DocumentationPage() {
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="px-4 py-12 bg-slate-50/50">
-        <div className="max-w-6xl mx-auto">
-          <div className="flex flex-col md:flex-row justify-between items-center gap-6">
-            <div className="flex items-center gap-2">
-              <FluidLogo />
-              <span className="text-slate-600 text-sm">
-                © 2024 Enju Protocol. Building the future of cross-chain DeFi.
-              </span>
-            </div>
-            <div className="flex gap-6 text-sm">
-              <Link
-                to="/"
-                className="text-slate-600 hover:text-emerald-600 transition-colors"
-              >
-                Home
-              </Link>
-              <Link
-                to="/app"
-                className="text-slate-600 hover:text-emerald-600 transition-colors"
-              >
-                App
-              </Link>
-              <a
-                href="#"
-                className="text-slate-600 hover:text-emerald-600 transition-colors"
-              >
-                GitHub
-              </a>
-              <a
-                href="#"
-                className="text-slate-600 hover:text-emerald-600 transition-colors"
-              >
-                Discord
-              </a>
-            </div>
-          </div>
-        </div>
-      </footer>
+      <AppFooter />
     </div>
   );
 }

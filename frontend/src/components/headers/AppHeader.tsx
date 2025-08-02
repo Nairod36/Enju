@@ -7,18 +7,24 @@ import { DualWalletButton } from "../DualWalletButton";
 export function AppHeader() {
   return (
     <header className="top-0 left-0 right-0 z-50 backdrop-blur">
-      <div className="max-w-full mx-auto pt-2">
+      <div className="max-w-full mx-auto">
         <div className="px-14 flex items-center justify-between border-b">
           {/* Logo & Brand */}
           <Link
             to="/app"
             className="flex items-center gap-2 hover:scale-105 transition-all duration-300"
           >
-            <FluidLogo />
+            <div className="flex flex-row items-center py-3">
+              <FluidLogo />
+              {/* Text "enju" */}
+              <div className="text-2xl pl-3 font-light text-green-800 tracking-wide">
+                enju
+              </div>
+            </div>
           </Link>
 
           {/* Navigation */}
-          <nav className="hidden md:flex items-center gap-6 text-sm">
+          <nav className="hidden md:flex items-center gap-6 text-sm pt-1 ">
             <Link
               to="/app"
               className="text-slate-700 hover:text-slate-900 transition-colors px-3 py-2 rounded-lg hover:bg-emerald-50"

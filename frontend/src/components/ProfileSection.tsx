@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react';
-import { useAccount, useSignMessage } from 'wagmi';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { User, Edit3, Save, Info, X } from 'lucide-react';
+import { useState, useEffect } from "react";
+import { useAccount, useSignMessage } from "wagmi";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { User, Edit3, Save, Info, X } from "lucide-react";
 
 interface UserProfile {
   id: string;
@@ -23,7 +23,7 @@ export function ProfileSection() {
   const { signMessage } = useSignMessage();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [isEditing, setIsEditing] = useState(false);
-  const [newUsername, setNewUsername] = useState('');
+  const [newUsername, setNewUsername] = useState("");
   const [isUpdating, setIsUpdating] = useState(false);
   const [showAuthInfo, setShowAuthInfo] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -39,22 +39,22 @@ export function ProfileSection() {
     if (!address) return;
 
     try {
-      const response = await fetch('http://localhost:3001/api/v1/auth/me', {
+      const response = await fetch("http://localhost:3001/api/v1/auth/me", {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
+          Authorization: `Bearer ${localStorage.getItem("auth_token")}`,
         },
       });
 
       if (response.ok) {
         const data = await response.json();
         setProfile(data.user);
-        setNewUsername(data.user.username || '');
+        setNewUsername(data.user.username || "");
       } else {
         // Si pas de token ou expired, essayer de se connecter automatiquement
         await connectWallet();
       }
     } catch (error) {
-      console.error('Erreur lors du chargement du profil:', error);
+      console.error("Erreur lors du chargement du profil:", error);
     }
   };
 
@@ -62,20 +62,23 @@ export function ProfileSection() {
     if (!address) return;
 
     try {
-      const response = await fetch('http://localhost:3001/api/v1/auth/connect', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ address }),
-      });
+      const response = await fetch(
+        "http://localhost:3001/api/v1/auth/connect",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ address }),
+        }
+      );
 
       if (response.ok) {
         const data = await response.json();
-        localStorage.setItem('auth_token', data.token);
+        localStorage.setItem("auth_token", data.token);
         setProfile(data.user);
-        setNewUsername(data.user.username || '');
+        setNewUsername(data.user.username || "");
       }
     } catch (error) {
-      console.error('Erreur lors de la connexion:', error);
+      console.error("Erreur lors de la connexion:", error);
     }
   };
 
@@ -92,40 +95,45 @@ export function ProfileSection() {
     try {
       // Message à signer pour prouver la propriété du wallet
       const message = `Enju - Modification pseudo: ${newUsername.trim()}\\nAdresse: ${address}\\nTimestamp: ${Date.now()}`;
-      
+
       // Signer le message (optionnel mais recommandé)
       const signature = await signMessage({ message });
 
       // Appeler l'API backend
-      const response = await fetch('http://localhost:3001/api/v1/auth/update-username', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
-        },
-        body: JSON.stringify({
-          address,
-          username: newUsername.trim(),
-          signature,
-          message,
-        }),
-      });
+      const response = await fetch(
+        "http://localhost:3001/api/v1/auth/update-username",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${localStorage.getItem("auth_token")}`,
+          },
+          body: JSON.stringify({
+            address,
+            username: newUsername.trim(),
+            signature,
+            message,
+          }),
+        }
+      );
 
       if (response.ok) {
         const data = await response.json();
-        setProfile(prev => prev ? { ...prev, username: data.user.username } : null);
+        setProfile((prev) =>
+          prev ? { ...prev, username: data.user.username } : null
+        );
         setIsEditing(false);
         setError(null);
       } else {
         const errorData = await response.json();
-        setError(errorData.message || 'Impossible de mettre à jour le pseudo');
+        setError(errorData.message || "Impossible de mettre à jour le pseudo");
       }
     } catch (error: any) {
-      console.error('Erreur lors de la mise à jour du pseudo:', error);
-      if (error.message.includes('User rejected')) {
-        setError('Signature annulée par l\'utilisateur');
+      console.error("Erreur lors de la mise à jour du pseudo:", error);
+      if (error.message.includes("User rejected")) {
+        setError("Signature annulée par l'utilisateur");
       } else {
-        setError('Erreur lors de la signature ou de la mise à jour du pseudo');
+        setError("Erreur lors de la signature ou de la mise à jour du pseudo");
       }
     } finally {
       setIsUpdating(false);
@@ -134,7 +142,7 @@ export function ProfileSection() {
 
   const cancelEdit = () => {
     setIsEditing(false);
-    setNewUsername(profile?.username || '');
+    setNewUsername(profile?.username || "");
     setError(null);
   };
 
@@ -169,10 +177,10 @@ export function ProfileSection() {
   return (
     <div className="max-w-2xl mx-auto p-6 space-y-6">
       {/* Profil principal */}
-      <Card className="border-emerald-200/80 bg-white shadow-sm">
+      <Card className="border-gray-200 bg-white shadow-sm">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <User className="h-6 w-6 text-emerald-600" />
+            <User className="h-6 w-6 text-gray-600" />
             Mon Profil
           </CardTitle>
         </CardHeader>
@@ -195,12 +203,16 @@ export function ProfileSection() {
                 <div className="flex gap-2">
                   <Button
                     onClick={handleUpdateUsername}
-                    disabled={!newUsername.trim() || newUsername.trim().length < 3 || isUpdating}
+                    disabled={
+                      !newUsername.trim() ||
+                      newUsername.trim().length < 3 ||
+                      isUpdating
+                    }
                     size="sm"
                     className="bg-emerald-600 hover:bg-emerald-700"
                   >
                     <Save className="h-4 w-4 mr-1" />
-                    {isUpdating ? 'Enregistrement...' : 'Enregistrer'}
+                    {isUpdating ? "Enregistrement..." : "Enregistrer"}
                   </Button>
                   <Button
                     onClick={cancelEdit}
@@ -216,7 +228,7 @@ export function ProfileSection() {
             ) : (
               <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
                 <span className="font-medium">
-                  {profile.username || 'Aucun pseudo défini'}
+                  {profile.username || "Aucun pseudo défini"}
                 </span>
                 <Button
                   onClick={() => setIsEditing(true)}
@@ -281,12 +293,24 @@ export function ProfileSection() {
 
           {showAuthInfo && (
             <div className="mt-4 p-4 bg-emerald-50 rounded-lg text-sm text-slate-700">
-              <p className="font-medium text-emerald-800 mb-2">Sécurité renforcée :</p>
+              <p className="font-medium text-emerald-800 mb-2">
+                Sécurité renforcée :
+              </p>
               <ul className="space-y-1 text-slate-600">
-                <li>• La signature prouve que vous êtes bien le propriétaire du wallet</li>
-                <li>• Cela empêche les modifications non autorisées de votre profil</li>
-                <li>• La signature est optionnelle mais fortement recommandée</li>
-                <li>• Votre clé privée reste sécurisée et n'est jamais transmise</li>
+                <li>
+                  • La signature prouve que vous êtes bien le propriétaire du
+                  wallet
+                </li>
+                <li>
+                  • Cela empêche les modifications non autorisées de votre
+                  profil
+                </li>
+                <li>
+                  • La signature est optionnelle mais fortement recommandée
+                </li>
+                <li>
+                  • Votre clé privée reste sécurisée et n'est jamais transmise
+                </li>
               </ul>
             </div>
           )}

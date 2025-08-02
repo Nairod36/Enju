@@ -3,7 +3,7 @@ import React, { FC } from "react";
 
 export const FluidLogo: FC = () => {
   return (
-    <div className="relative w-20 h-20">
+    <div className="relative w-12 h-12">
       {/* Cercle de fond floral */}
       <div className="absolute inset-0 animate-pulse" />
 

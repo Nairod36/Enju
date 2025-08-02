@@ -17,10 +17,8 @@ import {
   GitBranch,
 } from "lucide-react";
 import { useAccount, useBalance, useChainId } from "wagmi";
-import { useBridge } from "../../hooks/useBridge";
 import { useTokenBalances } from "../../hooks/useTokenBalances";
 import { useBridgeHistory } from "../../hooks/useBridgeHistory";
-import { RewardDisplay } from "../../components/rewards/RewardDisplay";
 import { useTronWallet } from "../../hooks/useTronWallet";
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
@@ -232,7 +230,7 @@ export function AppDashboard() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-emerald-50/30">
+    <div className="bg-gradient-to-br from-slate-50 via-white to-emerald-50/30">
       {/* Welcome overlay for new users */}
       {showWelcome && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
@@ -245,7 +243,7 @@ export function AppDashboard() {
         <div className="max-w-full pr-8 py-6 pl-20">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-black">
+              <h1 className="text-xl font-bold text-black">
                 Bridge / Swap Platform
               </h1>
               <p className="text-slate-600 mt-1">
@@ -323,8 +321,6 @@ export function AppDashboard() {
                       <span className="animate-pulse text-blue-500">
                         ⟳ Loading...
                       </span>
-                    ) : !tronConnected ? (
-                      <span className="text-gray-400">Not connected</span>
                     ) : tronBalance ? (
                       `${parseFloat(tronBalance).toFixed(2)} TRX`
                     ) : (
@@ -338,7 +334,7 @@ export function AppDashboard() {
 
                 {/* REWARD Token Balance */}
                 <div className="text-right">
-                  <div className="text-lg font-bold text-yellow-600">
+                  <div className="text-lg font-bold text-green-600">
                     {tokenBalancesLoading ? (
                       <span className="animate-pulse text-blue-500">
                         ⟳ Loading...
@@ -364,7 +360,7 @@ export function AppDashboard() {
         </div>
       </div>
 
-      <div className="flex h-[calc(85vh-80px)]">
+      <div className="flex h-[calc(105vh-105px)]">
         {/* Left Sidebar - Island Viewer */}
         <div className="w-[40%] bg-white border-r border-slate-200 flex flex-col shadow-sm">
           {/* Island Viewer */}
@@ -378,7 +374,7 @@ export function AppDashboard() {
               </p>
             </div>
 
-            <div className="flex-1">
+            <div className="h-[40vh]">
               {!isConnected ? (
                 <div className="h-full flex items-center justify-center p-8">
                   <div className="text-center">
@@ -401,7 +397,7 @@ export function AppDashboard() {
                   </div>
                 </div>
               ) : (
-                <Canvas shadows camera={{ position: [15, 5, 10], fov: 40 }}>
+                <Canvas shadows camera={{ position: [15, 5, 10], fov: 30 }}>
                   <OrbitControls
                     enablePan={true}
                     minDistance={5}
@@ -431,7 +427,7 @@ export function AppDashboard() {
           </div>
 
           {/* Island Stats */}
-          <div className="bg-gradient-to-br from-slate-50 to-white border-t border-slate-100 pr-8 py-6 pl-20">
+          <div className="bg-gradient-to-br from-slate-50 to-white border-t border-slate-100 pr-8 py-6 pl-20 h-[40vh]">
             <div className="space-y-5">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-slate-600">
@@ -511,11 +507,6 @@ export function AppDashboard() {
               )}
             </div>
           </div>
-
-          {/* Reward Display */}
-          {/* <div className="px-4 pb-4">
-            <RewardDisplay />
-          </div> */}
         </div>
 
         {/* Main Content - Bridge & Activity */}
@@ -534,18 +525,18 @@ export function AppDashboard() {
                 Connect to start bridging assets across chains
               </p>
             </div>
-          ) : activeTab === "bridge" ? (
-            <div className="sticky top-0 z-10 w-[500px]">
+          ) : (
+            <div className="sticky w-[500px] mb-24">
               <div className="px-8 py-8">
                 {/* Tab Toggle - Premium Style - Au-dessus du composant */}
                 <div className="flex justify-center mb-6">
                   <div className="relative bg-slate-50 rounded-xl p-1 border border-slate-200">
                     <div
-                      className={`absolute top-1 bottom-1 bg-white rounded-lg shadow-sm transition-all duration-300 ${
-                        activeTab === "bridge"
-                          ? "left-1 right-[50%]"
-                          : "left-[50%] right-1"
-                      }`}
+                      className="absolute top-1 bottom-1 bg-white rounded-lg shadow-sm transition-all duration-300 ease-out"
+                      style={{
+                        width: "calc(50% - 4px)",
+                        left: activeTab === "bridge" ? "4px" : "50%",
+                      }}
                     />
                     <div className="relative flex">
                       <button
@@ -574,18 +565,21 @@ export function AppDashboard() {
                   </div>
                 </div>
 
-                <ModernBridge
-                  onBridgeSuccess={() => {
-                    setTreeCount((prev) => prev + 1);
-                    setTimeout(() => {
-                      refreshHistory();
-                    }, 5000);
-                  }}
-                />
+                {/* Contenu conditionnel */}
+                {activeTab === "bridge" ? (
+                  <ModernBridge
+                    onBridgeSuccess={() => {
+                      setTreeCount((prev) => prev + 1);
+                      setTimeout(() => {
+                        refreshHistory();
+                      }, 5000);
+                    }}
+                  />
+                ) : (
+                  <CompactSwap />
+                )}
               </div>
             </div>
-          ) : (
-            <CompactSwap />
           )}
         </div>
       </div>

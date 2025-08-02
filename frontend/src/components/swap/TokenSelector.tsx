@@ -34,9 +34,11 @@ export const TokenSelector: React.FC<TokenSelectorProps> = ({
 
   // Trouver le solde du token sélectionné
   const selectedTokenKey = Object.keys(tokens).find(
-    key => tokens[key].address === selectedToken.address
+    (key) => tokens[key].address === selectedToken.address
   );
-  const selectedTokenBalance = selectedTokenKey ? balances[selectedTokenKey] : "0";
+  const selectedTokenBalance = selectedTokenKey
+    ? balances[selectedTokenKey]
+    : "0";
 
   return (
     <div className="relative">
@@ -44,7 +46,7 @@ export const TokenSelector: React.FC<TokenSelectorProps> = ({
         type="button"
         variant="outline"
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full justify-between h-12 px-3 border-2 hover:border-gray-300"
+        className="w-full justify-between h-20 px-3 border-1 hover:border-gray-300"
       >
         <div className="flex items-center space-x-2">
           <TokenLogo symbol={selectedToken.symbol} size="sm" />
