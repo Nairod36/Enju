@@ -158,11 +158,58 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
     }
   };
 
+  // Valid bridge routes
+  const validRoutes = [
+    { from: "ethereum", to: "near" },
+    { from: "ethereum", to: "tron" },
+    { from: "near", to: "ethereum" },
+    { from: "tron", to: "ethereum" },
+  ];
+
+  const isValidRoute = (from: string, to: string) => {
+    return validRoutes.some(route => route.from === from && route.to === to);
+  };
+
+  const getValidToChains = (fromChain: string) => {
+    return validRoutes
+      .filter(route => route.from === fromChain)
+      .map(route => route.to);
+  };
+
+  const getValidFromChains = (toChain: string) => {
+    return validRoutes
+      .filter(route => route.to === toChain)
+      .map(route => route.from);
+  };
+
   const handleSwapChains = () => {
-    setFromChain(toChain);
-    setToChain(fromChain);
-    // Set the converted amount as the new from amount
-    setFromAmount(conversion.convertedAmount || "");
+    // Only swap if the reverse route is valid
+    if (isValidRoute(toChain, fromChain)) {
+      setFromChain(toChain);
+      setToChain(fromChain);
+      // Set the converted amount as the new from amount
+      setFromAmount(conversion.convertedAmount || "");
+    }
+  };
+
+  const handleFromChainChange = (newFromChain: "ethereum" | "near" | "tron") => {
+    setFromChain(newFromChain);
+    
+    // If current toChain is not valid with new fromChain, auto-select first valid option
+    const validToChains = getValidToChains(newFromChain);
+    if (!validToChains.includes(toChain)) {
+      setToChain(validToChains[0] as "ethereum" | "near" | "tron");
+    }
+  };
+
+  const handleToChainChange = (newToChain: "ethereum" | "near" | "tron") => {
+    setToChain(newToChain);
+    
+    // If current fromChain is not valid with new toChain, auto-select first valid option
+    const validFromChains = getValidFromChains(newToChain);
+    if (!validFromChains.includes(fromChain)) {
+      setFromChain(validFromChains[0] as "ethereum" | "near" | "tron");
+    }
   };
 
   const handleBridge = async () => {
@@ -1723,7 +1770,7 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
                       <select
                         value={fromChain}
                         onChange={(e) =>
-                          setFromChain(
+                          handleFromChainChange(
                             e.target.value as "ethereum" | "near" | "tron"
                           )
                         }
@@ -1745,9 +1792,16 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
                   variant="ghost"
                   size="sm"
                   onClick={handleSwapChains}
-                  className="rounded-full w-8 h-8 p-0 bg-gradient-to-r from-emerald-50 to-blue-50 hover:from-emerald-100 hover:to-blue-100 border border-gray-200 shadow-sm"
+                  disabled={!isValidRoute(toChain, fromChain)}
+                  className={`rounded-full w-8 h-8 p-0 border border-gray-200 shadow-sm transition-all ${
+                    isValidRoute(toChain, fromChain)
+                      ? "bg-gradient-to-r from-emerald-50 to-blue-50 hover:from-emerald-100 hover:to-blue-100 cursor-pointer"
+                      : "bg-gray-100 cursor-not-allowed opacity-50"
+                  }`}
                 >
-                  <ArrowRightLeft className="w-4 h-4 text-emerald-600" />
+                  <ArrowRightLeft className={`w-4 h-4 ${
+                    isValidRoute(toChain, fromChain) ? "text-emerald-600" : "text-gray-400"
+                  }`} />
                 </Button>
               </div>
 
@@ -1781,15 +1835,21 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
                       <select
                         value={toChain}
                         onChange={(e) =>
-                          setToChain(
+                          handleToChainChange(
                             e.target.value as "ethereum" | "near" | "tron"
                           )
                         }
                         className="bg-transparent border-none outline-none font-semibold cursor-pointer"
                       >
-                        <option value="near">NEAR</option>
-                        <option value="ethereum">ETH</option>
-                        <option value="tron">TRX</option>
+                        {getValidToChains(fromChain).includes("near") && (
+                          <option value="near">NEAR</option>
+                        )}
+                        {getValidToChains(fromChain).includes("ethereum") && (
+                          <option value="ethereum">ETH</option>
+                        )}
+                        {getValidToChains(fromChain).includes("tron") && (
+                          <option value="tron">TRX</option>
+                        )}
                       </select>
                       <ChevronDown className="w-4 h-4 text-gray-400" />
                     </div>
@@ -1797,8 +1857,31 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
                 </div>
               </div>
 
+              {/* Invalid Route Warning */}
+              {fromChain !== toChain && !isValidRoute(fromChain, toChain) && (
+                <div className="bg-gradient-to-r from-red-50 to-orange-50 p-3 rounded-lg border border-red-200/50">
+                  <div className="text-xs">
+                    <div className="font-semibold text-red-800 mb-1 flex items-center gap-1">
+                      ❌ Bridge route not supported
+                    </div>
+                    <div className="text-red-700 mb-2">
+                      {fromChain.toUpperCase()} → {toChain.toUpperCase()} bridge is not available.
+                    </div>
+                    <div className="text-red-600 text-[11px]">
+                      <div className="font-medium mb-1">✅ Supported routes:</div>
+                      <div className="space-y-1">
+                        <div>• ETH → NEAR</div>
+                        <div>• ETH → TRON</div>
+                        <div>• NEAR → ETH</div>
+                        <div>• TRON → ETH</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Real-time Conversion Info */}
-              {fromAmount && fromChain !== toChain && (
+              {fromAmount && fromChain !== toChain && isValidRoute(fromChain, toChain) && (
                 <div className="bg-gradient-to-r from-blue-50 to-purple-50 p-2 rounded-lg border border-blue-200/50">
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-gray-600">
@@ -1957,6 +2040,7 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
                 disabled={
                   !fromAmount ||
                   isLoading ||
+                  !isValidRoute(fromChain, toChain) ||
                   (fromChain === "ethereum" && !isConnected) ||
                   (fromChain === "near" && !nearConnected) ||
                   (fromChain === "tron" && !tronConnected) ||
@@ -1971,6 +2055,8 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
                     <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                     Processing...
                   </div>
+                ) : !isValidRoute(fromChain, toChain) ? (
+                  `❌ ${fromChain.toUpperCase()} → ${toChain.toUpperCase()} bridge not supported`
                 ) : (fromChain === "ethereum" && !isConnected) ||
                   (fromChain === "near" && !nearConnected) ||
                   (fromChain === "tron" && !tronConnected) ? (
