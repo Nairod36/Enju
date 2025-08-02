@@ -201,18 +201,70 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
     if (needsEthWallet) {
       console.log("🔍 Checking Ethereum network...");
       try {
-        // First check the current network via wallet
-        const currentChainId = await window.ethereum.request({ method: 'eth_chainId' });
-        const currentChainIdDecimal = parseInt(currentChainId, 16);
-        console.log(`🔍 Current network: chainId ${currentChainIdDecimal}`);
-        updateBridgeLog(`🔍 Wallet network: chainId ${currentChainIdDecimal}`);
+        // Multiple attempts to get the correct chainId with more thorough checking
+        let currentChainId;
+        let currentChainIdDecimal;
+        let finalChainId;
+        
+        // First attempt
+        currentChainId = await window.ethereum.request({ method: 'eth_chainId' });
+        currentChainIdDecimal = parseInt(currentChainId, 16);
+        console.log(`🔍 First attempt - Current network: chainId ${currentChainIdDecimal} (hex: ${currentChainId})`);
+        
+        // Always check with ethers provider as primary source of truth
+        let providerChainId;
+        try {
+          const provider = new ethers.providers.Web3Provider(window.ethereum as any, "any");
+          const network = await provider.getNetwork();
+          providerChainId = network.chainId;
+          console.log(`🔍 Provider network: chainId ${network.chainId}, name: ${network.name || 'unknown'}`);
+        } catch (providerError) {
+          console.log("⚠️ Provider check failed:", providerError);
+          providerChainId = null;
+        }
+        
+        // If provider gives different result, use provider as truth
+        if (providerChainId && providerChainId !== currentChainIdDecimal) {
+          console.log(`🔄 Provider and wallet disagree! Provider: ${providerChainId}, Wallet: ${currentChainIdDecimal}`);
+          console.log(`🔄 Using provider chainId ${providerChainId} as source of truth`);
+          finalChainId = providerChainId;
+        } else {
+          finalChainId = currentChainIdDecimal;
+        }
+        
+        // If we still get Avalanche chainId from wallet API, do additional retries
+        if (currentChainIdDecimal === 43114 && (!providerChainId || providerChainId === 43114)) {
+          console.log("⚠️ Detected Avalanche chainId from both sources, forcing refresh...");
+          
+          // Force a fresh connection check
+          try {
+            await window.ethereum.request({ method: 'eth_requestAccounts' });
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            // Try again with fresh connection
+            currentChainId = await window.ethereum.request({ method: 'eth_chainId' });
+            currentChainIdDecimal = parseInt(currentChainId, 16);
+            console.log(`🔍 After refresh - Wallet chainId: ${currentChainIdDecimal} (hex: ${currentChainId})`);
+            
+            // Check provider again
+            const provider = new ethers.providers.Web3Provider(window.ethereum as any, "any");
+            const network = await provider.getNetwork();
+            console.log(`🔍 After refresh - Provider chainId: ${network.chainId}`);
+            
+            finalChainId = network.chainId;
+          } catch (refreshError) {
+            console.log("⚠️ Refresh attempt failed:", refreshError);
+          }
+        }
+        
+        updateBridgeLog(`🔍 Final detected network: chainId ${finalChainId}`);
         
         // Check if we need to switch to the correct network
         const expectedChainId = FORK_MAINNET_CONFIG.chainId; // 1 for mainnet fork
         
-        if (currentChainIdDecimal !== expectedChainId) {
-          console.log(`⚠️ Wrong network: ${currentChainIdDecimal}, expected: ${expectedChainId}`);
-          updateBridgeLog(`⚠️ Wrong network detected. Current: ${currentChainIdDecimal}, Expected: ${expectedChainId}`);
+        if (finalChainId !== expectedChainId) {
+          console.log(`⚠️ Wrong network: ${finalChainId}, expected: ${expectedChainId}`);
+          updateBridgeLog(`⚠️ Wrong network detected. Current: ${finalChainId}, Expected: ${expectedChainId}`);
           updateBridgeLog(`🔄 Attempting to switch to the correct network...`);
           
           try {
@@ -222,18 +274,19 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
               params: [{ chainId: `0x${expectedChainId.toString(16)}` }],
             });
             updateBridgeLog(`✅ Successfully switched to chainId ${expectedChainId}`);
-          } catch (switchError: any) {
+          } catch (switchError: unknown) {
+            const error = switchError as { code?: number; message?: string; data?: unknown };
             console.log("❌ Switch network error:", switchError);
             console.log("❌ Switch error details:", {
-              code: switchError.code,
-              message: switchError.message,
-              data: switchError.data
+              code: error.code,
+              message: error.message,
+              data: error.data
             });
-            updateBridgeLog(`❌ Switch error: ${switchError.message || switchError}`);
-            updateBridgeLog(`❌ Error code: ${switchError.code || 'unknown'}`);
+            updateBridgeLog(`❌ Switch error: ${error.message || switchError}`);
+            updateBridgeLog(`❌ Error code: ${error.code || 'unknown'}`);
             
             // If the network doesn't exist, show manual instructions
-            if (switchError.code === 4902) {
+            if (error.code === 4902) {
               updateBridgeLog(`❌ Network not found in MetaMask - trying to add it...`);
               
               try {
@@ -251,9 +304,10 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
                 updateBridgeLog(`✅ Network added successfully! Please try bridge again.`);
                 setIsLoading(false);
                 return;
-              } catch (addError: any) {
+              } catch (addError: unknown) {
+                const addErr = addError as { message?: string };
                 console.log("❌ Failed to add network:", addError);
-                updateBridgeLog(`❌ Failed to add network automatically: ${addError.message}`);
+                updateBridgeLog(`❌ Failed to add network automatically: ${addErr.message}`);
                 updateBridgeLog(`📋 Please add the fork network manually:`);
                 updateBridgeLog(`   1. Open MetaMask → Settings → Networks → Add Network`);
                 updateBridgeLog(`   2. Network Name: ${FORK_MAINNET_CONFIG.name}`);
@@ -262,7 +316,7 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
                 updateBridgeLog(`   5. Currency: ETH`);
                 updateBridgeLog(`   6. Save and switch to this network`);
               }
-            } else if (switchError.code === 4001) {
+            } else if (error.code === 4001) {
               updateBridgeLog(`❌ User rejected network switch`);
             } else {
               updateBridgeLog(`❌ Failed to switch network automatically`);
@@ -273,13 +327,13 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
             return;
           }
         } else {
-          console.log(`✅ Correct network: chainId ${currentChainIdDecimal}`);
-          updateBridgeLog(`✅ Correct network detected: chainId ${currentChainIdDecimal}`);
+          console.log(`✅ Correct network: chainId ${finalChainId}`);
+          updateBridgeLog(`✅ Correct network detected: chainId ${finalChainId}`);
           
           // Additional verification: test if we can connect to the fork RPC
           try {
             updateBridgeLog(`🔍 Verifying fork mainnet connectivity...`);
-            const provider = new ethers.providers.Web3Provider(window.ethereum as any, "any");
+            const provider = new ethers.providers.Web3Provider(window.ethereum as ethers.providers.ExternalProvider, "any");
             const network = await provider.getNetwork();
             console.log("🔍 Network details:", network);
             updateBridgeLog(`✅ Fork mainnet verified: chainId ${network.chainId}`);
@@ -1303,7 +1357,7 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
   ) => {
     const contractAddress =
       BRIDGE_CONFIG.tron?.contractAddress ||
-      "TA879tNjuFCd8w57V3BHNhsshehKn1Ks86";
+      "TPtAi88ucyJDGjY6fHTkvqVtipcKuovxMM";
 
     try {
       // Check TRON balance first

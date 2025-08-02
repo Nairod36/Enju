@@ -188,7 +188,7 @@ export class TronEventListener extends EventEmitter {
         taker: event.result.taker,
         amount: event.result.amount,
         tronMaker: event.result.tronMaker,
-        ethTaker: event.result.ethTaker,
+        ethTaker: event.result.targetAccount || event.result.ethTaker, // Use targetAccount from new contract
         txHash: txHash,
         blockNumber: Math.floor(event.block_timestamp / 1000)
       };

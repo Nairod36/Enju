@@ -24,7 +24,7 @@ export const BRIDGE_CONFIG = {
   inchLimitOrderProtocol: '0x111111125421cA6dc452d289314280a0f8842A65',
 
   tron: {
-    contractAddress: 'TA879tNjuFCd8w57V3BHNhsshehKn1Ks86',
+    contractAddress: 'TPtAi88ucyJDGjY6fHTkvqVtipcKuovxMM',
     network: 'shasta',
     rpcUrl: 'https://api.shasta.trongrid.io',
     apiKey: '5e8b38e2-9828-4737-af16-11b935808aca'

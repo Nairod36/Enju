@@ -69,7 +69,8 @@ export interface SwapRequest {
   hashlock: string;
   timelock: number;
   ethRecipient: string;
-  nearAccount: string;
+  nearAccount?: string; // Optional for TRON bridges
+  tronAddress?: string; // For ETH_TO_TRON and TRON_TO_ETH bridges
   secret?: string;
   contractId?: string; // For NEAR_TO_ETH bridges
 }

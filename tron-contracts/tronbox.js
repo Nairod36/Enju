@@ -4,14 +4,14 @@ module.exports = {
   networks: {
     shasta: {
       privateKey: process.env.TRON_PRIVATE_KEY,
-      userFeePercentage: 100,       // Max percentage for deployment
-      feeLimit: 15000 * 1e6,        // 15000 TRX limit!! (EXTREME MAX)
+      userFeePercentage: 30,        // Reasonable percentage for deployment
+      feeLimit: 1500 * 1e6,         // 1500 TRX limit (reasonable for current balance)
       fullHost: "https://api.shasta.trongrid.io",
       network_id: "2",
-      consume_user_resource_percent: 100,  // Use max user resources
+      consume_user_resource_percent: 30,  // Conservative resource usage
       name: 'shasta',
-      originEnergyLimit: 100000000,  // 100M energy limit (EXTREME MAX)
-      deployOriginEnergyLimit: 100000000,
+      originEnergyLimit: 10000000,  // 10M energy limit (TRON max allowed)
+      deployOriginEnergyLimit: 10000000,  // 10M energy limit (TRON max allowed)
       createAccountFee: 100000
     },
     development: {
@@ -28,7 +28,7 @@ module.exports = {
       version: "0.8.6",
       optimizer: {
         enabled: true,
-        runs: 1,                    // Most aggressive optimization for smaller bytecode
+        runs: 200,                  // Balanced optimization for gas vs size
         details: {
           yul: true,                // Enable Yul optimizer
           yulDetails: {
@@ -40,8 +40,9 @@ module.exports = {
       settings: {
         optimizer: {
           enabled: true,
-          runs: 1
-        }
+          runs: 200                 // Balanced optimization
+        },
+        evmVersion: "london"        // Use compatible EVM version
       }
     }
   }

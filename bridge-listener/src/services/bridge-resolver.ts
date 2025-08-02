@@ -23,7 +23,7 @@ export class BridgeResolver extends EventEmitter {
 
   // Contrats déployés
   private readonly ETH_BRIDGE_CONTRACT = '0x79fD45793DC81Da9BaB6aE577f01ba7935484C51';
-  private readonly TRON_BRIDGE_CONTRACT = 'TA879tNjuFCd8w57V3BHNhsshehKn1Ks86';
+  private readonly TRON_BRIDGE_CONTRACT = 'TPtAi88ucyJDGjY6fHTkvqVtipcKuovxMM';
   private nearToEthMap = new Map<string, string>(); // Map NEAR account → ETH address
 
   constructor(private config: ResolverConfig) {

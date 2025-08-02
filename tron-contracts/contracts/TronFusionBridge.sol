@@ -484,6 +484,102 @@ contract TronFusionBridge {
         return address(this).balance;
     }
     
+    // 🔄 COMPATIBILITY LAYER: Simple bridge function for current frontend
+    event EscrowCreated(
+        address indexed escrow,
+        bytes32 indexed hashlock,
+        string targetAccount,
+        uint256 amount,
+        string targetChain
+    );
+    
+    /**
+     * @dev Simple bridge function compatible with current frontend
+     * @param hashlock The hashlock for the HTLC
+     * @param targetAccount ETH address to receive funds
+     * @param targetChain Always "ethereum"
+     */
+    function createTronBridge(
+        bytes32 hashlock,
+        string calldata targetAccount,
+        string calldata targetChain
+    ) external payable returns (bytes32) {
+        require(msg.value > 0, "Must send TRX");
+        require(hashlock != bytes32(0), "Invalid hashlock");
+        require(_isValidEthAddress(targetAccount), "Invalid ETH address");
+        require(keccak256(bytes(targetChain)) == keccak256(bytes("ethereum")), "Only ethereum supported");
+        
+        // Generate simple order hash for compatibility
+        bytes32 orderHash = keccak256(abi.encodePacked(
+            hashlock,
+            msg.sender,
+            targetAccount,
+            msg.value,
+            block.timestamp
+        ));
+        
+        // Create simplified swap entry
+        TronTimelocks memory timelocks = TronTimelocks({
+            srcWithdrawal: uint32(block.timestamp + 30 minutes),
+            srcPublicWithdrawal: uint32(block.timestamp + 2 hours),
+            srcCancellation: uint32(block.timestamp + 6 hours),
+            srcPublicCancellation: uint32(block.timestamp + 12 hours),
+            dstWithdrawal: uint32(block.timestamp + 1 hours),
+            dstPublicWithdrawal: uint32(block.timestamp + 3 hours),
+            dstCancellation: uint32(block.timestamp + 8 hours)
+        });
+        
+        Immutables memory immutables = Immutables({
+            orderHash: orderHash,
+            hashlock: hashlock,
+            maker: msg.sender,
+            taker: address(0), // No specific taker for simple bridge
+            token: address(0), // TRX
+            amount: msg.value,
+            safetyDeposit: 0, // No safety deposit for simple bridge
+            timelocks: timelocks
+        });
+        
+        swaps[orderHash] = TronFusionSwap({
+            immutables: immutables,
+            state: SwapState.Created,
+            createdAt: block.timestamp,
+            secretRevealed: bytes32(0)
+        });
+        
+        // Emit event compatible with current bridge-listener
+        emit EscrowCreated(
+            address(this), // Use contract address as escrow
+            hashlock,
+            targetAccount,
+            msg.value,
+            targetChain
+        );
+        
+        return orderHash;
+    }
+    
+    /**
+     * @dev Simple completion function for bridge-listener
+     * @param orderHash The swap identifier
+     * @param secret The secret that generates the hashlock
+     */
+    function completeSimpleBridge(
+        bytes32 orderHash,
+        bytes32 secret
+    ) external validSecret(secret, swaps[orderHash].immutables.hashlock) {
+        TronFusionSwap storage swap = swaps[orderHash];
+        require(swap.state == SwapState.Created, "Invalid state");
+        
+        swap.state = SwapState.Completed;
+        swap.secretRevealed = secret;
+        
+        // Transfer TRX to the caller (should be bridge resolver)
+        payable(msg.sender).transfer(swap.immutables.amount);
+        
+        emit SwapCompleted(orderHash, secret, msg.sender);
+    }
+
     // Receive TRX for escrows and safety deposits
     receive() external payable {}
     fallback() external payable {}
