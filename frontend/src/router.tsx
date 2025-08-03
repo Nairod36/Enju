@@ -11,6 +11,7 @@ import ThreePage from "./pages/app/ThreePage";
 import { IslandExplorer } from "./pages/app/IslandExplorer";
 import { Rewards } from "./pages/app/Rewards";
 import { Profile } from "./pages/app/Profile";
+import { Marketplace } from "./pages/app/Marketplace";
 
 const rootRoute = createRootRoute({
   component: () => (
@@ -62,6 +63,12 @@ const profileRoute = createRoute({
   component: Profile,
 });
 
+const marketplaceRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/marketplace",
+  component: Marketplace,
+});
+
 const routeTree = rootRoute.addChildren([
   homeRoute,
   appRoute.addChildren([
@@ -69,6 +76,7 @@ const routeTree = rootRoute.addChildren([
     explorerRoute,
     rewardsRoute,
     profileRoute,
+    marketplaceRoute,
   ]),
   ThreeDGameRoute,
 ]);
