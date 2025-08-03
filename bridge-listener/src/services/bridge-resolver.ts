@@ -2,7 +2,7 @@ import { EventEmitter } from 'events';
 import { EthereumListener } from './eth-listener';
 import { NearListener } from './near-listener';
 import { TronFusionClient, FusionImmutables } from './tron-fusion-client';
-import { TronEventListener, TronEscrowEvent } from './tron-event-listener';
+import { TronEventListener, TronEscrowEvent, TronPartialFillEvent, TronPartialFillCompletedEvent } from './tron-event-listener';
 import { PriceOracle } from './price-oracle';
 import { BridgeEvent, EthEscrowCreatedEvent, NearHTLCEvent, ResolverConfig, SwapRequest } from '../types';
 import { ethers } from 'ethers';
@@ -277,6 +277,10 @@ export class BridgeResolver extends EventEmitter {
     // Handle TRON → ETH bridge initiation
     if (this.tronEventListener) {
       this.tronEventListener.on('tronEscrowCreated', this.handleTronToEthBridge.bind(this));
+      // Handle TRON Partial Fills events
+      this.tronEventListener.on('tronPartialOrderCreated', this.handleTronPartialOrderCreated.bind(this));
+      this.tronEventListener.on('tronPartialFillExecuted', this.handleTronPartialFillExecuted.bind(this));
+      this.tronEventListener.on('tronPartialFillCompleted', this.handleTronPartialFillCompleted.bind(this));
     }
 
     // Handle ETH swap completion
@@ -2064,6 +2068,216 @@ export class BridgeResolver extends EventEmitter {
       console.error('❌ Failed to complete ETH escrow withdrawal:', error);
       // Fallback: simple transfer for now
       console.log('⚠️ Using fallback direct transfer method...');
+    }
+  }
+
+  // ===============================
+  // TRON PARTIAL FILLS HANDLERS
+  // ===============================
+
+  /**
+   * Handle TRON partial order creation
+   */
+  private async handleTronPartialOrderCreated(event: any): Promise<void> {
+    console.log('🟡 Processing TRON Partial Order Created...');
+    
+    const dedupeKey = `partial-order-${event.txHash}`;
+    if (this.processedTxHashes.has(dedupeKey)) {
+      console.log(`⚠️ Partial order ${dedupeKey} already processed, skipping...`);
+      return;
+    }
+    this.processedTxHashes.add(dedupeKey);
+
+    try {
+      const partialOrder = {
+        id: event.orderHash,
+        type: 'PARTIAL_FILL_ORDER',
+        status: 'ACTIVE',
+        totalAmount: event.totalAmount,
+        minFillAmount: event.minFillAmount,
+        maxFillAmount: event.maxFillAmount,
+        remainingAmount: event.totalAmount,
+        targetChain: event.targetChain,
+        maker: event.maker,
+        fills: [],
+        createdAt: Date.now(),
+        tronTxHash: event.txHash,
+        blockNumber: event.blockNumber
+      };
+
+      // Store partial order for tracking
+      this.activeBridges.set(event.orderHash, partialOrder);
+      
+      console.log(`✅ TRON Partial Order Created: ${event.orderHash}`);
+      console.log(`📊 Total: ${event.totalAmount} TRX | Range: ${event.minFillAmount}-${event.maxFillAmount} TRX`);
+      
+      this.emit('partialOrderCreated', partialOrder);
+    } catch (error) {
+      console.error('❌ Error handling TRON partial order creation:', error);
+    }
+  }
+
+  /**
+   * Handle TRON partial fill execution
+   */
+  private async handleTronPartialFillExecuted(event: TronPartialFillEvent): Promise<void> {
+    console.log('🔵 Processing TRON Partial Fill Executed...');
+    
+    const dedupeKey = `partial-fill-${event.txHash}-${event.fillId}`;
+    if (this.processedTxHashes.has(dedupeKey)) {
+      console.log(`⚠️ Partial fill ${dedupeKey} already processed, skipping...`);
+      return;
+    }
+    this.processedTxHashes.add(dedupeKey);
+
+    try {
+      // Find the parent order
+      const parentOrder = this.activeBridges.get(event.orderHash);
+      if (!parentOrder) {
+        console.error(`❌ Parent order not found: ${event.orderHash}`);
+        return;
+      }
+
+      // Create partial fill entry
+      const partialFill = {
+        id: event.fillId,
+        orderHash: event.orderHash,
+        filler: event.filler,
+        amount: event.amount,
+        remainingAmount: event.remainingAmount,
+        targetAddress: event.targetAddress,
+        status: 'PENDING',
+        tronTxHash: event.txHash,
+        blockNumber: event.blockNumber,
+        createdAt: Date.now()
+      };
+
+      // Update parent order
+      if (!parentOrder.fills) parentOrder.fills = [];
+      parentOrder.fills.push(partialFill);
+      parentOrder.remainingAmount = event.remainingAmount;
+      
+      // Check if order is fully filled
+      if (parseFloat(event.remainingAmount) === 0) {
+        parentOrder.status = 'FULLY_FILLED';
+      }
+
+      this.activeBridges.set(event.orderHash, parentOrder);
+
+      console.log(`✅ TRON Partial Fill Executed: ${event.fillId}`);
+      console.log(`💰 Amount: ${event.amount} TRX | Remaining: ${event.remainingAmount} TRX`);
+      console.log(`🎯 Target: ${event.targetAddress} | Filler: ${event.filler}`);
+
+      // Emit event for potential cross-chain processing
+      this.emit('partialFillExecuted', {
+        ...partialFill,
+        parentOrder: parentOrder
+      });
+
+      // If this is targeting Ethereum, initiate cross-chain transfer
+      if (event.targetAddress.startsWith('0x')) {
+        await this.processPartialFillToEthereum(partialFill, parentOrder);
+      }
+
+    } catch (error) {
+      console.error('❌ Error handling TRON partial fill execution:', error);
+    }
+  }
+
+  /**
+   * Handle TRON partial fill completion
+   */
+  private async handleTronPartialFillCompleted(event: TronPartialFillCompletedEvent): Promise<void> {
+    console.log('✅ Processing TRON Partial Fill Completed...');
+    
+    const dedupeKey = `partial-fill-completed-${event.txHash}-${event.fillId}`;
+    if (this.processedTxHashes.has(dedupeKey)) {
+      console.log(`⚠️ Partial fill completion ${dedupeKey} already processed, skipping...`);
+      return;
+    }
+    this.processedTxHashes.add(dedupeKey);
+
+    try {
+      // Find the fill in active bridges
+      let parentOrder: any = null;
+      let targetFill: any = null;
+
+      for (const [orderHash, order] of this.activeBridges.entries()) {
+        if (order.fills) {
+          const fill = order.fills.find((f: any) => f.id === event.fillId);
+          if (fill) {
+            parentOrder = order;
+            targetFill = fill;
+            break;
+          }
+        }
+      }
+
+      if (!targetFill || !parentOrder) {
+        console.error(`❌ Partial fill not found: ${event.fillId}`);
+        return;
+      }
+
+      // Update fill status
+      targetFill.status = 'COMPLETED';
+      targetFill.secret = event.secret;
+      targetFill.completedAt = Date.now();
+      targetFill.completionTxHash = event.txHash;
+
+      this.activeBridges.set(parentOrder.id, parentOrder);
+
+      console.log(`✅ TRON Partial Fill Completed: ${event.fillId}`);
+      console.log(`🔑 Secret revealed for ${event.amount} TRX to ${event.filler}`);
+
+      // Emit completion event
+      this.emit('partialFillCompleted', {
+        ...targetFill,
+        parentOrder: parentOrder
+      });
+
+      // Handle any cross-chain completion logic if needed
+      // This could trigger final transfers on destination chains
+
+    } catch (error) {
+      console.error('❌ Error handling TRON partial fill completion:', error);
+    }
+  }
+
+  /**
+   * Process partial fill for cross-chain transfer to Ethereum
+   */
+  private async processPartialFillToEthereum(partialFill: any, parentOrder: any): Promise<void> {
+    console.log('🌉 Processing partial fill cross-chain to Ethereum...');
+    
+    try {
+      const trxAmount = parseFloat(partialFill.amount);
+      
+      // Convert TRX to ETH (simplified conversion)
+      const ethAmount = await this.priceOracle.convertTrxToEth(trxAmount.toString());
+      
+      console.log(`💱 Converting ${trxAmount} TRX → ${ethAmount} ETH for ${partialFill.targetAddress}`);
+
+      // For now, just log the cross-chain intent
+      // In production, this would trigger actual ETH transfer
+      console.log(`🎯 Would transfer ${ethAmount} ETH to ${partialFill.targetAddress}`);
+      console.log(`🔑 Using hashlock pattern for partial fill: ${partialFill.id}`);
+
+      // Track the cross-chain transfer
+      const crossChainTransfer = {
+        id: `cross-chain-${partialFill.id}`,
+        type: 'PARTIAL_FILL_TRON_TO_ETH',
+        fillId: partialFill.id,
+        orderHash: parentOrder.id,
+        sourceAmount: partialFill.amount,
+        targetAmount: ethAmount,
+        targetAddress: partialFill.targetAddress,
+        status: 'PENDING_CROSS_CHAIN'
+      };
+
+      this.emit('crossChainTransferInitiated', crossChainTransfer);
+
+    } catch (error) {
+      console.error('❌ Error processing partial fill to Ethereum:', error);
     }
   }
 }

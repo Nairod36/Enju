@@ -13,6 +13,26 @@ export interface TronEscrowEvent {
   blockNumber: number;
 }
 
+export interface TronPartialFillEvent {
+  orderHash: string;
+  fillId: string;
+  filler: string;
+  amount: string;
+  remainingAmount: string;
+  targetAddress: string;
+  txHash: string;
+  blockNumber: number;
+}
+
+export interface TronPartialFillCompletedEvent {
+  fillId: string;
+  secret: string;
+  filler: string;
+  amount: string;
+  txHash: string;
+  blockNumber: number;
+}
+
 export class TronEventListener extends EventEmitter {
   private tronWeb: any;
   private contract: any;
@@ -147,9 +167,9 @@ export class TronEventListener extends EventEmitter {
         return [];
       }
       
-      // Filter events by event name (in case API doesn't support event_name filter)
+      // Filter events by relevant event names for partial fills
       const filteredEvents = (data as any).data.filter((event: any) => {
-        return event.event_name === 'EscrowCreated';
+        return ['EscrowCreated', 'PartialFillExecuted', 'PartialFillCompleted', 'PartialOrderCreated'].includes(event.event_name);
       });
       
       
@@ -194,28 +214,91 @@ export class TronEventListener extends EventEmitter {
       }
       this.processedTxHashes.add(txHash);
       
-      
-      // Parse event data
-      const tronEvent: TronEscrowEvent = {
-        orderHash: event.result.orderHash,
-        hashlock: event.result.hashlock,
-        maker: event.result.maker,
-        taker: event.result.taker,
-        amount: event.result.amount,
-        tronMaker: event.result.tronMaker,
-        ethTaker: event.result.targetAccount || event.result.ethTaker, // Use targetAccount from new contract
-        txHash: txHash,
-        blockNumber: Math.floor(event.block_timestamp / 1000)
-      };
-      
-      
-      
-      // Emit event for bridge-resolver
-      this.emit('tronEscrowCreated', tronEvent);
+      // Handle different event types for partial fills
+      switch (event.event_name) {
+        case 'EscrowCreated':
+          await this.processEscrowCreatedEvent(event, txHash);
+          break;
+        case 'PartialOrderCreated':
+          await this.processPartialOrderCreatedEvent(event, txHash);
+          break;
+        case 'PartialFillExecuted':
+          await this.processPartialFillExecutedEvent(event, txHash);
+          break;
+        case 'PartialFillCompleted':
+          await this.processPartialFillCompletedEvent(event, txHash);
+          break;
+        default:
+          console.log(`ℹ️ Unknown TRON event type: ${event.event_name}`);
+      }
       
     } catch (error) {
       console.error('❌ Error processing TRON event:', error);
     }
+  }
+
+  private async processEscrowCreatedEvent(event: any, txHash: string): Promise<void> {
+    // Parse legacy escrow event data
+    const tronEvent: TronEscrowEvent = {
+      orderHash: event.result.orderHash,
+      hashlock: event.result.hashlock,
+      maker: event.result.maker,
+      taker: event.result.taker,
+      amount: event.result.amount,
+      tronMaker: event.result.tronMaker,
+      ethTaker: event.result.targetAccount || event.result.ethTaker,
+      txHash: txHash,
+      blockNumber: Math.floor(event.block_timestamp / 1000)
+    };
+    
+    console.log(`🟢 TRON EscrowCreated: ${tronEvent.orderHash}`);
+    this.emit('tronEscrowCreated', tronEvent);
+  }
+
+  private async processPartialOrderCreatedEvent(event: any, txHash: string): Promise<void> {
+    const partialOrderEvent = {
+      orderHash: event.result.orderHash,
+      maker: event.result.maker,
+      totalAmount: event.result.totalAmount,
+      minFillAmount: event.result.minFillAmount,
+      maxFillAmount: event.result.maxFillAmount,
+      targetChain: event.result.targetChain,
+      txHash: txHash,
+      blockNumber: Math.floor(event.block_timestamp / 1000)
+    };
+    
+    console.log(`🟡 TRON PartialOrderCreated: ${partialOrderEvent.orderHash}`);
+    this.emit('tronPartialOrderCreated', partialOrderEvent);
+  }
+
+  private async processPartialFillExecutedEvent(event: any, txHash: string): Promise<void> {
+    const partialFillEvent: TronPartialFillEvent = {
+      orderHash: event.result.orderHash,
+      fillId: event.result.fillId,
+      filler: event.result.filler,
+      amount: event.result.amount,
+      remainingAmount: event.result.remainingAmount,
+      targetAddress: event.result.targetAddress,
+      txHash: txHash,
+      blockNumber: Math.floor(event.block_timestamp / 1000)
+    };
+    
+    console.log(`🔵 TRON PartialFillExecuted: ${partialFillEvent.fillId} (${partialFillEvent.amount} TRX)`);
+    this.emit('tronPartialFillExecuted', partialFillEvent);
+  }
+
+  private async processPartialFillCompletedEvent(event: any, txHash: string): Promise<void> {
+    const partialFillCompletedEvent: TronPartialFillCompletedEvent = {
+      fillId: event.result.fillId,
+      secret: event.result.secret,
+      filler: event.result.filler,
+      amount: event.result.amount,
+      txHash: txHash,
+      blockNumber: Math.floor(event.block_timestamp / 1000)
+    };
+    
+    console.log(`✅ TRON PartialFillCompleted: ${partialFillCompletedEvent.fillId}`);
+    this.emit('tronPartialFillCompleted', partialFillCompletedEvent);
   }
 
   getStatus() {
