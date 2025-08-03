@@ -8,7 +8,7 @@ import { useAuth } from "../../hooks/useAuth";
 
 export function AppHeader() {
   const { user, isAuthenticated } = useAuth();
-  
+
   return (
     <header className="top-0 left-0 right-0 z-50 backdrop-blur">
       <div className="max-w-full mx-auto">
@@ -41,27 +41,13 @@ export function AppHeader() {
             >
               Island Explorer
             </Link>
-            <Link
-              to="/docs"
-              className="text-slate-700 hover:text-slate-900 transition-colors px-3 py-2 rounded-lg hover:bg-emerald-50"
-            >
-              Documentation
-            </Link>
-            <Link
-              to="/app"
-              className="text-slate-700 hover:text-slate-900 transition-colors px-3 py-2 rounded-lg hover:bg-emerald-50"
-            >
-              Support
-            </Link>
           </nav>
 
           {/* Actions */}
           <div className="flex items-center gap-3">
             {/* Affichage du niveau si l'utilisateur est connecté */}
-            {isAuthenticated && user && (
-              <PlayerLevelMini user={user} />
-            )}
-            
+            {isAuthenticated && user && <PlayerLevelMini user={user} />}
+
             <DualWalletButton />
 
             <Link to="/app/profile">

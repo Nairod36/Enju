@@ -37,10 +37,6 @@ export function useMultiChainBalance() {
     // Fetch ETH balance
     const fetchEthBalance = async () => {
         if (!address) return null;
-
-        console.log('Fetching ETH balance for address:', address);
-        console.log('Using chainId:', chainId);
-
         try {
             // Utilise le backend comme proxy pour éviter les problèmes CORS
             const response = await fetch('http://localhost:3001/api/v1/rpc/eth', {

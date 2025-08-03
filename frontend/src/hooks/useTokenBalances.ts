@@ -59,13 +59,6 @@ export function useTokenBalances() {
                 let rpcUrl = 'http://localhost:3001/api/v1/rpc/eth';
                 let tryDirectRpc = tokenAddress === '0x012EB96bcc36d3c32847dB4AC416B19Febeb9c54';
 
-                if (tryDirectRpc) {
-                    rpcUrl = 'http://vps-b11044fd.vps.ovh.net:8545/';
-                    console.log(`🌐 Trying direct RPC for REWARD token: ${rpcUrl}`);
-                } else {
-                    console.log(`🌐 Using backend RPC for ${tokenAddress}: ${rpcUrl}`);
-                }
-
                 const response = await fetch(rpcUrl, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -172,19 +165,8 @@ export function useTokenBalances() {
 
             const newBalances: TokenBalanceMap = {};
             results.forEach(({ address: tokenAddress, balance }) => {
-                if (tokenAddress === '0x012EB96bcc36d3c32847dB4AC416B19Febeb9c54') {
-                    console.log(`🎯 REWARD TOKEN PROCESSING:`, { address: tokenAddress, balance });
-                }
-
                 if (balance) {
                     newBalances[tokenAddress] = balance;
-                    if (tokenAddress === '0x012EB96bcc36d3c32847dB4AC416B19Febeb9c54') {
-                        console.log(`✅ REWARD TOKEN ADDED TO BALANCES:`, balance);
-                    }
-                } else {
-                    if (tokenAddress === '0x012EB96bcc36d3c32847dB4AC416B19Febeb9c54') {
-                        console.log(`❌ REWARD TOKEN BALANCE IS NULL/UNDEFINED`);
-                    }
                 }
             });
 

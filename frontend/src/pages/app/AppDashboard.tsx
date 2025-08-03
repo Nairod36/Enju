@@ -2,21 +2,8 @@ import { useState, useEffect, useRef } from "react";
 import { ModernBridge } from "../../components/bridge/ModernBridge";
 import { CompactSwap } from "../../components/swap/CompactSwap";
 import { Button } from "../../components/ui/button";
-import {
-  ArrowRightLeft,
-  Activity,
-  CheckCircle,
-  AlertCircle,
-  ExternalLink,
-  MapPin,
-  TrendingUp,
-  Shield,
-  Clock,
-  Zap,
-  Repeat,
-  GitBranch,
-} from "lucide-react";
-import { useAccount, useBalance, useChainId } from "wagmi";
+import { ExternalLink, MapPin, Repeat, GitBranch } from "lucide-react";
+import { useAccount, useChainId } from "wagmi";
 import { useTokenBalances } from "../../hooks/useTokenBalances";
 import { useBridgeHistory } from "../../hooks/useBridgeHistory";
 import { useTronWallet } from "../../hooks/useTronWallet";
@@ -30,10 +17,8 @@ import { WelcomeNewUser } from "../../components/welcome/WelcomeNewUser";
 import { useIslands } from "../../hooks/useIslands";
 import { useAuthContext } from "@/contexts/AuthContext";
 import { useMultiChainBalance } from "../../hooks/useMultiChainBalance";
-import { ethers } from "ethers";
 import { PlayerLevel } from "../../components/PlayerLevel";
 import { useAuth } from "../../hooks/useAuth";
-// import { useEscrowEventListener } from "../../hooks/useEscrowEventListener";
 
 export function AppDashboard() {
   // Function to get network name
@@ -50,42 +35,18 @@ export function AppDashboard() {
     }
   };
 
-  // Utility function to safely format amount
-  const formatAmount = (amount: any): number => {
-    if (!amount) return 0;
-    try {
-      if (typeof amount === "string" && amount.includes(".")) {
-        return parseFloat(amount);
-      } else {
-        return parseFloat(ethers.utils.formatEther(amount));
-      }
-    } catch (error) {
-      return parseFloat(amount.toString()) || 0;
-    }
-  };
-
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
-  const { data: balance } = useBalance({ address });
-  const { getTokenBalance, isLoading: tokenBalancesLoading } =
-    useTokenBalances();
+  const { getTokenBalance } = useTokenBalances();
   const {
     balances,
     isLoading: isLoadingBalances,
     error: balanceError,
   } = useMultiChainBalance();
   // TRON wallet hook for direct balance access
-  const {
-    balance: tronBalance,
-    isConnected: tronConnected,
-    isLoading: tronLoading,
-  } = useTronWallet();
+  const { balance: tronBalance } = useTronWallet();
 
-  const {
-    bridges: bridgeHistory,
-    isLoading: isLoadingHistory,
-    refreshHistory,
-  } = useBridgeHistory();
+  const { bridges: bridgeHistory, refreshHistory } = useBridgeHistory();
 
   const islandRef = useRef<FloatingIslandRef>(null);
 
@@ -205,19 +166,12 @@ export function AppDashboard() {
     }
   };
 
-  const [fromAmount, setFromAmount] = useState("");
-  const [toAmount, setToAmount] = useState("");
-  const [fromChain, setFromChain] = useState<"ethereum" | "near">("ethereum");
-  const [toChain, setToChain] = useState<"ethereum" | "near">("near");
-  const [nearAccount, setNearAccount] = useState("");
-  const [currentSwapHash, setCurrentSwapHash] = useState<string | null>(null);
   const [userIslandData, setUserIslandData] = useState<any>(null);
 
   const [isInitialized, setIsInitialized] = useState(false);
 
   const [treeCount, setTreeCount] = useState(0);
   const [islandSeed, setIslandSeed] = useState<number | null>(null);
-  const [mintLoading, setMintLoading] = useState(false);
   const [showWelcome, setShowWelcome] = useState(false);
   const [hasCheckedUserStatus, setHasCheckedUserStatus] = useState(false);
   const [activeTab, setActiveTab] = useState<"bridge" | "swap">("bridge");
@@ -382,7 +336,7 @@ export function AppDashboard() {
       )}
 
       {/* Header */}
-      <div className="bg-white border-b border-gray-100">
+      <div className="relative z-10 bg-white border-b border-gray-100">
         <div className="max-w-full pr-8 py-6 pl-20">
           <div className="flex items-center justify-between">
             <div>
@@ -440,17 +394,9 @@ export function AppDashboard() {
                 {/* NEAR Balance */}
                 <div className="text-right">
                   <div className="text-lg font-bold text-gray-900">
-                    {isLoadingBalances ? (
-                      <span className="animate-pulse text-blue-500">
-                        ⟳ Loading...
-                      </span>
-                    ) : balanceError ? (
-                      <span className="text-red-500">Error</span>
-                    ) : balances.near ? (
-                      `${balances.near.formatted} NEAR`
-                    ) : (
-                      "0.0000 NEAR"
-                    )}
+                    {balances.near
+                      ? `${balances.near.formatted} NEAR`
+                      : "0.0000 NEAR"}
                   </div>
                   <div className="text-xs text-gray-500">NEAR Protocol</div>
                 </div>
@@ -460,15 +406,9 @@ export function AppDashboard() {
                 {/* TRON Balance */}
                 <div className="text-right">
                   <div className="text-lg font-bold text-gray-900">
-                    {tronLoading ? (
-                      <span className="animate-pulse text-blue-500">
-                        ⟳ Loading...
-                      </span>
-                    ) : tronBalance ? (
-                      `${parseFloat(tronBalance).toFixed(2)} TRX`
-                    ) : (
-                      "0.00 TRX"
-                    )}
+                    {tronBalance
+                      ? `${parseFloat(tronBalance).toFixed(2)} TRX`
+                      : "0.00 TRX"}
                   </div>
                   <div className="text-xs text-gray-500">TRON</div>
                 </div>
@@ -478,22 +418,16 @@ export function AppDashboard() {
                 {/* REWARD Token Balance */}
                 <div className="text-right">
                   <div className="text-lg font-bold text-green-600">
-                    {tokenBalancesLoading ? (
-                      <span className="animate-pulse text-blue-500">
-                        ⟳ Loading...
-                      </span>
-                    ) : (
-                      (() => {
-                        const rewardBalance = getTokenBalance(
-                          "0x012EB96bcc36d3c32847dB4AC416B19Febeb9c54"
-                        );
-                        return rewardBalance
-                          ? `${parseFloat(rewardBalance.formatted).toFixed(
-                              4
-                            )} REWARD`
-                          : "0.0000 REWARD";
-                      })()
-                    )}
+                    {(() => {
+                      const rewardBalance = getTokenBalance(
+                        "0x012EB96bcc36d3c32847dB4AC416B19Febeb9c54"
+                      );
+                      return rewardBalance
+                        ? `${parseFloat(rewardBalance.formatted).toFixed(
+                            4
+                          )} REWARD`
+                        : "0.0000 REWARD";
+                    })()}
                   </div>
                   <div className="text-xs text-gray-500">Reward Tokens</div>
                 </div>
@@ -503,7 +437,7 @@ export function AppDashboard() {
         </div>
       </div>
 
-      <div className="flex h-[calc(105vh-105px)]">
+      <div className="flex h-[calc(110vh-125px)] xl:h-[calc(90vh-105px)]">
         {/* Left Sidebar - Island Viewer */}
         <div className="w-[40%] bg-white border-r border-slate-200 flex flex-col shadow-sm">
           {/* Island Viewer */}
@@ -536,7 +470,8 @@ export function AppDashboard() {
               </div>
             </div>
 
-            <div className="h-[40vh]">
+            {/* Island Viewer */}
+            <div className="h-full xl:h-[50vh]">
               {!isConnected ? (
                 <div className="h-full flex items-center justify-center p-8">
                   <div className="text-center">
@@ -674,7 +609,6 @@ export function AppDashboard() {
         {/* Main Content - Bridge & Activity */}
         <div className="flex items-center align-center justify-center flex-1">
           {/* Bridge Section - Sticky */}
-
           {!isConnected ? (
             <div className="text-center py-16">
               <div className="w-16 h-16 bg-gradient-to-br from-slate-100 to-slate-200 rounded-2xl mx-auto mb-4 flex items-center justify-center">
@@ -689,7 +623,7 @@ export function AppDashboard() {
             </div>
           ) : (
             <div className="sticky w-[500px] mb-24">
-              <div className="px-8 py-8">
+              <div className="px-8 pt-8">
                 {/* Tab Toggle - Premium Style - Au-dessus du composant */}
                 <div className="flex justify-center mb-6">
                   <div className="relative bg-slate-50 rounded-xl p-1 border border-slate-200">

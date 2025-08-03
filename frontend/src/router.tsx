@@ -11,7 +11,6 @@ import ThreePage from "./pages/app/ThreePage";
 import { IslandExplorer } from "./pages/app/IslandExplorer";
 import { Rewards } from "./pages/app/Rewards";
 import { Profile } from "./pages/app/Profile";
-import DocumentationPage from "./pages/DocumentationPage";
 
 const rootRoute = createRootRoute({
   component: () => (
@@ -25,12 +24,6 @@ const homeRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/",
   component: HomePage,
-});
-
-const docsRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: "/docs",
-  component: DocumentationPage,
 });
 
 const appRoute = createRoute({
@@ -71,7 +64,6 @@ const profileRoute = createRoute({
 
 const routeTree = rootRoute.addChildren([
   homeRoute,
-  docsRoute,
   appRoute.addChildren([
     appDashboardRoute,
     explorerRoute,
