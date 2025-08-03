@@ -8,6 +8,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "./RewardToken.sol";
+import "./AnimalTypeFactory.sol";
 
 /**
  * @title AnimalNFT
@@ -20,7 +21,7 @@ contract AnimalNFT is ERC721, ERC721Enumerable, ERC721URIStorage, Ownable {
     // Structure pour définir un animal
     struct Animal {
         string name;
-        AnimalType animalType;
+        uint256 animalTypeId; // ID du type d'animal dans la factory
         Rarity rarity;
         uint256 level;
         uint256 experience;
@@ -30,21 +31,6 @@ contract AnimalNFT is ERC721, ERC721Enumerable, ERC721URIStorage, Ownable {
         bool isBreeding;
         uint256 lastFeedTime;
         uint256 birthTime;
-    }
-
-    // Types d'animaux disponibles
-    enum AnimalType {
-        CAT,        // Chat
-        DOG,        // Chien
-        BIRD,       // Oiseau
-        FISH,       // Poisson
-        RABBIT,     // Lapin
-        TIGER,      // Tigre
-        FOX,        // Renard
-        ELEPHANT,   // Éléphant
-        DRAGON,     // Dragon (rare)
-        UNICORN,    // Licorne (très rare)
-        PHOENIX     // Phénix (légendaire)
     }
 
     // Niveaux de rareté
@@ -58,11 +44,10 @@ contract AnimalNFT is ERC721, ERC721Enumerable, ERC721URIStorage, Ownable {
 
     // Mappings
     mapping(uint256 => Animal) public animals;
-    mapping(AnimalType => uint256) public animalTypeTokenPrices; // Prix en RewardToken uniquement
     mapping(Rarity => uint256) public rarityMultipliers;
     
     // Événements
-    event AnimalMinted(address indexed owner, uint256 indexed tokenId, AnimalType animalType, Rarity rarity);
+    event AnimalMinted(address indexed owner, uint256 indexed tokenId, uint256 animalTypeId, Rarity rarity);
     event AnimalFed(uint256 indexed tokenId, uint256 experienceGained);
     event AnimalLevelUp(uint256 indexed tokenId, uint256 newLevel);
     event BreedingStarted(uint256 indexed parent1, uint256 indexed parent2);
@@ -70,41 +55,24 @@ contract AnimalNFT is ERC721, ERC721Enumerable, ERC721URIStorage, Ownable {
 
     // Variables d'état
     uint256 private _nextTokenId = 1;
-    string private _baseTokenURI = "https://api.enju.com/animals/";
     uint256 public constant BREEDING_COOLDOWN = 7 days;
     uint256 public constant FEED_COOLDOWN = 8 hours;
     uint256 public constant MAX_LEVEL = 100;
     bool public mintingPaused = false;
     
-    // RewardToken contract
+    // Contracts
     RewardToken public rewardToken;
+    AnimalTypeFactory public animalTypeFactory;
 
-    constructor(address initialOwner, address _rewardToken) 
+    constructor(address initialOwner, address _rewardToken, address _animalTypeFactory) 
         ERC721("Enju Animals", "ENJU") 
         Ownable(initialOwner)
     {
         rewardToken = RewardToken(_rewardToken);
-        _initializePrices();
+        animalTypeFactory = AnimalTypeFactory(_animalTypeFactory);
         _initializeRarityMultipliers();
     }
 
-    /**
-     * @dev Initialise les prix de base pour chaque type d'animal en RewardToken uniquement
-     */
-    function _initializePrices() private {
-        // Prix en RewardToken uniquement - Prix ajustés pour l'économie interne
-        animalTypeTokenPrices[AnimalType.CAT] = 10 * 10**18;      // 10 REWARD
-        animalTypeTokenPrices[AnimalType.DOG] = 10 * 10**18;      // 10 REWARD
-        animalTypeTokenPrices[AnimalType.BIRD] = 15 * 10**18;     // 15 REWARD
-        animalTypeTokenPrices[AnimalType.FISH] = 8 * 10**18;      // 8 REWARD
-        animalTypeTokenPrices[AnimalType.RABBIT] = 12 * 10**18;   // 12 REWARD
-        animalTypeTokenPrices[AnimalType.TIGER] = 25 * 10**18;    // 25 REWARD
-        animalTypeTokenPrices[AnimalType.FOX] = 18 * 10**18;      // 18 REWARD
-        animalTypeTokenPrices[AnimalType.ELEPHANT] = 35 * 10**18; // 35 REWARD
-        animalTypeTokenPrices[AnimalType.DRAGON] = 100 * 10**18;  // 100 REWARD
-        animalTypeTokenPrices[AnimalType.UNICORN] = 150 * 10**18; // 150 REWARD
-        animalTypeTokenPrices[AnimalType.PHOENIX] = 500 * 10**18; // 500 REWARD
-    }
 
     /**
      * @dev Initialise les multiplicateurs de rareté
@@ -121,19 +89,20 @@ contract AnimalNFT is ERC721, ERC721Enumerable, ERC721URIStorage, Ownable {
     /**
      * @dev Mint un nouvel animal avec des RewardTokens
      */
-    function mintAnimal(AnimalType _animalType, string memory _name) 
+    function mintAnimal(uint256 _animalTypeId, string memory _name) 
         external 
         returns (uint256) 
     {
         require(!mintingPaused, "Minting is currently paused");
         require(bytes(_name).length > 0, "Name cannot be empty");
         require(bytes(_name).length <= 20, "Name too long");
+        require(animalTypeFactory.isAnimalTypeActive(_animalTypeId), "Animal type not active");
 
         // Déterminer la rareté de manière pseudo-aléatoire
         Rarity rarity = _determineRarity();
         
         // Calculer le prix basé sur le type d'animal et la rareté
-        uint256 tokenPrice = _calculateTokenPrice(_animalType, rarity);
+        uint256 tokenPrice = _calculateTokenPrice(_animalTypeId, rarity);
         
         // Transférer les tokens depuis l'utilisateur vers le contrat
         require(rewardToken.transferFrom(msg.sender, address(this), tokenPrice), "Token transfer failed");
@@ -143,7 +112,7 @@ contract AnimalNFT is ERC721, ERC721Enumerable, ERC721URIStorage, Ownable {
         // Créer l'animal avec des stats de base aléatoires
         animals[tokenId] = Animal({
             name: _name,
-            animalType: _animalType,
+            animalTypeId: _animalTypeId,
             rarity: rarity,
             level: 1,
             experience: 0,
@@ -158,7 +127,7 @@ contract AnimalNFT is ERC721, ERC721Enumerable, ERC721URIStorage, Ownable {
         _safeMint(msg.sender, tokenId);
         _setTokenURI(tokenId, _generateTokenURI(tokenId));
 
-        emit AnimalMinted(msg.sender, tokenId, _animalType, rarity);
+        emit AnimalMinted(msg.sender, tokenId, _animalTypeId, rarity);
 
         return tokenId;
     }
@@ -224,8 +193,9 @@ contract AnimalNFT is ERC721, ERC721Enumerable, ERC721URIStorage, Ownable {
     /**
      * @dev Calcule le prix en tokens d'un animal basé sur son type et sa rareté
      */
-    function _calculateTokenPrice(AnimalType _animalType, Rarity _rarity) private view returns (uint256) {
-        uint256 basePrice = animalTypeTokenPrices[_animalType];
+    function _calculateTokenPrice(uint256 _animalTypeId, Rarity _rarity) private view returns (uint256) {
+        AnimalTypeFactory.AnimalTypeData memory animalType = animalTypeFactory.getAnimalType(_animalTypeId);
+        uint256 basePrice = animalType.basePrice;
         uint256 multiplier = rarityMultipliers[_rarity];
         return (basePrice * multiplier) / 100;
     }
@@ -254,18 +224,17 @@ contract AnimalNFT is ERC721, ERC721Enumerable, ERC721URIStorage, Ownable {
     }
 
     /**
-     * @dev Génère l'URI du token
+     * @dev Génère l'URI du token avec métadonnées 3D
      */
     function _generateTokenURI(uint256 tokenId) private view returns (string memory) {
         Animal memory animal = animals[tokenId];
-        return string(abi.encodePacked(
-            _baseTokenURI,
-            tokenId.toString(),
-            "?type=",
-            uint256(animal.animalType).toString(),
-            "&rarity=",
-            uint256(animal.rarity).toString()
-        ));
+        return animalTypeFactory.generateMetadataURI(
+            animal.animalTypeId,
+            tokenId,
+            animal.name,
+            animal.level,
+            uint256(animal.rarity)
+        );
     }
 
     /**
@@ -291,24 +260,24 @@ contract AnimalNFT is ERC721, ERC721Enumerable, ERC721URIStorage, Ownable {
     }
 
     /**
-     * @dev Définit l'URI de base pour les métadonnées
-     */
-    function setBaseURI(string memory newBaseURI) external onlyOwner {
-        _baseTokenURI = newBaseURI;
-    }
-
-    /**
-     * @dev Met à jour le prix en tokens d'un type d'animal
-     */
-    function updateAnimalPrice(AnimalType _animalType, uint256 _newPrice) external onlyOwner {
-        animalTypeTokenPrices[_animalType] = _newPrice;
-    }
-
-    /**
      * @dev Retourne le prix en tokens pour un type d'animal et une rareté donnée
      */
-    function getPrice(AnimalType _animalType, Rarity _rarity) external view returns (uint256) {
-        return _calculateTokenPrice(_animalType, _rarity);
+    function getPrice(uint256 _animalTypeId, Rarity _rarity) external view returns (uint256) {
+        return _calculateTokenPrice(_animalTypeId, _rarity);
+    }
+
+    /**
+     * @dev Retourne tous les types d'animaux actifs
+     */
+    function getActiveAnimalTypes() external view returns (uint256[] memory typeIds, AnimalTypeFactory.AnimalTypeData[] memory types) {
+        return animalTypeFactory.getActiveAnimalTypes();
+    }
+
+    /**
+     * @dev Met à jour l'adresse de la factory (uniquement le propriétaire)
+     */
+    function setAnimalTypeFactory(address _newFactory) external onlyOwner {
+        animalTypeFactory = AnimalTypeFactory(_newFactory);
     }
 
     /**

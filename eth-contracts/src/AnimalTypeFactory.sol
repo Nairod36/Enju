@@ -56,7 +56,7 @@ contract AnimalTypeFactory is Ownable {
         // Chien  
         _createAnimalType(
             "Dog",
-            "Un chien loyal et énergique, meilleur ami de l'homme",
+            "Un chien loyal et energique, meilleur ami de l'homme",
             "QmDogModel3D...",
             "QmDogImage...",
             10 * 10**18
@@ -65,7 +65,7 @@ contract AnimalTypeFactory is Ownable {
         // Oiseau
         _createAnimalType(
             "Bird", 
-            "Un oiseau coloré capable de voler haut dans le ciel",
+            "Un oiseau colore capable de voler haut dans le ciel",
             "QmBirdModel3D...",
             "QmBirdImage...",
             15 * 10**18
@@ -101,16 +101,16 @@ contract AnimalTypeFactory is Ownable {
         // Renard
         _createAnimalType(
             "Fox", 
-            "Un renard rusé avec une queue touffue",
+            "Un renard ruse avec une queue touffue",
             "QmFoxModel3D...",
             "QmFoxImage...",
             18 * 10**18
         );
 
-        // Éléphant
+        // Elephant
         _createAnimalType(
             "Elephant",
-            "Un éléphant imposant avec une mémoire exceptionnelle", 
+            "Un elephant imposant avec une memoire exceptionnelle", 
             "QmElephantModel3D...",
             "QmElephantImage...",
             35 * 10**18
@@ -119,13 +119,13 @@ contract AnimalTypeFactory is Ownable {
         // Dragon (rare)
         _createAnimalType(
             "Dragon",
-            "Un dragon légendaire cracheur de feu",
+            "Un dragon legendaire cracheur de feu",
             "QmDragonModel3D...",
             "QmDragonImage...",
             100 * 10**18
         );
 
-        // Licorne (très rare)
+        // Licorne (tres rare)
         _createAnimalType(
             "Unicorn",
             "Une licorne magique avec une corne scintillante",
@@ -134,10 +134,10 @@ contract AnimalTypeFactory is Ownable {
             150 * 10**18
         );
 
-        // Phénix (légendaire)
+        // Phenix (legendaire)
         _createAnimalType(
             "Phoenix",
-            "Un phénix immortel renaissant de ses cendres",
+            "Un phenix immortel renaissant de ses cendres",
             "QmPhoenixModel3D...",
             "QmPhoenixImage...",
             500 * 10**18
