@@ -96,7 +96,7 @@ export function Marketplace() {
         <div className="max-w-full pr-8 py-6 pl-20">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">NFT Marketplace</h1>
+              <h1 className="text-3xl font-bold text-gray-900">NFT Marketplace - Work In Progress ...</h1>
               <p className="text-sm text-gray-500 mt-1">
                 Discover, collect, and trade unique animal NFTs
               </p>
