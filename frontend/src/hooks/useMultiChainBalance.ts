@@ -38,7 +38,7 @@ export function useMultiChainBalance() {
     const fetchEthBalance = async () => {
         if (!address) return null;
         try {
-            // Utilise le backend comme proxy pour éviter les problèmes CORS
+            // Use backend as proxy to avoid CORS issues
             const response = await fetch('http://localhost:3001/api/v1/rpc/eth', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },

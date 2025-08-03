@@ -41,11 +41,17 @@ export function AppHeader() {
             >
               Island Explorer
             </Link>
+            <Link
+              to="/app/marketplace"
+              className="text-slate-700 hover:text-slate-900 transition-colors px-3 py-2 rounded-lg hover:bg-emerald-50"
+            >
+              NFT Marketplace
+            </Link>
           </nav>
 
           {/* Actions */}
           <div className="flex items-center gap-3">
-            {/* Affichage du niveau si l'utilisateur est connecté */}
+            {/* Display level if user is connected */}
             {isAuthenticated && user && <PlayerLevelMini user={user} />}
 
             <DualWalletButton />

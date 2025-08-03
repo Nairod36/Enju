@@ -67,10 +67,32 @@ export class EthereumListener extends EventEmitter {
 
     // Focus on the events that our simplified contract actually emits
     console.log('🎯 Setting up EscrowCreated event listener (main event)...');
-    this.contract.on('EscrowCreated', this.handleNewEscrowCreated.bind(this));
+    console.log(`🔍 Contract address being monitored: ${this.config.ethBridgeContract}`);
+    this.contract.on('EscrowCreated', (escrow, hashlock, destinationChain, destinationAccount, amount, event) => {
+      console.log('🔥🔥🔥 RAW EscrowCreated event received!', {
+        escrow,
+        hashlock,
+        destinationChain,
+        destinationAccount,
+        amount: amount.toString(),
+        blockNumber: event.blockNumber,
+        txHash: event.transactionHash
+      });
+      this.handleNewEscrowCreated(escrow, hashlock, destinationChain, destinationAccount, amount, event);
+    });
 
     console.log('🎯 Setting up EscrowCreatedLegacy event listener (backward compatibility)...');
-    this.contract.on('EscrowCreatedLegacy', this.handleLegacyEscrowCreated.bind(this));
+    this.contract.on('EscrowCreatedLegacy', (escrow, hashlock, nearAccount, amount, event) => {
+      console.log('🔥🔥🔥 RAW EscrowCreatedLegacy event received!', {
+        escrow,
+        hashlock,
+        nearAccount,
+        amount: amount.toString(),
+        blockNumber: event.blockNumber,
+        txHash: event.transactionHash
+      });
+      this.handleLegacyEscrowCreated(escrow, hashlock, nearAccount, amount, event);
+    });
 
     // Advanced events (if available in future updates)
     console.log('🎯 Setting up PartialFillCreated event listener...');

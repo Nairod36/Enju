@@ -137,7 +137,7 @@ export function IslandExplorer() {
         </div>
       </div>
 
-      <div className="flex h-[calc(85vh-80px)]">
+      <div className="flex h-[calc(100vh-80px)]">
         {/* Left Sidebar - Search and Filters */}
         <div className="w-[30%] bg-white border-r border-gray-200 flex flex-col">
           <div className="pr-8 py-6 pl-20 border-b border-gray-200">
@@ -212,46 +212,50 @@ export function IslandExplorer() {
         </div>
 
         {/* Main Content - Islands Grid */}
-        <div className="flex-1 bg-white flex flex-col overflow-hidden">
-          <div className="flex-1 overflow-y-auto bg-gray-50">
+        <div className="flex-1 bg-white flex flex-col min-h-0">
+          <div className="flex-1 overflow-y-auto bg-gray-50 min-h-0">
             <div className="p-8">
               {loading ? (
-                <div className="flex items-center justify-center py-20">
+                <div className="flex items-center justify-center min-h-[50vh]">
                   <div className="flex items-center">
                     <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mr-3"></div>
                     <span className="text-gray-600">Loading islands...</span>
                   </div>
                 </div>
               ) : error ? (
-                <div className="text-center py-20">
-                  <div className="w-12 h-12 bg-red-100 rounded-xl mx-auto mb-4 flex items-center justify-center">
-                    <MapPin className="w-6 h-6 text-red-400" />
+                <div className="text-center flex items-center justify-center min-h-[50vh]">
+                  <div>
+                    <div className="w-12 h-12 bg-red-100 rounded-xl mx-auto mb-4 flex items-center justify-center">
+                      <MapPin className="w-6 h-6 text-red-400" />
+                    </div>
+                    <h4 className="text-sm font-medium text-gray-900 mb-2">
+                      Error loading islands
+                    </h4>
+                    <p className="text-xs text-gray-500 mb-4">{error}</p>
+                    <Button
+                      onClick={refreshIslands}
+                      className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-lg"
+                    >
+                      Retry
+                    </Button>
                   </div>
-                  <h4 className="text-sm font-medium text-gray-900 mb-2">
-                    Error loading islands
-                  </h4>
-                  <p className="text-xs text-gray-500 mb-4">{error}</p>
-                  <Button
-                    onClick={refreshIslands}
-                    className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-lg"
-                  >
-                    Retry
-                  </Button>
                 </div>
               ) : filteredIslands.length === 0 ? (
-                <div className="text-center py-20">
-                  <div className="w-12 h-12 bg-gray-100 rounded-xl mx-auto mb-4 flex items-center justify-center">
-                    <Search className="w-6 h-6 text-gray-400" />
+                <div className="text-center flex items-center justify-center min-h-[50vh]">
+                  <div>
+                    <div className="w-12 h-12 bg-gray-100 rounded-xl mx-auto mb-4 flex items-center justify-center">
+                      <Search className="w-6 h-6 text-gray-400" />
+                    </div>
+                    <h4 className="text-sm font-medium text-gray-900 mb-2">
+                      No islands found
+                    </h4>
+                    <p className="text-xs text-gray-500">
+                      Try adjusting your search terms to find more islands.
+                    </p>
                   </div>
-                  <h4 className="text-sm font-medium text-gray-900 mb-2">
-                    No islands found
-                  </h4>
-                  <p className="text-xs text-gray-500">
-                    Try adjusting your search terms to find more islands.
-                  </p>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-8">
                   {filteredIslands.map((island) => (
                     <div
                       key={island.id}
@@ -260,9 +264,11 @@ export function IslandExplorer() {
                     >
                       {/* 3D Island Preview - Bigger */}
                       <div className="h-64 bg-gradient-to-br from-sky-100 to-emerald-50 relative">
+                        {/* Overlay to ensure click events work */}
+                        <div className="absolute inset-0 z-10 cursor-pointer" />
                         {/* My Island Badge */}
                         {isMyIsland(island) && (
-                          <div className="absolute top-3 right-3 z-10 bg-emerald-600 text-white px-3 py-1.5 rounded-full text-sm font-medium flex items-center gap-1.5">
+                          <div className="absolute top-3 right-3 z-20 bg-emerald-600 text-white px-3 py-1.5 rounded-full text-sm font-medium flex items-center gap-1.5">
                             <Crown className="w-4 h-4" />
                             My Island
                           </div>
@@ -270,6 +276,7 @@ export function IslandExplorer() {
                         <Canvas
                           shadows
                           camera={{ position: [12, 6, 12], fov: 45 }}
+                          style={{ pointerEvents: 'none' }}
                           onCreated={(state) =>
                             console.log("Canvas created", state)
                           }
@@ -374,7 +381,7 @@ export function IslandExplorer() {
           onClick={() => setSelectedIsland(null)}
         >
           <div
-            className="bg-white rounded-2xl shadow-2xl border border-gray-200 max-w-4xl w-full max-h-[90vh] overflow-hidden"
+            className="bg-white rounded-2xl shadow-2xl border border-gray-200 max-w-4xl w-full max-h-[90vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header - AppDashboard style */}
@@ -489,7 +496,7 @@ export function IslandExplorer() {
                 </div>
 
                 {/* Island Features */}
-                <div className="flex-1 p-6 overflow-y-auto">
+                <div className="flex-1 p-6 overflow-y-scroll">
                   <h3 className="text-md font-semibold text-gray-900 mb-4">
                     Island Features
                   </h3>

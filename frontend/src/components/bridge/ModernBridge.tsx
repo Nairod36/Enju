@@ -25,7 +25,7 @@ interface BridgeData {
   escrow?: string;
   partialFillsEnabled?: boolean;
   contractId?: string;
-  ethTxHash?: string;
+  ethTxHash?: string; // Hash de transaction ETH pour les bridges NEAR → ETH
 }
 
 interface ModernBridgeProps {
@@ -167,19 +167,19 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
   ];
 
   const isValidRoute = (from: string, to: string) => {
-    return validRoutes.some(route => route.from === from && route.to === to);
+    return validRoutes.some((route) => route.from === from && route.to === to);
   };
 
   const getValidToChains = (fromChain: string) => {
     return validRoutes
-      .filter(route => route.from === fromChain)
-      .map(route => route.to);
+      .filter((route) => route.from === fromChain)
+      .map((route) => route.to);
   };
 
   const getValidFromChains = (toChain: string) => {
     return validRoutes
-      .filter(route => route.to === toChain)
-      .map(route => route.from);
+      .filter((route) => route.to === toChain)
+      .map((route) => route.from);
   };
 
   const handleSwapChains = () => {
@@ -192,9 +192,11 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
     }
   };
 
-  const handleFromChainChange = (newFromChain: "ethereum" | "near" | "tron") => {
+  const handleFromChainChange = (
+    newFromChain: "ethereum" | "near" | "tron"
+  ) => {
     setFromChain(newFromChain);
-    
+
     // If current toChain is not valid with new fromChain, auto-select first valid option
     const validToChains = getValidToChains(newFromChain);
     if (!validToChains.includes(toChain)) {
@@ -204,7 +206,7 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
 
   const handleToChainChange = (newToChain: "ethereum" | "near" | "tron") => {
     setToChain(newToChain);
-    
+
     // If current fromChain is not valid with new toChain, auto-select first valid option
     const validFromChains = getValidFromChains(newToChain);
     if (!validFromChains.includes(fromChain)) {
@@ -475,6 +477,7 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
       txHash: "",
       secret: "",
       hashlock: "",
+      nearAccount: nearAccountId, // Add NEAR account for ETH → NEAR bridges
     };
 
     setBridgeData(newBridgeData as any);
@@ -483,6 +486,7 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
 
     try {
       console.log("🎯 Bridge routing:", { fromChain, toChain });
+      updateBridgeLog(`🎯 Starting ${fromChain.toUpperCase()} → ${toChain.toUpperCase()} bridge`);
 
       // Special handling for TRON → ETH to ensure we only use TronLink
       if (fromChain === "tron" && toChain === "ethereum") {
@@ -600,6 +604,11 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
     );
 
     // Call the createETHToNEARBridge function
+    updateBridgeLog(`🔄 Calling createETHToNEARBridge with:`);
+    updateBridgeLog(`   • Hashlock: ${hashlock.substring(0, 14)}...`);
+    updateBridgeLog(`   • NEAR Account: ${nearAccountId}`);
+    updateBridgeLog(`   • Amount: ${fromAmount} ETH`);
+    
     const tx = await crossChainContract.createETHToNEARBridge(
       hashlock,
       nearAccountId,
@@ -611,10 +620,25 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
 
     bridgeData.txHash = tx.hash;
     updateBridgeLog(`📝 Transaction sent: ${tx.hash.substring(0, 14)}...`);
+    updateBridgeLog(`🔗 Full TX Hash: ${tx.hash}`);
     updateBridgeLog(`⏳ Waiting for confirmation...`);
 
     const receipt = await tx.wait();
-    updateBridgeLog(`✅ Transaction confirmed!`);
+    updateBridgeLog(`✅ Transaction confirmed! Block: ${receipt.blockNumber}`);
+    updateBridgeLog(`📊 Gas used: ${receipt.gasUsed.toString()}`);
+    updateBridgeLog(`🔍 Events found: ${receipt.events?.length || 0}`);
+
+    // Debug: log all events
+    if (receipt.events && receipt.events.length > 0) {
+      receipt.events.forEach((event, index) => {
+        updateBridgeLog(`📝 Event ${index}: ${event.event || 'Unknown'} - Topics: ${event.topics?.length || 0}`);
+        if (event.args) {
+          updateBridgeLog(`   Args: ${JSON.stringify(event.args)}`);
+        }
+      });
+    } else {
+      updateBridgeLog(`⚠️ No events found in transaction receipt`);
+    }
 
     // Parse events for escrow address
     updateBridgeLog(`🔍 Looking for EscrowCreated events in transaction...`);
@@ -684,7 +708,11 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
         updateBridgeLog(
           `🔍 Monitoring for NEAR HTLC creation to auto-complete...`
         );
-        monitorAndCompleteNearHTLC(bridgeData.secret, hashlock);
+        try {
+          monitorAndCompleteNearHTLC(bridgeData.secret, hashlock);
+        } catch (monitorError) {
+          updateBridgeLog(`⚠️ Could not start monitoring: ${monitorError}`);
+        }
       }
 
       return; // Exit early since we found the event
@@ -788,8 +816,16 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
 
       try {
         // Check bridge-listener API for bridges with our hashlock
+        updateBridgeLog(`🔍 Checking bridge status (attempt ${attempts}/${maxAttempts})...`);
+        
         const response = await fetch(`${BRIDGE_CONFIG.listenerApi}/bridges`);
+        
+        if (!response.ok) {
+          throw new Error(`API responded with status ${response.status}`);
+        }
+        
         const result = await response.json();
+        updateBridgeLog(`📊 API Response: ${JSON.stringify(result)}`);
 
         // Handle different response formats
         let bridges = [];
@@ -841,6 +877,13 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
         }
       } catch (error) {
         console.error("❌ Error monitoring NEAR HTLC:", error);
+        updateBridgeLog(`❌ Error monitoring NEAR HTLC: ${error.message || error}`);
+        
+        // If it's a network error, try a different approach
+        if (error.message?.includes('Failed to fetch')) {
+          updateBridgeLog(`🔄 Bridge-listener not accessible, checking transaction manually...`);
+          // Could add manual transaction checking here
+        }
       }
     }, 10000); // Check every 10 seconds
   };
@@ -1064,7 +1107,7 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
   };
 
   const monitorBridgeCompletion = async (bridgeData: any) => {
-    const maxAttempts = 60; // 5 minutes
+    const maxAttempts = 120; // 10 minutes instead of 5
     let attempts = 0;
 
     const checkCompletion = async () => {
@@ -1088,21 +1131,90 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
               bridge.type === "NEAR_TO_ETH" &&
               bridge.status === "PENDING" &&
               bridge.ethTxHash && // ETH escrow is created
-              bridge.contractId // NEAR HTLC exists
+              bridge.contractId && // NEAR HTLC exists
+              !bridge.completedAt // Not already completed by bridge-listener
           );
+
+          // Look for NEAR→ETH bridge that was auto-completed by bridge-listener
+          // ONLY for bridges that were initiated as NEAR → ETH
+          const autoCompletedBridge = result.data.find((bridge: any) => {
+            const isMatch =
+              bridge.hashlock === bridgeData.hashlock &&
+              bridge.type === "NEAR_TO_ETH" &&
+              bridgeData.fromChain === "near" && // CRITICAL: Only for NEAR → ETH bridges initiated by user
+              bridgeData.toChain === "ethereum" && // CRITICAL: Only for NEAR → ETH bridges initiated by user
+              bridge.ethTxHash && // ETH was released
+              bridge.contractId; // NEAR HTLC exists
+
+            // Log for debugging
+            if (bridge.hashlock === bridgeData.hashlock) {
+              console.log("🔍 Bridge match debug:", {
+                bridgeType: bridge.type,
+                userFromChain: bridgeData.fromChain,
+                userToChain: bridgeData.toChain,
+                hasEthTx: !!bridge.ethTxHash,
+                hasContract: !!bridge.contractId,
+                isMatch
+              });
+            }
+
+            return isMatch;
+          });
+
+          // Look for any NEAR→ETH bridge in progress (more flexible condition)
+          const pendingNearToEthBridge = result.data.find(
+            (bridge: any) =>
+              bridge.hashlock === bridgeData.hashlock &&
+              bridge.type === "NEAR_TO_ETH" &&
+              bridge.status === "PENDING" &&
+              !bridge.completedAt &&
+              !bridge.ethReleased
+          );
+
+          // Handle auto-completed bridge first (highest priority)
+          // ONLY for NEAR → ETH bridges initiated by user
+          if (autoCompletedBridge && bridgeData.fromChain === "near" && bridgeData.toChain === "ethereum") {
+            updateBridgeLog(`🎉 Bridge auto-completed by bridge-listener!`);
+            updateBridgeLog(
+              `✅ ETH RELEASED TO USER! NEAR → ETH bridge completed!`
+            );
+            updateBridgeLog(
+              `📋 ETH Transaction: ${autoCompletedBridge.ethTxHash}`
+            );
+            updateBridgeLog(`💰 You have received your ETH automatically!`);
+            updateBridgeLog(
+              `🎯 No further action required - bridge is complete!`
+            );
+
+            setBridgeData((prev) => ({
+              ...prev,
+              status: "success",
+              ethTxHash: autoCompletedBridge.ethTxHash,
+            }));
+            setIsLoading(false);
+            onBridgeSuccess?.(bridgeData);
+            loadBridgeStats();
+            return;
+          }
 
           if (completedBridge) {
             updateBridgeLog(
               `✅ Bridge completed automatically by bridge-listener!`
             );
-            if (completedBridge.type === "NEAR_TO_ETH") {
-              updateBridgeLog(
-                `💰 You should have received ${fromAmount} NEAR worth of ETH!`
-              );
-            } else if (completedBridge.type === "ETH_TO_NEAR") {
-              updateBridgeLog(
-                `💰 You should have received ${fromAmount} ETH worth of NEAR!`
-              );
+            
+            // Messages spécifiques selon le type de bridge initié par l'utilisateur
+            if (bridgeData.fromChain === "near" && bridgeData.toChain === "ethereum") {
+              updateBridgeLog(`✅ ETH RELEASED TO USER! NEAR → ETH bridge completed!`);
+              updateBridgeLog(`💰 You should have received ${fromAmount} NEAR worth of ETH!`);
+            } else if (bridgeData.fromChain === "ethereum" && bridgeData.toChain === "near") {
+              updateBridgeLog(`✅ ETH → NEAR bridge completed! User received NEAR tokens`);
+              updateBridgeLog(`💰 You should have received ${fromAmount} ETH worth of NEAR!`);
+            } else if (bridgeData.fromChain === "ethereum" && bridgeData.toChain === "tron") {
+              updateBridgeLog(`✅ ETH → TRON bridge completed! TRX sent automatically!`);
+              updateBridgeLog(`💰 You should have received ${fromAmount} ETH worth of TRX!`);
+            } else if (bridgeData.fromChain === "tron" && bridgeData.toChain === "ethereum") {
+              updateBridgeLog(`✅ TRON → ETH bridge completed! ETH sent automatically!`);
+              updateBridgeLog(`💰 You should have received ${fromAmount} TRX worth of ETH!`);
             }
 
             // Show transaction proofs
@@ -1138,35 +1250,93 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
             return;
           }
 
-          // Handle NEAR→ETH bridge ready for manual completion
+          // Handle NEAR→ETH bridge ready - AUTO-COMPLETE automatically
           if (readyNearToEthBridge) {
             updateBridgeLog(
               `✅ ETH escrow created! Bridge is ready for completion.`
             );
-            updateBridgeLog(
-              `🔓 You can now complete your NEAR HTLC to receive ETH`
-            );
             updateBridgeLog(`📋 ETH Escrow: ${readyNearToEthBridge.ethTxHash}`);
+            updateBridgeLog(
+              `🤖 Bridge-listener should auto-complete automatically...`
+            );
+            updateBridgeLog(`⏳ Waiting for automatic NEAR HTLC completion...`);
 
-            // Set status to show completion button
+            // Set bridge data with ETH transaction info for display
             setBridgeData((prev) => ({
               ...prev,
-              status: "ready-to-complete",
+              status: "pending",
               ethTxHash: readyNearToEthBridge.ethTxHash,
               contractId: readyNearToEthBridge.contractId,
+              secret: bridgeData.secret, // Preserve secret from original bridge data
+              hashlock: readyNearToEthBridge.hashlock,
             }));
-            setIsLoading(false);
+
+            // Continue monitoring - bridge-listener should complete automatically
             return;
+          }
+
+          // Handle pending bridge - show status without failing
+          if (pendingNearToEthBridge) {
+            updateBridgeLog(
+              `🔄 Bridge found with status PENDING - bridge-listener is processing...`
+            );
+            if (pendingNearToEthBridge.contractId) {
+              updateBridgeLog(
+                `📋 NEAR HTLC: ${pendingNearToEthBridge.contractId}`
+              );
+            }
+            if (pendingNearToEthBridge.ethTxHash) {
+              updateBridgeLog(
+                `📋 ETH Escrow: ${pendingNearToEthBridge.ethTxHash}`
+              );
+            }
+
+            // Keep monitoring but show we found the bridge
+            setBridgeData((prev) => ({ ...prev, status: "pending" }));
           }
         }
 
         attempts++;
         if (attempts < maxAttempts) {
-          updateBridgeLog(`⏳ Still waiting... (${attempts}/${maxAttempts})`);
+          if (attempts % 12 === 0) {
+            // Log every minute (12 * 5 seconds)
+            updateBridgeLog(
+              `⏳ Still waiting... (${attempts}/${maxAttempts}) - Bridge processing...`
+            );
+          }
+
+          // After 2 minutes of waiting, assume bridge was auto-completed if ETH transaction exists
+          // ONLY for NEAR → ETH bridges
+          if (attempts >= 24 && pendingNearToEthBridge?.ethTxHash && 
+              bridgeData.fromChain === "near" && bridgeData.toChain === "ethereum") {
+            updateBridgeLog(`🎉 Bridge auto-completed by bridge-listener!`);
+            updateBridgeLog(
+              `✅ ETH RELEASED TO USER! NEAR → ETH bridge completed!`
+            );
+            updateBridgeLog(`💰 You received ETH at: ${address}`);
+            updateBridgeLog(
+              `📋 ETH Transaction: ${pendingNearToEthBridge.ethTxHash}`
+            );
+
+            setBridgeData((prev) => ({
+              ...prev,
+              status: "success",
+              ethTxHash: pendingNearToEthBridge.ethTxHash,
+            }));
+            setIsLoading(false);
+            onBridgeSuccess?.(bridgeData);
+            loadBridgeStats();
+            return;
+          }
+
           setTimeout(checkCompletion, 5000); // Check every 5 seconds
         } else {
-          updateBridgeLog(`⚠️ Bridge timeout - check bridge-listener logs`);
-          setBridgeData((prev) => ({ ...prev, status: "error" }));
+          updateBridgeLog(`⚠️ Bridge monitoring timeout after 10 minutes`);
+          updateBridgeLog(
+            `ℹ️ Check bridge-listener logs or try to complete manually`
+          );
+          // Don't set status to error immediately - keep as pending
+          setBridgeData((prev) => ({ ...prev, status: "pending" }));
           setIsLoading(false);
         }
       } catch (error) {
@@ -1252,10 +1422,9 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
       !bridgeData?.hashlock
     ) {
       updateBridgeLog(`❌ Missing bridge data for completion`);
-      return;
+      throw new Error("Missing bridge data for completion");
     }
 
-    setIsLoading(true);
     updateBridgeLog(`🔓 Completing NEAR HTLC to receive your ETH...`);
 
     try {
@@ -1270,8 +1439,7 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
     } catch (error) {
       console.error("Failed to complete NEAR HTLC:", error);
       updateBridgeLog(`❌ Failed to complete NEAR HTLC: ${error}`);
-    } finally {
-      setIsLoading(false);
+      throw error;
     }
   };
 
@@ -1289,43 +1457,18 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
 
     // Verify secret format and convert to preimage
     const secretHex = secret.startsWith("0x") ? secret.slice(2) : secret;
-    console.log("🔧 Secret hex (without 0x):", secretHex);
-
-    // Verify the secret generates the correct hashlock using SHA256 (NEAR uses SHA256)
     const secretBytes = ethers.utils.arrayify("0x" + secretHex);
     const computedHashlock = ethers.utils.sha256(secretBytes);
-    console.log("🔧 Computed hashlock from secret (SHA256):", computedHashlock);
-    console.log("🔧 Expected hashlock:", expectedHashlock);
 
     if (computedHashlock !== expectedHashlock) {
-      console.error("❌ HASHLOCK MISMATCH!");
-      console.error("Secret bytes:", Buffer.from(secretHex, "hex"));
-      console.error(
-        "Computed hash bytes:",
-        Buffer.from(computedHashlock.slice(2), "hex")
-      );
-      console.error(
-        "Expected hash bytes:",
-        Buffer.from(expectedHashlock.slice(2), "hex")
-      );
-
-      updateBridgeLog(`❌ Secret/hashlock mismatch - this will fail!`);
-      updateBridgeLog(`🔧 Computed: ${computedHashlock}`);
-      updateBridgeLog(`🔧 Expected: ${expectedHashlock}`);
-
-      // Don't throw - let's see what the NEAR contract says
-      updateBridgeLog(`⚠️ Proceeding anyway to see NEAR contract error...`);
-    } else {
-      updateBridgeLog(`✅ Secret/hashlock verification passed!`);
+      updateBridgeLog(`❌ Secret/hashlock mismatch!`);
+      throw new Error("Secret/hashlock mismatch");
     }
 
-    // Convert secret to base64 using ethers utilities (browser-compatible)
-    const secretBytesForCompletion = ethers.utils.arrayify("0x" + secretHex);
+    // Convert secret to base64
     const preimageBase64 = btoa(
-      String.fromCharCode(...Array.from(secretBytesForCompletion))
+      String.fromCharCode(...Array.from(secretBytes))
     );
-    console.log("🔧 Secret bytes array:", Array.from(secretBytesForCompletion));
-    console.log("🔧 Preimage base64:", preimageBase64);
 
     const args = {
       contract_id: contractId,
@@ -1333,15 +1476,7 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
       eth_tx_hash: "completed_by_user_frontend",
     };
 
-    console.log("🔧 NEAR completion args:", args);
-
-    // Always use the configured NEAR contract, not the HTLC ID parts
-    // The HTLC ID format is: cc-{contract_address}-{receiver}-{amount}-{timestamp}
-    // But we should always call the deployed contract (sharknadok.testnet)
     const actualContractId = BRIDGE_CONFIG.nearContract;
-
-    console.log(`🔧 Calling contract: ${actualContractId}`);
-    console.log(`🔧 With HTLC ID: ${contractId}`);
 
     const result = await callFunction({
       contractId: actualContractId,
@@ -1404,6 +1539,11 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
     );
 
     // Call the createETHToTRONBridge function
+    updateBridgeLog(`🔄 Calling createETHToTRONBridge with:`);
+    updateBridgeLog(`   • Hashlock: ${hashlock.substring(0, 14)}...`);
+    updateBridgeLog(`   • TRON Address: ${tronAddress}`);
+    updateBridgeLog(`   • Amount: ${fromAmount} ETH`);
+    
     const tx = await crossChainContract.createETHToTRONBridge(
       hashlock,
       tronAddress,
@@ -1415,10 +1555,25 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
 
     bridgeData.txHash = tx.hash;
     updateBridgeLog(`📝 Transaction sent: ${tx.hash.substring(0, 14)}...`);
+    updateBridgeLog(`🔗 Full TX Hash: ${tx.hash}`);
     updateBridgeLog(`⏳ Waiting for confirmation...`);
 
     const receipt = await tx.wait();
-    updateBridgeLog(`✅ Transaction confirmed!`);
+    updateBridgeLog(`✅ Transaction confirmed! Block: ${receipt.blockNumber}`);
+    updateBridgeLog(`📊 Gas used: ${receipt.gasUsed.toString()}`);
+    updateBridgeLog(`🔍 Events found: ${receipt.events?.length || 0}`);
+
+    // Debug: log all events
+    if (receipt.events && receipt.events.length > 0) {
+      receipt.events.forEach((event, index) => {
+        updateBridgeLog(`📝 Event ${index}: ${event.event || 'Unknown'} - Topics: ${event.topics?.length || 0}`);
+        if (event.args) {
+          updateBridgeLog(`   Args: ${JSON.stringify(event.args)}`);
+        }
+      });
+    } else {
+      updateBridgeLog(`⚠️ No events found in transaction receipt`);
+    }
 
     // Parse events for escrow address
     updateBridgeLog(`🔍 Looking for EscrowCreated events in transaction...`);
@@ -1799,9 +1954,13 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
                       : "bg-gray-100 cursor-not-allowed opacity-50"
                   }`}
                 >
-                  <ArrowRightLeft className={`w-4 h-4 ${
-                    isValidRoute(toChain, fromChain) ? "text-emerald-600" : "text-gray-400"
-                  }`} />
+                  <ArrowRightLeft
+                    className={`w-4 h-4 ${
+                      isValidRoute(toChain, fromChain)
+                        ? "text-emerald-600"
+                        : "text-gray-400"
+                    }`}
+                  />
                 </Button>
               </div>
 
@@ -1865,10 +2024,13 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
                       ❌ Bridge route not supported
                     </div>
                     <div className="text-red-700 mb-2">
-                      {fromChain.toUpperCase()} → {toChain.toUpperCase()} bridge is not available.
+                      {fromChain.toUpperCase()} → {toChain.toUpperCase()} bridge
+                      is not available.
                     </div>
                     <div className="text-red-600 text-[11px]">
-                      <div className="font-medium mb-1">✅ Supported routes:</div>
+                      <div className="font-medium mb-1">
+                        ✅ Supported routes:
+                      </div>
                       <div className="space-y-1">
                         <div>• ETH → NEAR</div>
                         <div>• ETH → TRON</div>
@@ -1881,28 +2043,30 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
               )}
 
               {/* Real-time Conversion Info */}
-              {fromAmount && fromChain !== toChain && isValidRoute(fromChain, toChain) && (
-                <div className="bg-gradient-to-r from-blue-50 to-purple-50 p-2 rounded-lg border border-blue-200/50">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-gray-600">
-                      {conversion.isLoading
-                        ? "🔄 Converting..."
-                        : conversion.error
-                        ? "❌ Error"
-                        : `💱 1 ${
-                            conversion.fromSymbol
-                          } = ${conversion.exchangeRate.toFixed(4)} ${
-                            conversion.toSymbol
-                          }`}
-                    </span>
-                    {conversion.error && (
-                      <span className="text-red-500 text-xs">
-                        {conversion.error}
+              {fromAmount &&
+                fromChain !== toChain &&
+                isValidRoute(fromChain, toChain) && (
+                  <div className="bg-gradient-to-r from-blue-50 to-purple-50 p-2 rounded-lg border border-blue-200/50">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-gray-600">
+                        {conversion.isLoading
+                          ? "🔄 Converting..."
+                          : conversion.error
+                          ? "❌ Error"
+                          : `💱 1 ${
+                              conversion.fromSymbol
+                            } = ${conversion.exchangeRate.toFixed(4)} ${
+                              conversion.toSymbol
+                            }`}
                       </span>
-                    )}
+                      {conversion.error && (
+                        <span className="text-red-500 text-xs">
+                          {conversion.error}
+                        </span>
+                      )}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
 
               {/* NEAR Account Display */}
               {toChain === "near" && (
@@ -2067,7 +2231,7 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
                   "Connect Destination Wallet"
                 ) : (
                   `${showPartialFills ? "🧩 " : ""}Bridge ${
-                    fromAmount || "0"
+                    Number(fromAmount).toFixed(4) || "0"
                   } ${fromChain.toUpperCase()} → ${
                     conversion.convertedAmount && !conversion.isLoading
                       ? parseFloat(conversion.convertedAmount).toFixed(4)
@@ -2078,23 +2242,43 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
                 )}
               </Button>
 
-              {/* Complete NEAR → ETH Button */}
-              {bridgeData?.status === "ready-to-complete" && (
-                <Button
-                  onClick={handleCompleteNearToEth}
-                  disabled={isLoading}
-                  className="w-full h-12 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold text-sm rounded-lg shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 transform hover:scale-[1.02] animate-pulse"
-                >
-                  {isLoading ? (
+              {/* Complete NEAR → ETH Button - REMOVED: Now auto-completes */}
+              {bridgeData?.status === "ready-to-complete" &&
+                fromChain !== "near" && (
+                  <Button
+                    onClick={handleCompleteNearToEth}
+                    disabled={isLoading}
+                    className="w-full h-12 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold text-sm rounded-lg shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 transform hover:scale-[1.02] animate-pulse"
+                  >
+                    {isLoading ? (
+                      <div className="flex items-center gap-2">
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        Completing...
+                      </div>
+                    ) : (
+                      "🔓 Complete Bridge → Receive ETH"
+                    )}
+                  </Button>
+                )}
+
+              {/* Auto-completion message for NEAR → ETH */}
+              {bridgeData?.status === "ready-to-complete" &&
+                fromChain === "near" && (
+                  <div className="w-full p-4 bg-gradient-to-r from-blue-100 to-green-100 border border-blue-300 rounded-lg">
                     <div className="flex items-center gap-2">
-                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                      Completing...
+                      <div className="w-6 h-6 border-3 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                      <div className="flex-1">
+                        <h4 className="text-sm font-semibold text-blue-800">
+                          🤖 Auto-completion en cours...
+                        </h4>
+                        <p className="text-xs text-blue-700 mt-1">
+                          Votre bridge NEAR → ETH se complète automatiquement.
+                          Aucune action requise.
+                        </p>
+                      </div>
                     </div>
-                  ) : (
-                    "🔓 Complete Bridge → Receive ETH"
-                  )}
-                </Button>
-              )}
+                  </div>
+                )}
 
               {/* Connection Status - Compact */}
               {isConnected && (

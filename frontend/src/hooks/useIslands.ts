@@ -10,7 +10,7 @@ export const useIslands = () => {
   const [hasLoaded, setHasLoaded] = useState(false);
   const { isAuthenticated } = useAuthContext();
 
-  // Charger les îles de l'utilisateur
+  // Load user's islands
   const loadMyIslands = async () => {
     if (!isAuthenticated || hasLoaded) return;
     
@@ -20,7 +20,7 @@ export const useIslands = () => {
       const userIslands = await islandsService.getMyIslands();
       setIslands(userIslands);
       
-      // Trouver l'île active
+      // Find active island
       const active = userIslands.find(island => island.isActive);
       setActiveIsland(active || null);
       setHasLoaded(true);
@@ -32,7 +32,7 @@ export const useIslands = () => {
     }
   };
 
-  // Charger l'île active
+  // Load active island
   const loadActiveIsland = async () => {
     if (!isAuthenticated) return;
     
@@ -44,7 +44,7 @@ export const useIslands = () => {
     }
   };
 
-  // S'assurer que l'utilisateur a une île
+  // Ensure user has an island
   const ensureUserHasIsland = async (): Promise<IslandResponse | null> => {
     if (!isAuthenticated) {
       setError('Must be authenticated to access island');
@@ -57,7 +57,7 @@ export const useIslands = () => {
       const island = await islandsService.ensureUserHasIsland();
       setActiveIsland(island);
       
-      // Mettre à jour la liste localement sans recharger
+      // Update list locally without reloading
       setIslands(prev => {
         const exists = prev.find(i => i.id === island.id);
         if (exists) {
@@ -76,7 +76,7 @@ export const useIslands = () => {
     }
   };
 
-  // Créer une nouvelle île
+  // Create a new island
   const createIsland = async (islandData: CreateIslandRequest): Promise<IslandResponse | null> => {
     if (!isAuthenticated) {
       setError('Must be authenticated to create islands');
@@ -88,7 +88,7 @@ export const useIslands = () => {
     try {
       const newIsland = await islandsService.createIsland(islandData);
       
-      // Recharger les îles
+      // Reload islands
       await loadMyIslands();
       
       return newIsland;
@@ -101,7 +101,7 @@ export const useIslands = () => {
     }
   };
 
-  // Mettre à jour une île
+  // Update an island
   const updateIsland = async (id: string, updateData: UpdateIslandRequest): Promise<IslandResponse | null> => {
     if (!isAuthenticated) {
       setError('Must be authenticated to update islands');
@@ -113,12 +113,12 @@ export const useIslands = () => {
     try {
       const updatedIsland = await islandsService.updateIsland(id, updateData);
       
-      // Mettre à jour la liste locale
+      // Update local list
       setIslands(prev => prev.map(island => 
         island.id === id ? updatedIsland : island
       ));
       
-      // Mettre à jour l'île active si c'est celle-ci
+      // Update active island if this is it
       if (activeIsland?.id === id) {
         setActiveIsland(updatedIsland);
       }
@@ -133,7 +133,7 @@ export const useIslands = () => {
     }
   };
 
-  // Définir une île comme active
+  // Set an island as active
   const setAsActiveIsland = async (id: string): Promise<boolean> => {
     if (!isAuthenticated) {
       setError('Must be authenticated to set active island');
@@ -145,7 +145,7 @@ export const useIslands = () => {
     try {
       const activatedIsland = await islandsService.setActiveIsland(id);
       
-      // Mettre à jour les états locaux
+      // Update local states
       setIslands(prev => prev.map(island => ({
         ...island,
         isActive: island.id === id
@@ -162,7 +162,7 @@ export const useIslands = () => {
     }
   };
 
-  // Supprimer une île
+  // Delete an island
   const deleteIsland = async (id: string): Promise<boolean> => {
     if (!isAuthenticated) {
       setError('Must be authenticated to delete islands');
@@ -177,7 +177,7 @@ export const useIslands = () => {
       // Retirer de la liste locale
       setIslands(prev => prev.filter(island => island.id !== id));
       
-      // Si c'était l'île active, la retirer
+      // If it was the active island, remove it
       if (activeIsland?.id === id) {
         setActiveIsland(null);
       }
@@ -202,12 +202,12 @@ export const useIslands = () => {
     try {
       const updatedIsland = await islandsService.autoSaveIsland(id, updateData);
       
-      // Mettre à jour la liste locale
+      // Update local list
       setIslands(prev => prev.map(island => 
         island.id === id ? updatedIsland : island
       ));
       
-      // Mettre à jour l'île active si c'est celle-ci
+      // Update active island if this is it
       if (activeIsland?.id === id) {
         setActiveIsland(updatedIsland);
       }
@@ -241,7 +241,7 @@ export const useIslands = () => {
     }
   };
 
-  // Charger les îles au montage si authentifié
+  // Load islands on mount if authenticated
   useEffect(() => {
     if (isAuthenticated && !hasLoaded) {
       loadMyIslands();

@@ -28,7 +28,7 @@ export function ProfileSection() {
   const [showAuthInfo, setShowAuthInfo] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Charger le profil utilisateur
+  // Load user profile
   useEffect(() => {
     if (isConnected && address) {
       loadProfile();
@@ -50,11 +50,11 @@ export function ProfileSection() {
         setProfile(data.user);
         setNewUsername(data.user.username || "");
       } else {
-        // Si pas de token ou expired, essayer de se connecter automatiquement
+        // If no token or expired, try to connect automatically
         await connectWallet();
       }
     } catch (error) {
-      console.error("Erreur lors du chargement du profil:", error);
+      console.error("Error loading profile:", error);
     }
   };
 
@@ -78,7 +78,7 @@ export function ProfileSection() {
         setNewUsername(data.user.username || "");
       }
     } catch (error) {
-      console.error("Erreur lors de la connexion:", error);
+      console.error("Error during connection:", error);
     }
   };
 
@@ -93,7 +93,7 @@ export function ProfileSection() {
     setError(null);
 
     try {
-      // Message à signer pour prouver la propriété du wallet
+      // Message to sign to prove wallet ownership
       const message = `Enju - Modification pseudo: ${newUsername.trim()}\\nAdresse: ${address}\\nTimestamp: ${Date.now()}`;
 
       // Signer le message (optionnel mais recommandé)
@@ -126,14 +126,14 @@ export function ProfileSection() {
         setError(null);
       } else {
         const errorData = await response.json();
-        setError(errorData.message || "Impossible de mettre à jour le pseudo");
+        setError(errorData.message || "Unable to update username");
       }
     } catch (error: any) {
-      console.error("Erreur lors de la mise à jour du pseudo:", error);
+      console.error("Error updating username:", error);
       if (error.message.includes("User rejected")) {
-        setError("Signature annulée par l'utilisateur");
+        setError("Signature cancelled by user");
       } else {
-        setError("Erreur lors de la signature ou de la mise à jour du pseudo");
+        setError("Error during signature or username update");
       }
     } finally {
       setIsUpdating(false);
@@ -153,7 +153,7 @@ export function ProfileSection() {
           <CardContent className="p-8 text-center">
             <User className="h-12 w-12 text-slate-400 mx-auto mb-4" />
             <p className="text-slate-600">
-              Connectez votre wallet pour accéder à votre profil
+              Connect your wallet to access your profile
             </p>
           </CardContent>
         </Card>
@@ -167,7 +167,7 @@ export function ProfileSection() {
         <Card className="border-slate-200/80 bg-white shadow-sm">
           <CardContent className="p-8 text-center">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600 mx-auto mb-4"></div>
-            <p className="text-slate-600">Chargement du profil...</p>
+            <p className="text-slate-600">Loading profile...</p>
           </CardContent>
         </Card>
       </div>
@@ -181,13 +181,17 @@ export function ProfileSection() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <User className="h-6 w-6 text-gray-600" />
-            Mon Profil
+            My Profile
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Pseudo */}
+          {/* Username */}
           <div className="space-y-2">
-            <Label htmlFor="username">Pseudo</Label>
+            <Label htmlFor="username">Username</Label>
+            {/* Debug info */}
+            <div className="text-xs text-gray-500 mb-2">
+              Debug: isEditing={isEditing.toString()}, profile exists={!!profile}, connected={isConnected.toString()}
+            </div>
             {isEditing ? (
               <div className="space-y-2">
                 <Input
@@ -198,7 +202,7 @@ export function ProfileSection() {
                   className="border-emerald-200 focus:border-emerald-500"
                   minLength={3}
                   maxLength={20}
-                  placeholder="Entrez votre nouveau pseudo..."
+                  placeholder="Enter your new username..."
                 />
                 <div className="flex gap-2">
                   <Button
@@ -212,7 +216,7 @@ export function ProfileSection() {
                     className="bg-emerald-600 hover:bg-emerald-700"
                   >
                     <Save className="h-4 w-4 mr-1" />
-                    {isUpdating ? "Enregistrement..." : "Enregistrer"}
+                    {isUpdating ? "Saving..." : "Save"}
                   </Button>
                   <Button
                     onClick={cancelEdit}
@@ -221,29 +225,32 @@ export function ProfileSection() {
                     disabled={isUpdating}
                   >
                     <X className="h-4 w-4 mr-1" />
-                    Annuler
+                    Cancel
                   </Button>
                 </div>
               </div>
             ) : (
               <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
                 <span className="font-medium">
-                  {profile.username || "Aucun pseudo défini"}
+                  {profile.username || "No username set"}
                 </span>
                 <Button
-                  onClick={() => setIsEditing(true)}
+                  onClick={() => {
+                    console.log("Edit button clicked!");
+                    setIsEditing(true);
+                  }}
                   variant="ghost"
                   size="sm"
                   className="text-emerald-600 hover:text-emerald-700"
                 >
                   <Edit3 className="h-4 w-4 mr-1" />
-                  Modifier
+                  Edit
                 </Button>
               </div>
             )}
           </div>
 
-          {/* Erreur */}
+          {/* Error */}
           {error && (
             <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
               {error}
@@ -253,19 +260,19 @@ export function ProfileSection() {
           {/* Informations du profil */}
           <div className="grid grid-cols-2 gap-4 pt-4 border-t">
             <div>
-              <Label className="text-slate-500">Niveau</Label>
+              <Label className="text-slate-500">Level</Label>
               <p className="font-medium">{profile.level}</p>
             </div>
             <div>
-              <Label className="text-slate-500">Expérience</Label>
+              <Label className="text-slate-500">Experience</Label>
               <p className="font-medium">{profile.experience} XP</p>
             </div>
             <div>
-              <Label className="text-slate-500">Score d'activité</Label>
+              <Label className="text-slate-500">Activity Score</Label>
               <p className="font-medium">{profile.activityScore}</p>
             </div>
             <div>
-              <Label className="text-slate-500">Balance token</Label>
+              <Label className="text-slate-500">Token Balance</Label>
               <p className="font-medium">{profile.tokenBalance} REWARD</p>
             </div>
           </div>
@@ -287,29 +294,27 @@ export function ProfileSection() {
               className="text-slate-500 hover:text-slate-700"
             >
               <Info className="h-4 w-4 mr-1" />
-              Pourquoi signer lors de la modification ?
+              Why sign when modifying?
             </Button>
           </div>
 
           {showAuthInfo && (
             <div className="mt-4 p-4 bg-emerald-50 rounded-lg text-sm text-slate-700">
               <p className="font-medium text-emerald-800 mb-2">
-                Sécurité renforcée :
+                Enhanced Security:
               </p>
               <ul className="space-y-1 text-slate-600">
                 <li>
-                  • La signature prouve que vous êtes bien le propriétaire du
-                  wallet
+                  • The signature proves you are the wallet owner
                 </li>
                 <li>
-                  • Cela empêche les modifications non autorisées de votre
-                  profil
+                  • This prevents unauthorized modifications to your profile
                 </li>
                 <li>
-                  • La signature est optionnelle mais fortement recommandée
+                  • The signature is optional but strongly recommended
                 </li>
                 <li>
-                  • Votre clé privée reste sécurisée et n'est jamais transmise
+                  • Your private key remains secure and is never transmitted
                 </li>
               </ul>
             </div>

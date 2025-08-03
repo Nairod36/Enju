@@ -437,7 +437,7 @@ export function AppDashboard() {
         </div>
       </div>
 
-      <div className="flex h-[calc(110vh-125px)] xl:h-[calc(90vh-105px)]">
+      <div className="flex h-[100vh] xl:h-[calc(110vh-105px)]">
         {/* Left Sidebar - Island Viewer */}
         <div className="w-[40%] bg-white border-r border-slate-200 flex flex-col shadow-sm">
           {/* Island Viewer */}
