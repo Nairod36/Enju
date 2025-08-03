@@ -205,7 +205,7 @@ class IslandsService {
             userTrees: island.userTrees,
             chests: island.chests,
             usedTiles: island.usedTiles,
-            isActive: false // Première île sera définie comme active après
+            isActive: false // First island will be set as active after
           };
 
           await this.createIsland(createData);
@@ -215,7 +215,7 @@ class IslandsService {
         }
       }
 
-      // Sauvegarder les données originales avec un suffixe
+      // Save original data with a suffix
       localStorage.setItem('saved_islands_backup', localData);
       localStorage.removeItem('saved_islands');
 

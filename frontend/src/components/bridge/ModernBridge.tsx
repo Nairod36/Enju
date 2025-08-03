@@ -1064,7 +1064,7 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
   };
 
   const monitorBridgeCompletion = async (bridgeData: any) => {
-    const maxAttempts = 60; // 5 minutes
+    const maxAttempts = 120; // 10 minutes instead of 5
     let attempts = 0;
 
     const checkCompletion = async () => {
@@ -1089,6 +1089,14 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
               bridge.status === "PENDING" &&
               bridge.ethTxHash && // ETH escrow is created
               bridge.contractId // NEAR HTLC exists
+          );
+
+          // Look for any NEAR→ETH bridge in progress (more flexible condition)
+          const pendingNearToEthBridge = result.data.find(
+            (bridge: any) =>
+              bridge.hashlock === bridgeData.hashlock &&
+              bridge.type === "NEAR_TO_ETH" &&
+              bridge.status === "PENDING"
           );
 
           if (completedBridge) {
@@ -1158,15 +1166,35 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
             setIsLoading(false);
             return;
           }
+
+          // Handle pending bridge - show status without failing
+          if (pendingNearToEthBridge) {
+            updateBridgeLog(
+              `🔄 Bridge found with status PENDING - bridge-listener is processing...`
+            );
+            if (pendingNearToEthBridge.contractId) {
+              updateBridgeLog(`📋 NEAR HTLC: ${pendingNearToEthBridge.contractId}`);
+            }
+            if (pendingNearToEthBridge.ethTxHash) {
+              updateBridgeLog(`📋 ETH Escrow: ${pendingNearToEthBridge.ethTxHash}`);
+            }
+            
+            // Keep monitoring but show we found the bridge
+            setBridgeData((prev) => ({ ...prev, status: "pending" }));
+          }
         }
 
         attempts++;
         if (attempts < maxAttempts) {
-          updateBridgeLog(`⏳ Still waiting... (${attempts}/${maxAttempts})`);
+          if (attempts % 12 === 0) { // Log every minute (12 * 5 seconds)
+            updateBridgeLog(`⏳ Still waiting... (${attempts}/${maxAttempts}) - Bridge processing...`);
+          }
           setTimeout(checkCompletion, 5000); // Check every 5 seconds
         } else {
-          updateBridgeLog(`⚠️ Bridge timeout - check bridge-listener logs`);
-          setBridgeData((prev) => ({ ...prev, status: "error" }));
+          updateBridgeLog(`⚠️ Bridge monitoring timeout after 10 minutes`);
+          updateBridgeLog(`ℹ️ Check bridge-listener logs or try to complete manually`);
+          // Don't set status to error immediately - keep as pending
+          setBridgeData((prev) => ({ ...prev, status: "pending" }));
           setIsLoading(false);
         }
       } catch (error) {

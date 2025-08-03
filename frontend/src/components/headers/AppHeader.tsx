@@ -45,7 +45,7 @@ export function AppHeader() {
 
           {/* Actions */}
           <div className="flex items-center gap-3">
-            {/* Affichage du niveau si l'utilisateur est connecté */}
+            {/* Display level if user is connected */}
             {isAuthenticated && user && <PlayerLevelMini user={user} />}
 
             <DualWalletButton />

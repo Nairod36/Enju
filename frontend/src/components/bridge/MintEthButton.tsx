@@ -2,11 +2,13 @@ import { useState } from "react";
 import { Button } from "../ui/button";
 import { useAccount } from "wagmi";
 import { Coins, Loader2, Zap } from "lucide-react";
+import { toast } from "sonner";
 
 export function MintEthButton() {
   const { address, isConnected } = useAccount();
   const [isMinting, setIsMinting] = useState(false);
   const [mintLoading, setMintLoading] = useState(false);
+  const [isMinted, setIsMinted] = useState(false);
 
   const handleMintEth = async () => {
     if (!address || !isConnected) {
@@ -34,9 +36,10 @@ export function MintEthButton() {
       const result = await response.json();
 
       if (result.success) {
-        alert(
-          `Successfully minted ${result.data.amount} ETH to your wallet!\nTransaction: ${result.data.txHash}`
-        );
+        toast(`✅ Successfully minted ${result.data.amount} ETH!`, {
+          icon: <Coins className="w-4 h-4" />,
+        });
+        setIsMinted(true);
       } else {
         console.error("Minting failed:", result.error);
       }
@@ -60,6 +63,11 @@ export function MintEthButton() {
         <>
           <Zap className="w-4 h-4 mr-2 animate-pulse" />
           Minting...
+        </>
+      ) : isMinted ? (
+        <>
+          <Coins className="w-4 h-4 mr-2" />
+          Already minted !
         </>
       ) : (
         <>

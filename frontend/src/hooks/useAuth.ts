@@ -33,12 +33,12 @@ export const useAuth = () => {
       if (userData && token) {
         setIsLoading(true);
         try {
-          // Valider le token en faisant un appel API
+          // Validate token by making an API call
           const profile = await authService.getProfile();
           setUser(profile);
           setIsAuthenticated(true);
         } catch (error) {
-          // Token invalide, nettoyer et déconnecter
+          // Invalid token, clean and disconnect
           authService.logout();
           setUser(null);
           setIsAuthenticated(false);
@@ -65,7 +65,7 @@ export const useAuth = () => {
   // Handle wallet connection/disconnection
   useEffect(() => {
     if (isConnected && address && !isAuthenticated && !isLoading) {
-      // Délai pour s'assurer que la connexion wallet est complète
+      // Delay to ensure wallet connection is complete
       const timer = setTimeout(() => {
         handleWalletConnect();
       }, 500);

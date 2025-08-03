@@ -1,6 +1,7 @@
 import { Outlet } from "@tanstack/react-router";
 import { AppHeader } from "../../components/headers/AppHeader";
 import { AppFooter } from "../../components/layout/AppFooter";
+import { SonnerToast } from "@/components/ui/sonner";
 
 export function AppPage() {
   return (
@@ -19,6 +20,7 @@ export function AppPage() {
         <Outlet />
       </main>
       <AppFooter />
+      <SonnerToast />
     </div>
   );
 }

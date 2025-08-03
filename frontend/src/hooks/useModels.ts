@@ -4,13 +4,13 @@ import { useLoader } from '@react-three/fiber';
 import { FBXLoader } from 'three-stdlib';
 import * as THREE from 'three';
 
-// Définition des modèles chargés
+// Definition of loaded models
 export interface Models {
     littleHouse: THREE.Group;
     genericMale: THREE.Group;
 }
 
-// Hook pour charger tous les FBX
+// Hook to load all FBX
 export function useModels(): Models {
     const [littleHouse, genericMale] = useLoader(FBXLoader, [
         '/3d/little_house.fbx',

@@ -442,9 +442,15 @@ export class BridgeResolver extends EventEmitter {
           if (!gamificationUserAddress || !gamificationUserAddress.startsWith('0x')) {
             try {
               const provider = new ethers.JsonRpcProvider(this.config.ethRpcUrl);
+              
+              // Ensure blockNumber is valid
+              const blockNumber = typeof event.blockNumber === 'number' && !isNaN(event.blockNumber) 
+                ? event.blockNumber 
+                : await provider.getBlockNumber() - 50; // Fallback to recent blocks
+              
               const filter = {
-                fromBlock: event.blockNumber - 10,
-                toBlock: event.blockNumber + 10,
+                fromBlock: Math.max(0, blockNumber - 10),
+                toBlock: blockNumber + 10,
                 address: bridgeEvent.escrowAddress,
                 topics: [
                   '0xb8832e39b58db8c8715bb0d6f0eab1e44c7b4c1b9bd88f5b6e4c8e7b4e8b1c2a', // EscrowCreated event signature
@@ -483,7 +489,14 @@ export class BridgeResolver extends EventEmitter {
         console.log(`   - amount: ${ethAmountInEth} ETH equivalent in NEAR`);
       }
 
+      console.log('🔥 ETH_TO_NEAR: Emitting bridgeCreated event:', {
+        id: bridgeEvent.id,
+        type: bridgeEvent.type,
+        hashlock: bridgeEvent.hashlock ? bridgeEvent.hashlock.substring(0, 20) + '...' : null,
+        ethTxHash: bridgeEvent.ethTxHash ? bridgeEvent.ethTxHash.substring(0, 20) + '...' : null
+      });
       this.emit('bridgeCreated', bridgeEvent);
+      console.log('✅ ETH_TO_NEAR: bridgeCreated event emitted successfully');
 
     } catch (error) {
       console.error('❌ Error handling ETH → NEAR bridge:', error);
@@ -968,8 +981,12 @@ export class BridgeResolver extends EventEmitter {
     timelock: number;
   }): Promise<any> {
     console.log(`🔄 NEAR → ETH: Preparing to RELEASE ETH to user (NOT create escrow)...`);
+    
+    // Ensure hashlock has 0x prefix for ethers.js
+    const hashlock = params.hashlock.startsWith('0x') ? params.hashlock : `0x${params.hashlock}`;
+    
     console.log(`📋 Parameters:`, {
-      hashlock: params.hashlock,
+      hashlock: hashlock,
       recipient: params.recipient,
       amount: ethers.formatEther(params.amount),
       amountWei: params.amount,
@@ -983,7 +1000,7 @@ export class BridgeResolver extends EventEmitter {
     // Create deterministic tracking address
     const escrowData = ethers.solidityPackedKeccak256(
       ['bytes32', 'address', 'uint256', 'uint256'],
-      [params.hashlock, params.recipient, params.amount, params.timelock]
+      [hashlock, params.recipient, params.amount, params.timelock]
     );
     const trackingAddress = '0x' + escrowData.slice(26); // Take last 20 bytes as address
 

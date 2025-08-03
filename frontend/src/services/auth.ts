@@ -43,19 +43,19 @@ class AuthService {
   async connectWallet(walletAddress: string, chainId?: number): Promise<AuthResponse> {
     const now = Date.now();
     
-    // Éviter les appels trop rapides (moins de 3 secondes)
+    // Avoid too rapid calls (less than 3 seconds)
     if (now - this.lastConnectTime < 3000) {
       if (this.lastSignature && this.lastSignedMessage) {
         throw new Error('Please wait before reconnecting');
       }
     }
     
-    // Éviter les appels concurrents pour la même adresse
+    // Avoid concurrent calls for the same address
     if (this.connectingWallet === walletAddress) {
       throw new Error('Connection already in progress for this wallet');
     }
     
-    // Si on change de wallet, reset la connexion précédente
+    // If wallet changes, reset previous connection
     if (this.connectingWallet && this.connectingWallet !== walletAddress) {
       this.connectingWallet = null;
     }
@@ -94,7 +94,7 @@ class AuthService {
         };
       }
 
-      // 2. Sign message with wallet (avec cache pour éviter les doubles signatures)
+      // 2. Sign message with wallet (with cache to avoid double signatures)
       let signature: string;
       if (this.lastSignedMessage === message && this.lastSignature) {
         signature = this.lastSignature;
@@ -166,7 +166,7 @@ class AuthService {
     }
 
     const profile = await response.json();
-    // Mettre à jour les données utilisateur en localStorage
+    // Update user data in localStorage
     localStorage.setItem('user_data', JSON.stringify(profile));
     return profile;
   }
@@ -178,7 +178,7 @@ class AuthService {
     this.cachedNonce = null;
     localStorage.removeItem('auth_token');
     localStorage.removeItem('user_data');
-    // Nettoyer toutes les données liées à l'auth au cas où
+    // Clean all auth-related data just in case
     Object.keys(localStorage).forEach(key => {
       if (key.startsWith('auth_') || key.startsWith('user_')) {
         localStorage.removeItem(key);
@@ -221,7 +221,7 @@ class AuthService {
 
     if (response.status === 401) {
       this.logout();
-      // Déclencher un événement pour que les hooks puissent réagir
+      // Trigger an event so hooks can react
       window.dispatchEvent(new CustomEvent('auth:expired'));
       throw new Error('Token expired');
     }

@@ -29,7 +29,7 @@ const GameContent: React.FC = () => {
     isLoading: islandsLoading,
   } = useIslands();
 
-  // Initialiser l'île de l'utilisateur
+  // Initialize user's island
   useEffect(() => {
     const initializeUserIsland = async () => {
       if (isAuthenticated && !isInitialized && !islandsLoading) {
@@ -39,18 +39,18 @@ const GameContent: React.FC = () => {
             setIslandSeed(parseInt(userIsland.seed));
             setTreeCount(userIsland.treeCount || 0);
 
-            // Charger l'état complet de l'île après que l'île soit rendue
+            // Load complete island state after island is rendered
             setTimeout(async () => {
               if (islandRef.current) {
                 islandRef.current.loadFromDatabase(userIsland);
 
-                // Si l'île n'a pas de données générées, sauvegarder les données actuelles
+                // If island has no generated data, save current data
                 const hasGeneratedData =
                   userIsland.islandData &&
                   userIsland.islandData.landTiles &&
                   userIsland.islandData.landTiles.length > 0;
               }
-            }, 1000); // Délai pour s'assurer que l'île est rendue
+            }, 1000); // Delay to ensure island is rendered
 
             setIsInitialized(true);
           }
@@ -61,9 +61,9 @@ const GameContent: React.FC = () => {
     };
 
     initializeUserIsland();
-  }, [isAuthenticated, isInitialized, islandsLoading]); // Retiré ensureUserHasIsland des deps
+  }, [isAuthenticated, isInitialized, islandsLoading]); // Removed ensureUserHasIsland from deps
 
-  // Charger les îles sauvegardées
+  // Load saved islands
   const loadSavedIslands = async () => {
     try {
       const islands = await IslandStorageService.getAllSavedIslands();
@@ -73,7 +73,7 @@ const GameContent: React.FC = () => {
     }
   };
 
-  // Fonction pour ajouter un arbre aléatoire
+  // Function to add a random tree
   const handleAddTree = () => {
     if (islandRef.current) {
       islandRef.current.addRandomTree();
@@ -81,51 +81,51 @@ const GameContent: React.FC = () => {
     }
   };
 
-  // Fonction pour régénérer l'île
+  // Function to regenerate the island
   const handleRegenerate = () => {
     setIslandSeed(generateIslandSeed());
     setTreeCount(0);
   };
 
-  // Fonction pour agrandir l'île
+  // Function to expand the island
   const handleEnlargeIsland = () => {
     if (islandRef.current) {
       islandRef.current.enlargeIsland();
     }
   };
 
-  // Fonction pour faire apparaître un coffre
+  // Function to make a chest appear
   const handleSpawnChest = () => {
     if (islandRef.current) {
       islandRef.current.spawnChest();
     }
   };
 
-  // Fonction pour sauvegarder l'île
+  // Function to save the island
   const handleSaveIsland = async () => {
     if (islandRef.current) {
       const name =
-        saveIslandName.trim() || `Île ${new Date().toLocaleDateString()}`;
+        saveIslandName.trim() || `Island ${new Date().toLocaleDateString()}`;
       try {
         const savedId = await islandRef.current.saveIsland(name);
         if (savedId) {
-          alert(`✅ Île "${name}" sauvegardée avec succès !`);
+          alert(`✅ Island "${name}" saved successfully!`);
           setShowSaveDialog(false);
           setSaveIslandName("");
         } else {
-          alert("❌ Erreur lors de la sauvegarde");
+          alert("❌ Error during save");
         }
       } catch (error) {
         console.error("Save error:", error);
-        alert("❌ Erreur lors de la sauvegarde");
+        alert("❌ Error during save");
       }
     }
   };
 
-  // Fonction pour sauvegarder l'île actuelle vers l'API
+  // Function to save current island to API
   const handleSaveToAPI = async () => {
     if (!activeIsland || !islandRef.current) {
-      alert("❌ Aucune île active à sauvegarder");
+      alert("❌ No active island to save");
       return;
     }
 
@@ -139,23 +139,23 @@ const GameContent: React.FC = () => {
         chests: currentState.chests,
         usedTiles: currentState.usedTiles,
         totalTrees: currentState.treeCount,
-        healthScore: 100, // À calculer selon votre logique
+        healthScore: 100, // To calculate according to your logic
       };
 
       const savedIsland = await autoSaveIsland(activeIsland.id, updateData);
 
       if (savedIsland) {
-        alert("✅ Île sauvegardée avec succès !");
+        alert("✅ Island saved successfully!");
       } else {
-        alert("❌ Erreur lors de la sauvegarde");
+        alert("❌ Error during save");
       }
     } catch (error) {
       console.error("Save to API error:", error);
-      alert("❌ Erreur lors de la sauvegarde en ligne");
+      alert("❌ Error during online save");
     }
   };
 
-  // Fonction pour charger une île
+  // Function to load an island
   const handleLoadIsland = (id: string) => {
     if (islandRef.current) {
       const success = islandRef.current.loadIsland(id);
@@ -164,14 +164,14 @@ const GameContent: React.FC = () => {
         setIslandSeed(state.seed);
         setTreeCount(state.treeCount);
         setShowLoadDialog(false);
-        alert("✅ Île chargée avec succès !");
+        alert("✅ Island loaded successfully!");
       } else {
-        alert("❌ Erreur lors du chargement");
+        alert("❌ Error during loading");
       }
     }
   };
 
-  // Afficher un écran de chargement si l'île n'est pas encore initialisée
+  // Display loading screen if island is not yet initialized
   if (islandsLoading || !isInitialized) {
     return (
       <div
@@ -199,7 +199,7 @@ const GameContent: React.FC = () => {
               margin: "0 auto 20px",
             }}
           />
-          Chargement de votre île...
+          Loading your island...
         </div>
         <style>{`
           @keyframes spin {
@@ -241,7 +241,7 @@ const GameContent: React.FC = () => {
         <fog attach="fog" args={["#87CEEB", 40, 80]} />
       </Canvas>
 
-      {/* Interface utilisateur */}
+      {/* User interface */}
       <div
         style={{
           position: "absolute",
@@ -254,7 +254,7 @@ const GameContent: React.FC = () => {
           pointerEvents: "none",
         }}
       >
-        Île Volante Procédurale
+        Procedural Floating Island
       </div>
 
       <div
@@ -350,7 +350,7 @@ const GameContent: React.FC = () => {
               e.currentTarget.style.background = "rgba(255, 165, 0, 0.8)";
             }}
           >
-            🔍 Agrandir l'île
+            🔍 Expand Island
           </button>
 
           <button
@@ -377,7 +377,7 @@ const GameContent: React.FC = () => {
               e.currentTarget.style.background = "rgba(184, 134, 11, 0.8)";
             }}
           >
-            💰 Ajouter coffre
+            💰 Add Chest
           </button>
 
           <button
@@ -404,7 +404,7 @@ const GameContent: React.FC = () => {
               e.currentTarget.style.background = "rgba(34, 197, 94, 0.8)";
             }}
           >
-            💾 Sauvegarder
+            💾 Save
           </button>
 
           {/* <button
@@ -431,7 +431,7 @@ const GameContent: React.FC = () => {
               e.currentTarget.style.background = "rgba(34, 197, 94, 0.8)";
             }}
           >
-            💾 Sauvegarder
+            💾 Save
           </button>
 
           <button
@@ -461,7 +461,7 @@ const GameContent: React.FC = () => {
               e.currentTarget.style.background = "rgba(168, 85, 247, 0.8)";
             }}
           >
-            📂 Charger
+            📂 Load
           </button> */}
         </div>
 
@@ -473,11 +473,11 @@ const GameContent: React.FC = () => {
             backdropFilter: "blur(10px)",
           }}
         >
-          🌳 Arbres plantés: {treeCount} | 🎲 Seed: {Math.floor(islandSeed)}
+          🌳 Trees planted: {treeCount} | 🎲 Seed: {Math.floor(islandSeed)}
         </div>
       </div>
 
-      {/* Modal de sauvegarde */}
+      {/* Save modal */}
       {showSaveDialog && (
         <div
           style={{
@@ -506,11 +506,11 @@ const GameContent: React.FC = () => {
             onClick={(e) => e.stopPropagation()}
           >
             <h2 style={{ margin: "0 0 20px 0", color: "#333" }}>
-              💾 Sauvegarder l'île
+              💾 Save Island
             </h2>
             <input
               type="text"
-              placeholder="Nom de l'île (optionnel)"
+              placeholder="Island name (optional)"
               value={saveIslandName}
               onChange={(e) => setSaveIslandName(e.target.value)}
               style={{
@@ -540,7 +540,7 @@ const GameContent: React.FC = () => {
                   cursor: "pointer",
                 }}
               >
-                Annuler
+                Cancel
               </button>
               <button
                 onClick={handleSaveIsland}
@@ -553,14 +553,14 @@ const GameContent: React.FC = () => {
                   cursor: "pointer",
                 }}
               >
-                Sauvegarder
+                Save
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Modal de chargement */}
+      {/* Load modal */}
       {showLoadDialog && (
         <div
           style={{
@@ -591,7 +591,7 @@ const GameContent: React.FC = () => {
             onClick={(e) => e.stopPropagation()}
           >
             <h2 style={{ margin: "0 0 20px 0", color: "#333" }}>
-              📂 Charger une île
+              📂 Load Island
             </h2>
             <div style={{ maxHeight: "400px", overflow: "auto" }}>
               {savedIslands.map((island) => (
@@ -623,8 +623,8 @@ const GameContent: React.FC = () => {
                       marginTop: "5px",
                     }}
                   >
-                    🎲 Seed: {island.seed} | 🌳 Arbres: {island.treeCount} | 💰
-                    Coffres: {island.chests.length}
+                    🎲 Seed: {island.seed} | 🌳 Trees: {island.treeCount} | 💰
+                    Chests: {island.chests.length}
                   </div>
                   <div
                     style={{
@@ -633,8 +633,8 @@ const GameContent: React.FC = () => {
                       marginTop: "5px",
                     }}
                   >
-                    Créée: {new Date(island.createdAt).toLocaleDateString()} |
-                    Modifiée:{" "}
+                    Created: {new Date(island.createdAt).toLocaleDateString()} |
+                    Modified:{" "}
                     {new Date(island.lastModified).toLocaleDateString()}
                   </div>
                 </div>
@@ -647,7 +647,7 @@ const GameContent: React.FC = () => {
                     padding: "20px",
                   }}
                 >
-                  Aucune île sauvegardée
+                  No saved islands
                 </div>
               )}
             </div>
@@ -668,7 +668,7 @@ const GameContent: React.FC = () => {
                   cursor: "pointer",
                 }}
               >
-                Fermer
+                Close
               </button>
             </div>
           </div>

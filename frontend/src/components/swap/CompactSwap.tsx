@@ -7,9 +7,10 @@ import { useAuth } from "../../hooks/useAuth";
 import { useTokenBalances } from "../../hooks/useTokenBalances";
 import { authService } from "../../services/auth";
 import { ExternalLink, RotateCcw, Clock, Zap } from "lucide-react";
+import { toast } from "sonner";
 
 interface SwapQuote {
-  dstAmount: string; // Changé de toAmount à dstAmount
+  dstAmount: string; // Changed from toAmount to dstAmount
   srcToken: {
     address: string;
     symbol: string;
@@ -138,7 +139,7 @@ export const CompactSwap: React.FC<CompactSwapProps> = ({ onSwapSuccess }) => {
       const response = await fetch(`${API_BASE}/oneinch/quote?${params}`);
 
       if (!response.ok) {
-        throw new Error(`Erreur API: ${response.statusText}`);
+        throw new Error(`API Error: ${response.statusText}`);
       }
 
       const quoteData: SwapQuote = await response.json();
@@ -157,12 +158,8 @@ export const CompactSwap: React.FC<CompactSwapProps> = ({ onSwapSuccess }) => {
 
       setToAmount(receivedAmount.toFixed(toToken.decimals === 6 ? 2 : 4));
     } catch (err) {
-      console.error("Erreur quote:", err);
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Erreur lors de la récupération du quote"
-      );
+      console.error("Quote error:", err);
+      setError(err instanceof Error ? err.message : "Error fetching quote");
     } finally {
       setLoading(false);
     }
@@ -170,13 +167,13 @@ export const CompactSwap: React.FC<CompactSwapProps> = ({ onSwapSuccess }) => {
 
   const executeSwap = async () => {
     if (!fromAmount || !address || !walletClient || !isAuthenticated) {
-      setError("Wallet non connecté ou données manquantes");
+      setError("Wallet not connected or missing data");
       return;
     }
 
     const token = authService.getToken();
     if (!token) {
-      setError("Token d'authentification manquant");
+      setError("Authentication token missing");
       return;
     }
 
@@ -204,13 +201,13 @@ export const CompactSwap: React.FC<CompactSwapProps> = ({ onSwapSuccess }) => {
       });
 
       if (!response.ok) {
-        throw new Error(`Erreur API: ${response.statusText}`);
+        throw new Error(`API Error: ${response.statusText}`);
       }
 
       const swapData: SwapQuote = await response.json();
 
       if (!swapData.tx) {
-        throw new Error("Données de transaction manquantes dans la réponse");
+        throw new Error("Transaction data missing in response");
       }
 
       let gasLimit = BigInt(300000);
@@ -242,6 +239,15 @@ export const CompactSwap: React.FC<CompactSwapProps> = ({ onSwapSuccess }) => {
       setFromAmount("");
       setToAmount("");
 
+      // Success swap confirmation toast
+      toast(
+        `✅ Swap successful! ${fromAmount} ${fromToken.symbol} → ${toAmount} ${toToken.symbol}`,
+        {
+          icon: <Zap className="w-4 h-4" />,
+          duration: 5000,
+        }
+      );
+
       // Appeler le callback de succès si fourni
       if (onSwapSuccess) {
         onSwapSuccess(hash);
@@ -249,8 +255,8 @@ export const CompactSwap: React.FC<CompactSwapProps> = ({ onSwapSuccess }) => {
 
       // Les balances se mettront à jour automatiquement via le hook
     } catch (err) {
-      console.error("Erreur swap:", err);
-      setError(err instanceof Error ? err.message : "Erreur lors du swap");
+      console.error("Swap error:", err);
+      setError(err instanceof Error ? err.message : "Error during swap");
     } finally {
       setLoading(false);
     }
@@ -367,7 +373,7 @@ export const CompactSwap: React.FC<CompactSwapProps> = ({ onSwapSuccess }) => {
           {txHash && (
             <div className="p-3 bg-green-50 border border-green-200 text-green-700 rounded-lg text-sm">
               <div className="flex items-center justify-between">
-                <span>Swap réussi!</span>
+                <span>Swap successful!</span>
                 <a
                   href={`https://etherscan.io/tx/${txHash}`}
                   target="_blank"
@@ -409,16 +415,26 @@ export const CompactSwap: React.FC<CompactSwapProps> = ({ onSwapSuccess }) => {
             className="w-full h-12 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-bold text-sm rounded-lg shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 transform hover:scale-[1.02]"
           >
             {loading
-              ? "Swap en cours..."
+              ? "Swap in progress..."
               : `Swap ${fromToken.symbol} → ${toToken.symbol}`}
           </Button>
 
           {!address && (
             <p className="text-center text-gray-500 text-sm">
-              Connectez votre wallet pour continuer
+              Connect your wallet to continue
             </p>
           )}
         </div>
+
+        {/* Connection Status - Compact */}
+        {address && (
+          <div className="text-center text-xs text-gray-500 pt-3">
+            <div className="flex items-center justify-center gap-1">
+              <div className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse"></div>
+              <span>Secured by 1inch Fusion+</span>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

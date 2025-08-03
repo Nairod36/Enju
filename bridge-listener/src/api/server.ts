@@ -550,7 +550,29 @@ export class BridgeAPI {
       }
     });
 
-    // WebSocket-like endpoint for real-time updates
+    // ===== API V1 ROUTES =====
+
+    // API v1 - Get all bridges
+    this.app.get('/bridges', (req, res) => {
+      try {
+        const bridges = this.resolver.getAllBridges();
+        const safeBridges = this.safeBigIntStringify(bridges);
+        res.json({
+          success: true,
+          data: safeBridges,
+          count: safeBridges.length
+        });
+      } catch (error) {
+        console.error('Error in /api/v1/bridges endpoint:', error);
+        res.status(500).json({
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
+    });
+
+
+    // API v1 - SSE Events endpoint
     this.app.get('/events', (req, res) => {
       // Set headers for Server-Sent Events
       res.writeHead(200, {
@@ -566,11 +588,25 @@ export class BridgeAPI {
       // Set up event listeners
       const onBridgeCreated = (bridge: any) => {
         const safeBridge = this.safeBigIntStringify(bridge);
-        res.write(`data: ${JSON.stringify({ type: 'bridgeCreated', data: safeBridge })}\\n\\n`);
+        console.log('📡 API v1 SSE: Preparing to send bridgeCreated event:', {
+          bridgeId: bridge.id,
+          bridgeType: bridge.type,
+          hashlock: bridge.hashlock ? bridge.hashlock.substring(0, 20) + '...' : null,
+          ethTxHash: bridge.ethTxHash ? bridge.ethTxHash.substring(0, 20) + '...' : null,
+          status: bridge.status
+        });
+
+        const eventData = { type: 'bridgeCreated', data: safeBridge };
+        const eventString = `data: ${JSON.stringify(eventData)}\\n\\n`;
+
+        console.log('📡 API v1 SSE: Writing event to stream (length:', eventString.length, 'chars)');
+        res.write(eventString);
+        console.log('📡 API v1 SSE: Event written successfully');
       };
 
       const onBridgeCompleted = (bridge: any) => {
         const safeBridge = this.safeBigIntStringify(bridge);
+        console.log('📡 API v1 SSE: Sending bridgeCompleted event for bridge:', bridge.id, 'type:', bridge.type);
         res.write(`data: ${JSON.stringify({ type: 'bridgeCompleted', data: safeBridge })}\\n\\n`);
       };
 
@@ -616,7 +652,9 @@ export class BridgeAPI {
       console.log(`✅ Bridge API listening on port ${this.port}`);
       console.log(`📊 Health check: http://localhost:${this.port}/health`);
       console.log(`🌉 Bridges API: http://localhost:${this.port}/bridges`);
+      console.log(`🌉 Bridges API v1: http://localhost:${this.port}/api/v1/bridges`);
       console.log(`📡 Events stream: http://localhost:${this.port}/events`);
+      console.log(`📡 Events stream v1: http://localhost:${this.port}/api/v1/events`);
       const status = this.resolver.getStatus();
       if (status.tronEnabled) {
         console.log(`🔗 ETH ↔ TRON Resolver active`);

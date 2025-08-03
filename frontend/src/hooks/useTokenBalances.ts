@@ -12,7 +12,7 @@ interface TokenBalanceMap {
     [address: string]: TokenBalance;
 }
 
-// Fonction utilitaire pour formater les unités
+// Utility function to format units
 const formatUnits = (value: bigint, decimals: number): string => {
     const divisor = BigInt(10 ** decimals);
     const quotient = value / divisor;
