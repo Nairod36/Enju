@@ -1,0 +1,1189 @@
+[
+  {
+    "inputs": [],
+    "stateMutability": "nonpayable",
+    "type": "constructor"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "bytes32",
+        "name": "orderHash",
+        "type": "bytes32"
+      },
+      {
+        "indexed": true,
+        "internalType": "bytes32",
+        "name": "hashlock",
+        "type": "bytes32"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "maker",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "taker",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "tronMaker",
+        "type": "string"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "ethTaker",
+        "type": "string"
+      }
+    ],
+    "name": "EscrowCreated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "escrow",
+        "type": "address"
+      },
+      {
+        "indexed": true,
+        "internalType": "bytes32",
+        "name": "hashlock",
+        "type": "bytes32"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "targetAccount",
+        "type": "string"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "targetChain",
+        "type": "string"
+      }
+    ],
+    "name": "EscrowCreated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "resolver",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "bytes32",
+        "name": "reason",
+        "type": "bytes32"
+      }
+    ],
+    "name": "SafetyDepositSlashed",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "bytes32",
+        "name": "orderHash",
+        "type": "bytes32"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "canceller",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "refundAmount",
+        "type": "uint256"
+      }
+    ],
+    "name": "SwapCancelled",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "bytes32",
+        "name": "orderHash",
+        "type": "bytes32"
+      },
+      {
+        "indexed": false,
+        "internalType": "bytes32",
+        "name": "secret",
+        "type": "bytes32"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "resolver",
+        "type": "address"
+      }
+    ],
+    "name": "SwapCompleted",
+    "type": "event"
+  },
+  {
+    "stateMutability": "payable",
+    "type": "fallback"
+  },
+  {
+    "inputs": [],
+    "name": "MIN_SAFETY_DEPOSIT",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "TIMELOCK_DURATION",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "resolver",
+        "type": "address"
+      }
+    ],
+    "name": "authorizeResolver",
+    "outputs": [],
+    "stateMutability": "payable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "name": "authorizedResolvers",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "orderHash",
+        "type": "bytes32"
+      },
+      {
+        "components": [
+          {
+            "internalType": "bytes32",
+            "name": "orderHash",
+            "type": "bytes32"
+          },
+          {
+            "internalType": "bytes32",
+            "name": "hashlock",
+            "type": "bytes32"
+          },
+          {
+            "internalType": "address",
+            "name": "maker",
+            "type": "address"
+          },
+          {
+            "internalType": "address",
+            "name": "taker",
+            "type": "address"
+          },
+          {
+            "internalType": "address",
+            "name": "token",
+            "type": "address"
+          },
+          {
+            "internalType": "uint256",
+            "name": "amount",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "safetyDeposit",
+            "type": "uint256"
+          },
+          {
+            "components": [
+              {
+                "internalType": "uint32",
+                "name": "srcWithdrawal",
+                "type": "uint32"
+              },
+              {
+                "internalType": "uint32",
+                "name": "srcPublicWithdrawal",
+                "type": "uint32"
+              },
+              {
+                "internalType": "uint32",
+                "name": "srcCancellation",
+                "type": "uint32"
+              },
+              {
+                "internalType": "uint32",
+                "name": "srcPublicCancellation",
+                "type": "uint32"
+              },
+              {
+                "internalType": "uint32",
+                "name": "dstWithdrawal",
+                "type": "uint32"
+              },
+              {
+                "internalType": "uint32",
+                "name": "dstPublicWithdrawal",
+                "type": "uint32"
+              },
+              {
+                "internalType": "uint32",
+                "name": "dstCancellation",
+                "type": "uint32"
+              }
+            ],
+            "internalType": "struct TronFusionBridge.TronTimelocks",
+            "name": "timelocks",
+            "type": "tuple"
+          }
+        ],
+        "internalType": "struct TronFusionBridge.Immutables",
+        "name": "immutables",
+        "type": "tuple"
+      }
+    ],
+    "name": "cancel",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "orderHash",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "bytes32",
+        "name": "secret",
+        "type": "bytes32"
+      }
+    ],
+    "name": "completeSimpleBridge",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "hashlock",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "string",
+        "name": "targetAccount",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "targetChain",
+        "type": "string"
+      }
+    ],
+    "name": "createTronBridge",
+    "outputs": [
+      {
+        "internalType": "bytes32",
+        "name": "",
+        "type": "bytes32"
+      }
+    ],
+    "stateMutability": "payable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "components": [
+          {
+            "internalType": "bytes32",
+            "name": "orderHash",
+            "type": "bytes32"
+          },
+          {
+            "internalType": "bytes32",
+            "name": "hashlock",
+            "type": "bytes32"
+          },
+          {
+            "internalType": "address",
+            "name": "maker",
+            "type": "address"
+          },
+          {
+            "internalType": "address",
+            "name": "taker",
+            "type": "address"
+          },
+          {
+            "internalType": "address",
+            "name": "token",
+            "type": "address"
+          },
+          {
+            "internalType": "uint256",
+            "name": "amount",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "safetyDeposit",
+            "type": "uint256"
+          },
+          {
+            "components": [
+              {
+                "internalType": "uint32",
+                "name": "srcWithdrawal",
+                "type": "uint32"
+              },
+              {
+                "internalType": "uint32",
+                "name": "srcPublicWithdrawal",
+                "type": "uint32"
+              },
+              {
+                "internalType": "uint32",
+                "name": "srcCancellation",
+                "type": "uint32"
+              },
+              {
+                "internalType": "uint32",
+                "name": "srcPublicCancellation",
+                "type": "uint32"
+              },
+              {
+                "internalType": "uint32",
+                "name": "dstWithdrawal",
+                "type": "uint32"
+              },
+              {
+                "internalType": "uint32",
+                "name": "dstPublicWithdrawal",
+                "type": "uint32"
+              },
+              {
+                "internalType": "uint32",
+                "name": "dstCancellation",
+                "type": "uint32"
+              }
+            ],
+            "internalType": "struct TronFusionBridge.TronTimelocks",
+            "name": "timelocks",
+            "type": "tuple"
+          }
+        ],
+        "internalType": "struct TronFusionBridge.Immutables",
+        "name": "immutables",
+        "type": "tuple"
+      },
+      {
+        "internalType": "string",
+        "name": "tronMaker",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "ethTaker",
+        "type": "string"
+      }
+    ],
+    "name": "createTronEscrow",
+    "outputs": [
+      {
+        "internalType": "bytes32",
+        "name": "orderHash",
+        "type": "bytes32"
+      }
+    ],
+    "stateMutability": "payable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "createTronTimelocks",
+    "outputs": [
+      {
+        "components": [
+          {
+            "internalType": "uint32",
+            "name": "srcWithdrawal",
+            "type": "uint32"
+          },
+          {
+            "internalType": "uint32",
+            "name": "srcPublicWithdrawal",
+            "type": "uint32"
+          },
+          {
+            "internalType": "uint32",
+            "name": "srcCancellation",
+            "type": "uint32"
+          },
+          {
+            "internalType": "uint32",
+            "name": "srcPublicCancellation",
+            "type": "uint32"
+          },
+          {
+            "internalType": "uint32",
+            "name": "dstWithdrawal",
+            "type": "uint32"
+          },
+          {
+            "internalType": "uint32",
+            "name": "dstPublicWithdrawal",
+            "type": "uint32"
+          },
+          {
+            "internalType": "uint32",
+            "name": "dstCancellation",
+            "type": "uint32"
+          }
+        ],
+        "internalType": "struct TronFusionBridge.TronTimelocks",
+        "name": "",
+        "type": "tuple"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address payable",
+        "name": "to",
+        "type": "address"
+      },
+      {
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      }
+    ],
+    "name": "emergencyWithdrawAmount",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address payable",
+        "name": "to",
+        "type": "address"
+      }
+    ],
+    "name": "emergencyWithdrawTRX",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "",
+        "type": "bytes32"
+      }
+    ],
+    "name": "ethToTronAddress",
+    "outputs": [
+      {
+        "internalType": "string",
+        "name": "",
+        "type": "string"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "getContractBalance",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "orderHash",
+        "type": "bytes32"
+      }
+    ],
+    "name": "getSwap",
+    "outputs": [
+      {
+        "components": [
+          {
+            "internalType": "bytes32",
+            "name": "orderHash",
+            "type": "bytes32"
+          },
+          {
+            "internalType": "bytes32",
+            "name": "hashlock",
+            "type": "bytes32"
+          },
+          {
+            "internalType": "address",
+            "name": "maker",
+            "type": "address"
+          },
+          {
+            "internalType": "address",
+            "name": "taker",
+            "type": "address"
+          },
+          {
+            "internalType": "address",
+            "name": "token",
+            "type": "address"
+          },
+          {
+            "internalType": "uint256",
+            "name": "amount",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "safetyDeposit",
+            "type": "uint256"
+          },
+          {
+            "components": [
+              {
+                "internalType": "uint32",
+                "name": "srcWithdrawal",
+                "type": "uint32"
+              },
+              {
+                "internalType": "uint32",
+                "name": "srcPublicWithdrawal",
+                "type": "uint32"
+              },
+              {
+                "internalType": "uint32",
+                "name": "srcCancellation",
+                "type": "uint32"
+              },
+              {
+                "internalType": "uint32",
+                "name": "srcPublicCancellation",
+                "type": "uint32"
+              },
+              {
+                "internalType": "uint32",
+                "name": "dstWithdrawal",
+                "type": "uint32"
+              },
+              {
+                "internalType": "uint32",
+                "name": "dstPublicWithdrawal",
+                "type": "uint32"
+              },
+              {
+                "internalType": "uint32",
+                "name": "dstCancellation",
+                "type": "uint32"
+              }
+            ],
+            "internalType": "struct TronFusionBridge.TronTimelocks",
+            "name": "timelocks",
+            "type": "tuple"
+          }
+        ],
+        "internalType": "struct TronFusionBridge.Immutables",
+        "name": "immutables",
+        "type": "tuple"
+      },
+      {
+        "internalType": "enum TronFusionBridge.SwapState",
+        "name": "state",
+        "type": "uint8"
+      },
+      {
+        "internalType": "uint256",
+        "name": "createdAt",
+        "type": "uint256"
+      },
+      {
+        "internalType": "bytes32",
+        "name": "secretRevealed",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "enum TronFusionBridge.TimelockStage",
+        "name": "currentStage",
+        "type": "uint8"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "owner",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "orderHash",
+        "type": "bytes32"
+      },
+      {
+        "components": [
+          {
+            "internalType": "bytes32",
+            "name": "orderHash",
+            "type": "bytes32"
+          },
+          {
+            "internalType": "bytes32",
+            "name": "hashlock",
+            "type": "bytes32"
+          },
+          {
+            "internalType": "address",
+            "name": "maker",
+            "type": "address"
+          },
+          {
+            "internalType": "address",
+            "name": "taker",
+            "type": "address"
+          },
+          {
+            "internalType": "address",
+            "name": "token",
+            "type": "address"
+          },
+          {
+            "internalType": "uint256",
+            "name": "amount",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "safetyDeposit",
+            "type": "uint256"
+          },
+          {
+            "components": [
+              {
+                "internalType": "uint32",
+                "name": "srcWithdrawal",
+                "type": "uint32"
+              },
+              {
+                "internalType": "uint32",
+                "name": "srcPublicWithdrawal",
+                "type": "uint32"
+              },
+              {
+                "internalType": "uint32",
+                "name": "srcCancellation",
+                "type": "uint32"
+              },
+              {
+                "internalType": "uint32",
+                "name": "srcPublicCancellation",
+                "type": "uint32"
+              },
+              {
+                "internalType": "uint32",
+                "name": "dstWithdrawal",
+                "type": "uint32"
+              },
+              {
+                "internalType": "uint32",
+                "name": "dstPublicWithdrawal",
+                "type": "uint32"
+              },
+              {
+                "internalType": "uint32",
+                "name": "dstCancellation",
+                "type": "uint32"
+              }
+            ],
+            "internalType": "struct TronFusionBridge.TronTimelocks",
+            "name": "timelocks",
+            "type": "tuple"
+          }
+        ],
+        "internalType": "struct TronFusionBridge.Immutables",
+        "name": "immutables",
+        "type": "tuple"
+      }
+    ],
+    "name": "publicCancel",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "orderHash",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "bytes32",
+        "name": "secret",
+        "type": "bytes32"
+      },
+      {
+        "components": [
+          {
+            "internalType": "bytes32",
+            "name": "orderHash",
+            "type": "bytes32"
+          },
+          {
+            "internalType": "bytes32",
+            "name": "hashlock",
+            "type": "bytes32"
+          },
+          {
+            "internalType": "address",
+            "name": "maker",
+            "type": "address"
+          },
+          {
+            "internalType": "address",
+            "name": "taker",
+            "type": "address"
+          },
+          {
+            "internalType": "address",
+            "name": "token",
+            "type": "address"
+          },
+          {
+            "internalType": "uint256",
+            "name": "amount",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "safetyDeposit",
+            "type": "uint256"
+          },
+          {
+            "components": [
+              {
+                "internalType": "uint32",
+                "name": "srcWithdrawal",
+                "type": "uint32"
+              },
+              {
+                "internalType": "uint32",
+                "name": "srcPublicWithdrawal",
+                "type": "uint32"
+              },
+              {
+                "internalType": "uint32",
+                "name": "srcCancellation",
+                "type": "uint32"
+              },
+              {
+                "internalType": "uint32",
+                "name": "srcPublicCancellation",
+                "type": "uint32"
+              },
+              {
+                "internalType": "uint32",
+                "name": "dstWithdrawal",
+                "type": "uint32"
+              },
+              {
+                "internalType": "uint32",
+                "name": "dstPublicWithdrawal",
+                "type": "uint32"
+              },
+              {
+                "internalType": "uint32",
+                "name": "dstCancellation",
+                "type": "uint32"
+              }
+            ],
+            "internalType": "struct TronFusionBridge.TronTimelocks",
+            "name": "timelocks",
+            "type": "tuple"
+          }
+        ],
+        "internalType": "struct TronFusionBridge.Immutables",
+        "name": "immutables",
+        "type": "tuple"
+      }
+    ],
+    "name": "publicWithdraw",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "orderHash",
+        "type": "bytes32"
+      }
+    ],
+    "name": "rescueFunds",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "name": "resolverBonds",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "resolver",
+        "type": "address"
+      }
+    ],
+    "name": "revokeResolver",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "",
+        "type": "bytes32"
+      }
+    ],
+    "name": "swaps",
+    "outputs": [
+      {
+        "components": [
+          {
+            "internalType": "bytes32",
+            "name": "orderHash",
+            "type": "bytes32"
+          },
+          {
+            "internalType": "bytes32",
+            "name": "hashlock",
+            "type": "bytes32"
+          },
+          {
+            "internalType": "address",
+            "name": "maker",
+            "type": "address"
+          },
+          {
+            "internalType": "address",
+            "name": "taker",
+            "type": "address"
+          },
+          {
+            "internalType": "address",
+            "name": "token",
+            "type": "address"
+          },
+          {
+            "internalType": "uint256",
+            "name": "amount",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "safetyDeposit",
+            "type": "uint256"
+          },
+          {
+            "components": [
+              {
+                "internalType": "uint32",
+                "name": "srcWithdrawal",
+                "type": "uint32"
+              },
+              {
+                "internalType": "uint32",
+                "name": "srcPublicWithdrawal",
+                "type": "uint32"
+              },
+              {
+                "internalType": "uint32",
+                "name": "srcCancellation",
+                "type": "uint32"
+              },
+              {
+                "internalType": "uint32",
+                "name": "srcPublicCancellation",
+                "type": "uint32"
+              },
+              {
+                "internalType": "uint32",
+                "name": "dstWithdrawal",
+                "type": "uint32"
+              },
+              {
+                "internalType": "uint32",
+                "name": "dstPublicWithdrawal",
+                "type": "uint32"
+              },
+              {
+                "internalType": "uint32",
+                "name": "dstCancellation",
+                "type": "uint32"
+              }
+            ],
+            "internalType": "struct TronFusionBridge.TronTimelocks",
+            "name": "timelocks",
+            "type": "tuple"
+          }
+        ],
+        "internalType": "struct TronFusionBridge.Immutables",
+        "name": "immutables",
+        "type": "tuple"
+      },
+      {
+        "internalType": "enum TronFusionBridge.SwapState",
+        "name": "state",
+        "type": "uint8"
+      },
+      {
+        "internalType": "uint256",
+        "name": "createdAt",
+        "type": "uint256"
+      },
+      {
+        "internalType": "bytes32",
+        "name": "secretRevealed",
+        "type": "bytes32"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "orderHash",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "bytes32",
+        "name": "secret",
+        "type": "bytes32"
+      },
+      {
+        "components": [
+          {
+            "internalType": "bytes32",
+            "name": "orderHash",
+            "type": "bytes32"
+          },
+          {
+            "internalType": "bytes32",
+            "name": "hashlock",
+            "type": "bytes32"
+          },
+          {
+            "internalType": "address",
+            "name": "maker",
+            "type": "address"
+          },
+          {
+            "internalType": "address",
+            "name": "taker",
+            "type": "address"
+          },
+          {
+            "internalType": "address",
+            "name": "token",
+            "type": "address"
+          },
+          {
+            "internalType": "uint256",
+            "name": "amount",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "safetyDeposit",
+            "type": "uint256"
+          },
+          {
+            "components": [
+              {
+                "internalType": "uint32",
+                "name": "srcWithdrawal",
+                "type": "uint32"
+              },
+              {
+                "internalType": "uint32",
+                "name": "srcPublicWithdrawal",
+                "type": "uint32"
+              },
+              {
+                "internalType": "uint32",
+                "name": "srcCancellation",
+                "type": "uint32"
+              },
+              {
+                "internalType": "uint32",
+                "name": "srcPublicCancellation",
+                "type": "uint32"
+              },
+              {
+                "internalType": "uint32",
+                "name": "dstWithdrawal",
+                "type": "uint32"
+              },
+              {
+                "internalType": "uint32",
+                "name": "dstPublicWithdrawal",
+                "type": "uint32"
+              },
+              {
+                "internalType": "uint32",
+                "name": "dstCancellation",
+                "type": "uint32"
+              }
+            ],
+            "internalType": "struct TronFusionBridge.TronTimelocks",
+            "name": "timelocks",
+            "type": "tuple"
+          }
+        ],
+        "internalType": "struct TronFusionBridge.Immutables",
+        "name": "immutables",
+        "type": "tuple"
+      }
+    ],
+    "name": "withdraw",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "stateMutability": "payable",
+    "type": "receive"
+  }
+]

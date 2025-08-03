@@ -11,7 +11,11 @@ pnpm-lock.yaml
 .env.development
 .env.test
 .env.production
+.claude
 *.env
+
+# Cache
+cache/
 
 # Build outputs
 dist/

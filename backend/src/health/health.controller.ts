@@ -7,7 +7,7 @@ export class HealthController {
     return { 
       status: 'OK', 
       timestamp: new Date().toISOString(),
-      service: 'Mokuen NestJS Backend'
+      service: 'Enju NestJS Backend'
     };
   }
 }

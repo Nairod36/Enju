@@ -4,11 +4,13 @@ import {
   createRootRoute,
   Outlet,
 } from "@tanstack/react-router";
-import { Header } from "./components/headers/Header";
 import HomePage from "./pages/HomePage";
 import { AppPage } from "./pages/app/AppPage";
 import { AppDashboard } from "./pages/app/AppDashboard";
 import ThreePage from "./pages/app/ThreePage";
+import { IslandExplorer } from "./pages/app/IslandExplorer";
+import { Rewards } from "./pages/app/Rewards";
+import { Profile } from "./pages/app/Profile";
 
 const rootRoute = createRootRoute({
   component: () => (
@@ -42,9 +44,32 @@ const ThreeDGameRoute = createRoute({
   component: ThreePage,
 });
 
+const explorerRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/explorer",
+  component: IslandExplorer,
+});
+
+const rewardsRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/rewards",
+  component: Rewards,
+});
+
+const profileRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/profile",
+  component: Profile,
+});
+
 const routeTree = rootRoute.addChildren([
   homeRoute,
-  appRoute.addChildren([appDashboardRoute]),
+  appRoute.addChildren([
+    appDashboardRoute,
+    explorerRoute,
+    rewardsRoute,
+    profileRoute,
+  ]),
   ThreeDGameRoute,
 ]);
 

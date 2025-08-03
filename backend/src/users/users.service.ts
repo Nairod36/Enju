@@ -31,13 +31,39 @@ export class UsersService {
     private usersUtils: UsersUtils,
   ) { }
 
+  async checkUserExists(address: string) {
+    if (!address) {
+      return { exists: false, user: null };
+    }
+
+    try {
+      const user = await this.prisma.user.findUnique({
+        where: { walletAddress: address.toLowerCase() },
+        select: {
+          id: true,
+          walletAddress: true,
+          username: true,
+          createdAt: true,
+        }
+      });
+
+      return {
+        exists: !!user,
+        user: user || null
+      };
+    } catch (error) {
+      console.error('Error checking user existence:', error);
+      return { exists: false, user: null };
+    }
+  }
+
   async generateNonce(walletAddress: string): Promise<NonceResponseDto> {
     if (!ethers.utils.isAddress(walletAddress)) {
       throw new InvalidWalletAddressException();
     }
 
     const nonce = `nonce-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    const message = `Please sign this message to authenticate with Mokuen SwapForest: ${nonce}`;
+    const message = `Please sign this message to authenticate with Enju SwapForest: ${nonce}`;
 
     await this.prisma.user.upsert({
       where: { walletAddress: walletAddress.toLowerCase() },
@@ -68,11 +94,11 @@ export class UsersService {
       throw new NonceNotFoundException();
     }
 
-    const expectedMessage = `Please sign this message to authenticate with Mokuen SwapForest: ${user.nonce}`;
+    const expectedMessage = `Please sign this message to authenticate with Enju SwapForest: ${user.nonce}`;
     if (message !== expectedMessage) {
       // Si l'utilisateur est déjà connecté et le message semble valide (commence par le bon préfixe),
       // on peut accepter un ancien nonce pour éviter les problèmes de concurrence
-      const messagePrefix = 'Please sign this message to authenticate with Mokuen SwapForest: nonce-';
+      const messagePrefix = 'Please sign this message to authenticate with Enju SwapForest: nonce-';
       if (!user.isConnected || !message.startsWith(messagePrefix)) {
         throw new InvalidSignatureException('Invalid message');
       }
@@ -366,5 +392,48 @@ export class UsersService {
         winner,
       },
     };
+  }
+
+  async levelUp(userId: string, experienceGain: number, activityBonus: number = 10): Promise<UserResponseDto> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new UserNotFoundException();
+    }
+
+    const newExperience = user.experience + experienceGain;
+    const currentLevel = user.level;
+    
+    // Calcul du nouveau niveau (100 XP par niveau)
+    const newLevel = Math.floor(newExperience / 100) + 1;
+    const levelIncreased = newLevel > currentLevel;
+
+    const updatedUser = await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        experience: newExperience,
+        level: newLevel,
+        activityScore: { increment: activityBonus },
+        lastActivityAt: new Date(),
+      },
+    });
+
+    console.log(`🎉 User level up: ${user.walletAddress} | Level: ${currentLevel} → ${newLevel} | XP: ${user.experience} → ${newExperience}`);
+
+    return this.usersUtils.transformToResponseDto(updatedUser);
+  }
+
+  async levelUpByAddress(walletAddress: string, experienceGain: number, activityBonus: number = 10): Promise<UserResponseDto> {
+    const user = await this.prisma.user.findUnique({
+      where: { walletAddress: walletAddress.toLowerCase() },
+    });
+
+    if (!user) {
+      throw new UserNotFoundException();
+    }
+
+    return this.levelUp(user.id, experienceGain, activityBonus);
   }
 }

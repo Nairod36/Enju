@@ -1,0 +1,18 @@
+{
+  "name": "tron-fusion-bridge",
+  "version": "1.0.0",
+  "description": "Tron contracts for 1inch Fusion+ Bridge",
+  "scripts": {
+    "compile": "tronbox compile",
+    "migrate": "tronbox migrate",
+    "migrate:shasta": "tronbox migrate --network shasta",
+    "migrate:mainnet": "tronbox migrate --network mainnet",
+    "test": "tronbox test"
+  },
+  "dependencies": {
+    "tronweb": "^5.3.4"
+  },
+  "devDependencies": {
+    "tronbox": "^2.7.24"
+  }
+}

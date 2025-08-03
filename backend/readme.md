@@ -1,7 +1,7 @@
 
-# Mokuen SwapForest — Backend
+# Enju SwapForest — Backend
 
-This backend powers the Mokuen SwapForest app, handling user data, game logic, blockchain interactions, and rewards.
+This backend powers the Enju SwapForest app, handling user data, game logic, blockchain interactions, and rewards.
 
 ## Features
 - User management (wallet, profile, progression)

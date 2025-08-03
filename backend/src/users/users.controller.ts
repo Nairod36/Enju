@@ -4,6 +4,7 @@ import {
   Post,
   Body,
   Param,
+  Query,
   ParseIntPipe,
   NotFoundException,
   UseGuards,
@@ -18,6 +19,16 @@ import { ConnectWalletDto, UpdateUserProfileDto } from './dto';
 @Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) { }
+
+  @Get('check-exists')
+  @ApiOperation({
+    summary: 'Check if user exists',
+    description: 'Check if a user exists by wallet address'
+  })
+  @ApiResponse({ status: 200, description: 'User existence check completed' })
+  async checkUserExists(@Query('address') address: string) {
+    return this.usersService.checkUserExists(address);
+  }
 
   @Get('me')
   @ApiBearerAuth()
@@ -82,5 +93,27 @@ export class UsersController {
   @ApiResponse({ status: 200, description: 'Profile updated successfully' })
   async updateProfile(@Request() req, @Body() updateUserDto: UpdateUserProfileDto) {
     return this.usersService.updateProfile(req.user.id, updateUserDto);
+  }
+
+  @Post('me/level-up')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({
+    summary: 'Increase user level',
+    description: 'Increase user level and experience from bridge/swap activity'
+  })
+  @ApiResponse({ status: 200, description: 'Level increased successfully' })
+  async levelUp(@Request() req, @Body() body: { experience: number; activityBonus?: number }) {
+    return this.usersService.levelUp(req.user.id, body.experience, body.activityBonus);
+  }
+
+  @Post('level-up-by-address')
+  @ApiOperation({
+    summary: 'Increase user level by wallet address',
+    description: 'Increase user level and experience from bridge/swap activity using wallet address'
+  })
+  @ApiResponse({ status: 200, description: 'Level increased successfully' })
+  async levelUpByAddress(@Body() body: { walletAddress: string; experience: number; activityBonus?: number }) {
+    return this.usersService.levelUpByAddress(body.walletAddress, body.experience, body.activityBonus);
   }
 }

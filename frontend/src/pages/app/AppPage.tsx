@@ -1,12 +1,13 @@
 import { Outlet } from "@tanstack/react-router";
 import { AppHeader } from "../../components/headers/AppHeader";
+import { AppFooter } from "../../components/layout/AppFooter";
 
 export function AppPage() {
   return (
-    <div className="min-h-screen text-slate-800 font-sans selection:bg-emerald-200/60 selection:text-slate-900">
+    <div className="flex flex-col">
       {/* Light backgrounds with subtle green accents */}
-      <div className="fixed inset-0 bg-gradient-to-br from-white to-emerald-50/40" />
-      
+      <div className="fixed inset-0" />
+
       {/* Subtle animated background elements */}
       <div className="fixed inset-0 opacity-30">
         <div className="absolute top-20 left-20 w-72 h-72 bg-emerald-500/10 rounded-full blur-3xl animate-pulse" />
@@ -14,9 +15,10 @@ export function AppPage() {
       </div>
 
       <AppHeader />
-      <main className="relative z-10 pt-32">
+      <main className="h-full">
         <Outlet />
       </main>
+      <AppFooter />
     </div>
   );
 }

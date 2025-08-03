@@ -17,25 +17,14 @@ export interface UpdateIslandRequest {
   name?: string;
   islandData?: any;
   treeCount?: number;
+  totalTrees?: number;
   userTrees?: any[];
   chests?: any[];
   usedTiles?: string[];
+  healthScore?: number;
 }
 
-export interface IslandResponse {
-  id: string;
-  name: string;
-  seed: string;
-  isActive: boolean;
-  islandData: any;
-  treeCount: number;
-  createdAt: string;
-  lastModified: string;
-  version: string;
-  userTrees?: any[];
-  chests?: any[];
-  usedTiles?: string[];
-}
+export type IslandResponse = any;
 
 class IslandsService {
   private getAuthHeaders() {
@@ -161,7 +150,25 @@ class IslandsService {
     return response.json();
   }
 
+  async getPublicIslands(page: number = 1, limit: number = 20): Promise<{
+    islands: IslandResponse[];
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  }> {
+    const response = await fetch(`${API_BASE_URL}/islands/public?page=${page}&limit=${limit}`);
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch public islands: ${response.status} ${response.statusText}`);
+    }
+
+    return response.json();
+  }
+
   async autoSaveIsland(id: string, updateData: UpdateIslandRequest): Promise<IslandResponse> {
+    console.log('🔄 Calling auto-save API with:', { id, updateData });
+    
     const response = await fetch(`${API_BASE_URL}/islands/${id}/auto-save`, {
       method: 'PUT',
       headers: this.getAuthHeaders(),
@@ -169,10 +176,14 @@ class IslandsService {
     });
 
     if (!response.ok) {
-      throw new Error('Failed to auto-save island');
+      const errorText = await response.text();
+      console.error('Auto-save failed:', response.status, errorText);
+      throw new Error(`Failed to auto-save island: ${response.status} ${errorText}`);
     }
 
-    return response.json();
+    const result = await response.json();
+    console.log('✅ Auto-save API response:', result);
+    return result;
   }
 
   // Migration depuis localStorage
@@ -207,7 +218,7 @@ class IslandsService {
       // Sauvegarder les données originales avec un suffixe
       localStorage.setItem('saved_islands_backup', localData);
       localStorage.removeItem('saved_islands');
-      
+
       console.log('🎉 Migration completed! Original data backed up as saved_islands_backup');
     } catch (error) {
       console.error('❌ Migration failed:', error);

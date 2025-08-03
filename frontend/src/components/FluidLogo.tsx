@@ -3,13 +3,13 @@ import React, { FC } from "react";
 
 export const FluidLogo: FC = () => {
   return (
-    <div className="relative w-20 h-20">
+    <div className="relative w-12 h-12">
       {/* Cercle de fond floral */}
       <div className="absolute inset-0 animate-pulse" />
 
       {/* Blob animé façon goutte de sève */}
       <div
-        className="absolute top-1/4 left-1/4 w-10 h-10 bg-gradient-to-br from-lime-400 to-emerald-600
+        className="absolute top-1/4 left-1/4 w-8 h-8 bg-gradient-to-br from-lime-400 to-emerald-600
                  rounded-full animate-[leafblob_5s_ease-in-out_infinite]"
       />
 

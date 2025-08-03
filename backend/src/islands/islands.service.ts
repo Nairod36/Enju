@@ -78,13 +78,25 @@ export class IslandsService {
         { lastModified: 'desc' }
       ],
       include: {
+        user: {
+          select: {
+            username: true,
+            walletAddress: true
+          }
+        },
         userTrees: true,
         chests: true,
         usedTiles: true
       }
     });
 
-    return islands.map(island => this.transformToResponseDto(island));
+    return islands.map(island => ({
+      ...this.transformToResponseDto(island),
+      owner: {
+        username: island.user.username,
+        walletAddress: island.user.walletAddress
+      }
+    }));
   }
 
   async getActiveIsland(userId: string): Promise<IslandResponseDto | null> {
@@ -314,6 +326,61 @@ export class IslandsService {
         walletAddress: island.user.walletAddress
       }
     }));
+  }
+
+  async getAllPublicIslands(page: number = 1, limit: number = 20): Promise<{
+    islands: IslandResponseDto[];
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  }> {
+    const skip = (page - 1) * limit;
+    
+    const [islands, total] = await Promise.all([
+      this.prisma.island.findMany({
+        where: {
+          // Optionally add conditions for public islands
+          // For now, we'll include all islands but exclude sensitive data
+        },
+        include: {
+          user: {
+            select: {
+              username: true,
+              walletAddress: true
+            }
+          },
+          userTrees: true,
+          chests: true,
+          usedTiles: true
+        },
+        orderBy: { lastModified: 'desc' },
+        skip,
+        take: limit
+      }),
+      
+      this.prisma.island.count({
+        where: {
+          // Same conditions as above
+        }
+      })
+    ]);
+
+    const totalPages = Math.ceil(total / limit);
+
+    return {
+      islands: islands.map(island => ({
+        ...this.transformToResponseDto(island),
+        owner: {
+          username: island.user.username,
+          walletAddress: island.user.walletAddress
+        }
+      })),
+      total,
+      page,
+      limit,
+      totalPages
+    };
   }
 
   async autoSaveIsland(userId: string, islandId: string, updateData: UpdateIslandDto): Promise<IslandResponseDto> {
