@@ -121,13 +121,24 @@ export default function HomePage() {
                 </div>
                 <div className="text-center">
                   <div className="text-2xl font-light text-slate-900">
-                    $2.4M
+                    {loading ? "..." : islands.length.toLocaleString()}
                   </div>
-                  <div className="text-sm text-slate-500">Bridge Volume</div>
+                  <div className="text-sm text-slate-500">Islands</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-2xl font-light text-slate-900">15K+</div>
-                  <div className="text-sm text-slate-500">Islands</div>
+                  <div className="text-2xl font-light text-slate-900">
+                    {loading 
+                      ? "..." 
+                      : islands.reduce((sum, island) => sum + (island.totalTrees || 0), 0).toLocaleString()
+                    }
+                  </div>
+                  <div className="text-sm text-slate-500">Trees</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-light text-slate-900">
+                    $ --
+                  </div>
+                  <div className="text-sm text-slate-500">Bridge Volume</div>
                 </div>
               </div>
             </div>
