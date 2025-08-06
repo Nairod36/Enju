@@ -562,86 +562,34 @@ export class BridgeResolver extends EventEmitter {
         amount: event.amount
       });
 
-      // 🚀 AUTO-SEND TRX: Envoyer automatiquement les TRX dès réception des ETH
-      if (this.tronFusionClient) {
-        console.log(`� Auto-sending TRX to ${event.tronAddress}...`);
+      // 🔄 Use unified Fusion+ approach instead of direct TRX sending to avoid duplication
+      console.log(`🔄 Processing ETH → TRON bridge via unified Fusion+ flow...`);
+      
+      try {
+        // Convert amount for processing
+        const ethAmountInEther = ethers.formatEther(event.amount);
+        
+        // Process through unified method to avoid duplicate TRX sends
+        await this.processEthToTronSwap(
+          event.escrow,
+          event.tronAddress,
+          event.amount,
+          event.hashlock
+        );
 
-        // Mettre à jour le statut
+        // Update bridge status to processing
         bridgeEvent.status = 'PROCESSING';
         this.activeBridges.set(bridgeId, bridgeEvent);
 
-        try {
-          // Convertir le montant ETH en TRX équivalent
-          const ethAmountInEther = ethers.formatEther(event.amount);
-          console.log(`💰 Converting ${ethAmountInEther} ETH to equivalent TRX...`);
-
-          // Pour la démo, utilisons un taux de change fixe (à remplacer par un oracle de prix)
-          const ethToTrxRate = 11080; // Approximatif: 1 ETH ≈ 11,080 TRX
-          const trxAmount = (parseFloat(ethAmountInEther) * ethToTrxRate).toFixed(6);
-
-          console.log(`💱 Sending ${trxAmount} TRX (rate: ${ethToTrxRate} TRX/ETH)`);
-          console.log(`🔍 BRIDGE RESOLVER IDENTITY:`);
-          console.log(`   🤖 Resolver TRON address: ${this.tronFusionClient.getAddress()}`);
-          console.log(`   📋 Target recipient: ${event.tronAddress}`);
-          console.log(`   🎯 ETH event from: ${event.from || 'unknown'}`);
-          console.log(`   🔐 Hashlock: ${event.hashlock}`);
-
-          // Envoyer directement les TRX sans escrow
-          const tronTxResult = await this.tronFusionClient.sendTRX(
-            event.tronAddress,
-            trxAmount
-          );
-
-          if (tronTxResult.success) {
-            console.log(`✅ TRX sent successfully! TX: ${tronTxResult.txHash}`);
-
-            // Finaliser le bridge
-            bridgeEvent.status = 'COMPLETED';
-            bridgeEvent.tronTxHash = tronTxResult.txHash;
-            bridgeEvent.completedAt = Date.now();
-            this.activeBridges.set(bridgeId, bridgeEvent);
-
-            // 🪙 Mint reward tokens for ETH → TRON bridge
-            try {
-              const ethAmountInEth = parseFloat(ethAmountInEther);
-              const userAddress = event.from || event.sender; // Get user's ETH address from event
-              if (ethAmountInEth > 0 && userAddress) {
-                await this.mintRewardTokens('ETH_TO_TRON', ethAmountInEth, userAddress, bridgeId);
-              }
-            } catch (rewardError) {
-              console.error('❌ Failed to mint reward tokens for ETH → TRON bridge:', rewardError);
-            }
-
-            // 🎮 Level up user for ETH → TRON bridge
-            try {
-              const ethAmountInEth = parseFloat(ethAmountInEther);
-              const userAddress = event.from || event.sender;
-              if (ethAmountInEth > 0 && userAddress) {
-                const experience = Math.max(15, Math.floor(ethAmountInEth * 100)); // More XP for ETH bridges
-                await this.levelUpUser(userAddress, experience);
-                console.log(`🌳 ETH → TRON bridge completed - frontend will handle tree planting via callback`);
-              }
-            } catch (gamificationError) {
-              console.error('❌ Failed to level up user for ETH → TRON bridge:', gamificationError);
-            }
-
-            this.emit('bridgeCompleted', bridgeEvent);
-          } else {
-            throw new Error(`TRON send failed: ${tronTxResult.error}`);
-          }
-
-        } catch (tronError) {
-          console.error(`❌ Failed to auto-send TRX:`, tronError);
-          bridgeEvent.status = 'FAILED';
-          this.activeBridges.set(bridgeId, bridgeEvent);
-          this.emit('bridgeFailed', bridgeEvent);
-        }
-
-      } else {
-        console.log(`⚠️ TRON Fusion+ client not available - cannot auto-send TRX`);
+      } catch (error) {
+        console.error('❌ Failed to process ETH → TRON bridge:', error);
         bridgeEvent.status = 'FAILED';
         this.activeBridges.set(bridgeId, bridgeEvent);
+        this.emit('bridgeFailed', bridgeEvent);
       }
+
+      /*
+     
 
     } catch (error) {
       console.error('❌ Error handling ETH → TRON bridge:', error);
