@@ -30,7 +30,18 @@ export class BridgeAPI {
   }
 
   private setupMiddleware(): void {
-    this.app.use(cors());
+    // Configuration CORS pour VPS
+    this.app.use(cors({
+      origin: [
+        'http://localhost:5173',
+        'http://152.228.163.97:5173',
+        'http://152.228.163.97:3001',
+        'http://localhost:3000'
+      ],
+      credentials: true,
+      methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+      allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With'],
+    }));
     this.app.use(express.json());
 
     // Custom JSON serialization to handle BigInt values

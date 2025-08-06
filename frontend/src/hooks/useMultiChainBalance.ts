@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAccount } from 'wagmi';
 import { useWalletSelector } from '@near-wallet-selector/react-hook';
+import { rpcRequest } from '../config/api';
 
 interface MultiChainBalance {
     eth: {
@@ -38,17 +39,7 @@ export function useMultiChainBalance() {
     const fetchEthBalance = async () => {
         if (!address) return null;
         try {
-            // Use backend as proxy to avoid CORS issues
-            const response = await fetch('http://localhost:3001/api/v1/rpc/eth', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    jsonrpc: '2.0',
-                    method: 'eth_getBalance',
-                    params: [address, 'latest'],
-                    id: 1
-                })
-            });
+            const response = await rpcRequest('eth_getBalance', [address, 'latest']);
 
             const result = await response.json();
 

@@ -9,13 +9,24 @@ import { ValidationPipe as CustomValidationPipe } from './common/pipes/validatio
 dotenv.config();
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, {
+    // Optimisations pour VPS avec RAM limitée
+    logger: process.env.NODE_ENV === 'production' ? ['error', 'warn'] : ['log', 'debug', 'error', 'verbose', 'warn'],
+    cors: true, // Activer CORS au niveau de l'app
+  });
 
+  // Configuration CORS complète
   app.enableCors({
-    origin: process.env.CORS_ORIGINS?.split(',') || ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:5173'],
+    origin: (origin, callback) => {
+      console.log(`🔥 CORS origin check: ${origin}`);
+      // Accepter toutes les origines temporairement
+      callback(null, true);
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With'],
+    preflightContinue: false,
+    optionsSuccessStatus: 204,
   });
 
   // Préfixe global pour l'API
@@ -39,12 +50,24 @@ async function bootstrap() {
 
   const port = process.env.PORT || 3001;
   await app.listen(port);
+  
+  // Monitoring de base
+  setInterval(() => {
+    const memUsage = process.memoryUsage();
+    const memMB = Math.round(memUsage.rss / 1024 / 1024);
+    if (memMB > 512) {
+      console.warn(`⚠️  High memory usage: ${memMB}MB`);
+    }
+  }, 30000); // Check toutes les 30s
+  
   console.log(`
     🌳 Enju SwapForest API is running!
     📍 Server: http://localhost:${port}
     📚 Swagger: http://localhost:${port}/api/v1/swagger
     🗄️  Database: NEON PostgreSQL
     🌍 Public forest data available to all users
+    🐳 Docker: backend service running on port ${port}
+    🛡️  Rate limiting: 100 req/min per IP
   `);
 }
 bootstrap();

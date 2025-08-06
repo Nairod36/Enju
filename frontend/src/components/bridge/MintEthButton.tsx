@@ -3,6 +3,7 @@ import { Button } from "../ui/button";
 import { useAccount } from "wagmi";
 import { Coins, Loader2, Zap } from "lucide-react";
 import { toast } from "sonner";
+import { API_CONFIG, apiRequest } from "../../config/api";
 
 export function MintEthButton() {
   const { address, isConnected } = useAccount();
@@ -19,13 +20,10 @@ export function MintEthButton() {
     setIsMinting(true);
     console.log("🔄 Minting ETH...");
     try {
-      const response = await fetch(
-        "http://localhost:3001/api/v1/rpc/mint-eth",
+      const response = await apiRequest(
+        `${API_CONFIG.BASE_URL}/rpc/mint-eth`,
         {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
           body: JSON.stringify({
             address: address,
             // amount is optional, defaults to 0.1 ETH

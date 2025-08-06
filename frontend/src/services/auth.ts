@@ -1,7 +1,6 @@
 import { signMessage } from '@wagmi/core';
 import { wagmiAdapter } from '../config';
-
-const API_BASE_URL = 'http://localhost:3001/api/v1';
+import { API_CONFIG, apiRequest } from '../config/api';
 
 export interface ConnectWalletRequest {
   walletAddress: string;
@@ -42,50 +41,47 @@ class AuthService {
 
   async connectWallet(walletAddress: string, chainId?: number): Promise<AuthResponse> {
     const now = Date.now();
-    
+
     // Avoid too rapid calls (less than 3 seconds)
     if (now - this.lastConnectTime < 3000) {
       if (this.lastSignature && this.lastSignedMessage) {
         throw new Error('Please wait before reconnecting');
       }
     }
-    
+
     // Avoid concurrent calls for the same address
     if (this.connectingWallet === walletAddress) {
       throw new Error('Connection already in progress for this wallet');
     }
-    
+
     // If wallet changes, reset previous connection
     if (this.connectingWallet && this.connectingWallet !== walletAddress) {
       this.connectingWallet = null;
     }
-    
+
     this.connectingWallet = walletAddress;
     this.lastConnectTime = now;
     try {
       // 1. Get nonce from API (avec cache)
       let message: string;
-      
-      if (this.cachedNonce && 
-          this.cachedNonce.walletAddress === walletAddress && 
-          now - this.cachedNonce.timestamp < 10000) { // Cache pendant 10 secondes
+
+      if (this.cachedNonce &&
+        this.cachedNonce.walletAddress === walletAddress &&
+        now - this.cachedNonce.timestamp < 10000) { // Cache pendant 10 secondes
         message = this.cachedNonce.message;
       } else {
-        const nonceResponse = await fetch(`${API_BASE_URL}/users/nonce`, {
+        const nonceResponse = await apiRequest(`${API_CONFIG.BASE_URL}/users/nonce`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
           body: JSON.stringify({ walletAddress }),
         });
-        
+
         if (!nonceResponse.ok) {
           throw new Error('Failed to get nonce');
         }
 
         const nonceData: NonceResponse = await nonceResponse.json();
         message = nonceData.message;
-        
+
         // Mettre en cache
         this.cachedNonce = {
           walletAddress,
@@ -114,11 +110,8 @@ class AuthService {
         chainId,
       };
 
-      const connectResponse = await fetch(`${API_BASE_URL}/users/connect`, {
+      const connectResponse = await apiRequest(`${API_CONFIG.BASE_URL}/users/connect`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify(connectRequest),
       });
 
@@ -127,7 +120,7 @@ class AuthService {
       }
 
       const authResponse: AuthResponse = await connectResponse.json();
-      
+
       // Store token
       this.token = authResponse.accessToken;
       localStorage.setItem('auth_token', authResponse.accessToken);
@@ -151,7 +144,7 @@ class AuthService {
       throw new Error('No auth token');
     }
 
-    const response = await fetch(`${API_BASE_URL}/users/me`, {
+    const response = await apiRequest(`${API_CONFIG.BASE_URL}/users/me`, {
       headers: {
         'Authorization': `Bearer ${this.token}`,
       },
@@ -205,15 +198,14 @@ class AuthService {
   // Helper method for authenticated API calls
   async makeAuthenticatedRequest(url: string, options: RequestInit = {}): Promise<Response> {
     const token = this.getToken();
-    
+
     if (!token) {
       throw new Error('No auth token available');
     }
 
-    const response = await fetch(url, {
+    const response = await apiRequest(url, {
       ...options,
       headers: {
-        'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`,
         ...options.headers,
       },

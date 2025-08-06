@@ -240,7 +240,7 @@ export class BridgeResolver extends EventEmitter {
   private async levelUpUser(walletAddress: string, experience: number, activityBonus: number = 10): Promise<void> {
     try {
       console.log(`🎮 Leveling up user ${walletAddress} with ${experience} XP`);
-      
+
       const response = await fetch('http://localhost:3001/api/v1/users/level-up-by-address', {
         method: 'POST',
         headers: {
@@ -259,7 +259,7 @@ export class BridgeResolver extends EventEmitter {
 
       const result = await response.json() as { level: number; experience: number };
       console.log(`✅ User leveled up: ${walletAddress} | Level: ${result.level} | XP: ${result.experience}`);
-      
+
     } catch (error) {
       console.error(`❌ Error leveling up user ${walletAddress}:`, error);
       // Don't throw the error to avoid breaking the bridge process
@@ -437,17 +437,17 @@ export class BridgeResolver extends EventEmitter {
         try {
           // Get user address from bridge event
           let gamificationUserAddress = event.from;
-          
+
           // If no user address from event, try to get from transaction
           if (!gamificationUserAddress || !gamificationUserAddress.startsWith('0x')) {
             try {
               const provider = new ethers.JsonRpcProvider(this.config.ethRpcUrl);
-              
+
               // Ensure blockNumber is valid
-              const blockNumber = typeof event.blockNumber === 'number' && !isNaN(event.blockNumber) 
-                ? event.blockNumber 
+              const blockNumber = typeof event.blockNumber === 'number' && !isNaN(event.blockNumber)
+                ? event.blockNumber
                 : await provider.getBlockNumber() - 50; // Fallback to recent blocks
-              
+
               const filter = {
                 fromBlock: Math.max(0, blockNumber - 10),
                 toBlock: blockNumber + 10,
@@ -468,7 +468,7 @@ export class BridgeResolver extends EventEmitter {
               console.log(`⚠️ Failed to get sender for gamification:`, error);
             }
           }
-          
+
           if (ethAmountInEth > 0 && gamificationUserAddress && gamificationUserAddress.startsWith('0x')) {
             const experience = Math.max(15, Math.floor(ethAmountInEth * 100)); // More XP for ETH bridges
             await this.levelUpUser(gamificationUserAddress, experience);
@@ -981,10 +981,10 @@ export class BridgeResolver extends EventEmitter {
     timelock: number;
   }): Promise<any> {
     console.log(`🔄 NEAR → ETH: Preparing to RELEASE ETH to user (NOT create escrow)...`);
-    
+
     // Ensure hashlock has 0x prefix for ethers.js
     const hashlock = params.hashlock.startsWith('0x') ? params.hashlock : `0x${params.hashlock}`;
-    
+
     console.log(`📋 Parameters:`, {
       hashlock: hashlock,
       recipient: params.recipient,
@@ -1799,9 +1799,9 @@ export class BridgeResolver extends EventEmitter {
             } else {
               trxAmount = parseFloat(trxAmountStr) / 1e6;
             }
-            
+
             const experience = Math.max(10, Math.floor(trxAmount / 10)); // Min 10 XP, 1 XP per 10 TRX
-            
+
             await this.levelUpUser(userAddress, experience);
             console.log(`🌳 TRON → ETH bridge completed - frontend will handle tree planting via callback`);
           }

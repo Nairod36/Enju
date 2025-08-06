@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAccount } from 'wagmi';
+import { API_CONFIG, rpcRequest } from '../config/api';
 
 interface TokenBalance {
     formatted: string;
@@ -33,16 +34,7 @@ export function useTokenBalances() {
         try {
             // Handle ETH (native token)
             if (tokenAddress === "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE") {
-                const response = await fetch('http://localhost:3001/api/v1/rpc/eth', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        jsonrpc: '2.0',
-                        method: 'eth_getBalance',
-                        params: [address, 'latest'],
-                        id: 1
-                    })
-                });
+                const response = await rpcRequest('eth_getBalance', [address, 'latest']);
 
                 const result = await response.json();
                 if (result.result) {
@@ -55,48 +47,27 @@ export function useTokenBalances() {
                     };
                 }
             } else {
-                // Handle ERC20 tokens - Try direct RPC for REWARD token, fallback to backend
-                let rpcUrl = 'http://localhost:3001/api/v1/rpc/eth';
-                let tryDirectRpc = tokenAddress === '0x012EB96bcc36d3c32847dB4AC416B19Febeb9c54';
-
-                const response = await fetch(rpcUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        jsonrpc: '2.0',
-                        method: 'eth_call',
-                        params: [
-                            {
-                                to: tokenAddress,
-                                data: `0x70a08231000000000000000000000000${address.slice(2).toLowerCase()}` // balanceOf(address)
-                            },
-                            'latest'
-                        ],
-                        id: 1
-                    })
-                });
+                // Handle ERC20 tokens
+                const response = await rpcRequest('eth_call', [
+                    {
+                        to: tokenAddress,
+                        data: `0x70a08231000000000000000000000000${address.slice(2).toLowerCase()}` // balanceOf(address)
+                    },
+                    'latest'
+                ]);
 
                 const result = await response.json();
 
                 // If direct RPC failed and this is REWARD token, try backend as fallback
-                if (tryDirectRpc && (!result.result || result.error)) {
+                if ((!result.result || result.error)) {
                     console.log(`❌ Direct RPC failed for REWARD token, trying backend fallback...`);
-                    const fallbackResponse = await fetch('http://localhost:3001/api/v1/rpc/eth', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            jsonrpc: '2.0',
-                            method: 'eth_call',
-                            params: [
-                                {
-                                    to: tokenAddress,
-                                    data: `0x70a08231000000000000000000000000${address.slice(2).toLowerCase()}` // balanceOf(address)
-                                },
-                                'latest'
-                            ],
-                            id: 1
-                        })
-                    });
+                    const fallbackResponse = await rpcRequest('eth_call', [
+                        {
+                            to: tokenAddress,
+                            data: `0x70a08231000000000000000000000000${address.slice(2).toLowerCase()}` // balanceOf(address)
+                        },
+                        'latest'
+                    ]);
                     const fallbackResult = await fallbackResponse.json();
 
                     if (fallbackResult.result && fallbackResult.result !== '0x') {

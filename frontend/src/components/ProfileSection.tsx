@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { User, Edit3, Save, Info, X } from "lucide-react";
+import { API_CONFIG, apiRequest } from "../config/api";
 
 interface UserProfile {
   id: string;
@@ -39,7 +40,7 @@ export function ProfileSection() {
     if (!address) return;
 
     try {
-      const response = await fetch("http://localhost:3001/api/v1/auth/me", {
+      const response = await apiRequest(`${API_CONFIG.BASE_URL}/auth/me`, {
         headers: {
           Authorization: `Bearer ${localStorage.getItem("auth_token")}`,
         },
@@ -62,11 +63,10 @@ export function ProfileSection() {
     if (!address) return;
 
     try {
-      const response = await fetch(
-        "http://localhost:3001/api/v1/auth/connect",
+      const response = await apiRequest(
+        `${API_CONFIG.BASE_URL}/auth/connect`,
         {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ address }),
         }
       );
@@ -100,12 +100,11 @@ export function ProfileSection() {
       const signature = await signMessage({ message });
 
       // Appeler l'API backend
-      const response = await fetch(
-        "http://localhost:3001/api/v1/auth/update-username",
+      const response = await apiRequest(
+        `${API_CONFIG.BASE_URL}/auth/update-username`,
         {
           method: "POST",
           headers: {
-            "Content-Type": "application/json",
             Authorization: `Bearer ${localStorage.getItem("auth_token")}`,
           },
           body: JSON.stringify({

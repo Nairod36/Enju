@@ -1,6 +1,5 @@
 import { authService } from './auth';
-
-const API_BASE_URL = 'http://localhost:3001/api/v1';
+import { API_CONFIG, apiRequest } from '../config/api';
 
 export interface CreateIslandRequest {
   name: string;
@@ -36,7 +35,7 @@ class IslandsService {
   }
 
   async createIsland(islandData: CreateIslandRequest): Promise<IslandResponse> {
-    const response = await fetch(`${API_BASE_URL}/islands`, {
+    const response = await apiRequest(`${API_CONFIG.BASE_URL}/islands`, {
       method: 'POST',
       headers: this.getAuthHeaders(),
       body: JSON.stringify(islandData),
@@ -50,7 +49,7 @@ class IslandsService {
   }
 
   async getMyIslands(): Promise<IslandResponse[]> {
-    const response = await fetch(`${API_BASE_URL}/islands/my`, {
+    const response = await apiRequest(`${API_CONFIG.BASE_URL}/islands/my`, {
       headers: this.getAuthHeaders(),
     });
 
@@ -62,7 +61,7 @@ class IslandsService {
   }
 
   async getActiveIsland(): Promise<IslandResponse | null> {
-    const response = await fetch(`${API_BASE_URL}/islands/active`, {
+    const response = await apiRequest(`${API_CONFIG.BASE_URL}/islands/active`, {
       headers: this.getAuthHeaders(),
     });
 
@@ -79,7 +78,7 @@ class IslandsService {
   }
 
   async ensureUserHasIsland(): Promise<IslandResponse> {
-    const response = await authService.makeAuthenticatedRequest(`${API_BASE_URL}/islands/ensure`);
+    const response = await authService.makeAuthenticatedRequest(`${API_CONFIG.BASE_URL}/islands/ensure`);
 
     if (!response.ok) {
       throw new Error('Failed to ensure user island');
@@ -89,7 +88,7 @@ class IslandsService {
   }
 
   async getIslandById(id: string): Promise<IslandResponse> {
-    const response = await fetch(`${API_BASE_URL}/islands/${id}`, {
+    const response = await apiRequest(`${API_CONFIG.BASE_URL}/islands/${id}`, {
       headers: this.getAuthHeaders(),
     });
 
@@ -101,7 +100,7 @@ class IslandsService {
   }
 
   async updateIsland(id: string, updateData: UpdateIslandRequest): Promise<IslandResponse> {
-    const response = await fetch(`${API_BASE_URL}/islands/${id}`, {
+    const response = await apiRequest(`${API_CONFIG.BASE_URL}/islands/${id}`, {
       method: 'PUT',
       headers: this.getAuthHeaders(),
       body: JSON.stringify(updateData),
@@ -115,7 +114,7 @@ class IslandsService {
   }
 
   async setActiveIsland(id: string): Promise<IslandResponse> {
-    const response = await fetch(`${API_BASE_URL}/islands/${id}/activate`, {
+    const response = await apiRequest(`${API_CONFIG.BASE_URL}/islands/${id}/activate`, {
       method: 'PUT',
       headers: this.getAuthHeaders(),
     });
@@ -128,7 +127,7 @@ class IslandsService {
   }
 
   async deleteIsland(id: string): Promise<void> {
-    const response = await fetch(`${API_BASE_URL}/islands/${id}`, {
+    const response = await apiRequest(`${API_CONFIG.BASE_URL}/islands/${id}`, {
       method: 'DELETE',
       headers: this.getAuthHeaders(),
     });
@@ -139,7 +138,7 @@ class IslandsService {
   }
 
   async getIslandsBySeed(seed: number): Promise<IslandResponse[]> {
-    const response = await fetch(`${API_BASE_URL}/islands/by-seed/${seed}`, {
+    const response = await apiRequest(`${API_CONFIG.BASE_URL}/islands/by-seed/${seed}`, {
       headers: this.getAuthHeaders(),
     });
 
@@ -157,7 +156,7 @@ class IslandsService {
     limit: number;
     totalPages: number;
   }> {
-    const response = await fetch(`${API_BASE_URL}/islands/public?page=${page}&limit=${limit}`);
+    const response = await apiRequest(`${API_CONFIG.BASE_URL}/islands/public?page=${page}&limit=${limit}`);
 
     if (!response.ok) {
       throw new Error(`Failed to fetch public islands: ${response.status} ${response.statusText}`);
@@ -168,8 +167,8 @@ class IslandsService {
 
   async autoSaveIsland(id: string, updateData: UpdateIslandRequest): Promise<IslandResponse> {
     console.log('🔄 Calling auto-save API with:', { id, updateData });
-    
-    const response = await fetch(`${API_BASE_URL}/islands/${id}/auto-save`, {
+
+    const response = await apiRequest(`${API_CONFIG.BASE_URL}/islands/${id}/auto-save`, {
       method: 'PUT',
       headers: this.getAuthHeaders(),
       body: JSON.stringify(updateData),

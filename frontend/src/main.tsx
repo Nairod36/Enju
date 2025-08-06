@@ -13,15 +13,11 @@ import "@near-wallet-selector/modal-ui/styles.css";
 import { setupMyNearWallet } from "@near-wallet-selector/my-near-wallet";
 import { setupMeteorWallet } from "@near-wallet-selector/meteor-wallet";
 import { WalletSelectorProvider } from "@near-wallet-selector/react-hook";
+import { setupSender } from "@near-wallet-selector/sender";
 
 const walletSelectorConfig = {
   network: "testnet",
-  debug: true,
-  modules: [setupMyNearWallet(), setupMeteorWallet()],
-  walletUrls: {
-    "my-near-wallet": "https://testnet.mynearwallet.com/",
-    "meteor-wallet": "https://meteormallet.app/",
-  },
+  modules: [setupMyNearWallet(), setupMeteorWallet(),  setupSender() ],
 };
 
 const queryClient = new QueryClient();

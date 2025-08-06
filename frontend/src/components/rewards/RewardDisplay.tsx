@@ -3,6 +3,7 @@ import { useAccount } from 'wagmi';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Badge } from '../ui/badge';
 import { Coins, TrendingUp, Gift } from 'lucide-react';
+import { API_CONFIG, apiRequest } from '../../config/api';
 
 interface RewardStats {
   totalRewardsEarned: number;
@@ -19,7 +20,6 @@ export const RewardDisplay: React.FC = () => {
   });
   const [loading, setLoading] = useState(false);
 
-  const API_BASE = process.env.VITE_API_URL || "http://localhost:3001/api/v1";
 
   const fetchRewardStats = async () => {
     if (!address) return;
@@ -27,8 +27,8 @@ export const RewardDisplay: React.FC = () => {
     setLoading(true);
     try {
       const [balanceResponse, statsResponse] = await Promise.all([
-        fetch(`${API_BASE}/rewards/balance?address=${address}`),
-        fetch(`${API_BASE}/rewards/stats?address=${address}`)
+        apiRequest(`${API_CONFIG.BASE_URL}/rewards/balance?address=${address}`),
+        apiRequest(`${API_CONFIG.BASE_URL}/rewards/stats?address=${address}`)
       ]);
 
       const balanceData = await balanceResponse.json();

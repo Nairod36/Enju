@@ -18,6 +18,7 @@ import { useIslands } from "../../hooks/useIslands";
 import { useAuthContext } from "@/contexts/AuthContext";
 import { useMultiChainBalance } from "../../hooks/useMultiChainBalance";
 import { PlayerLevel } from "../../components/PlayerLevel";
+import { API_CONFIG, apiRequest } from "../../config/api";
 import { useAuth } from "../../hooks/useAuth";
 
 export function AppDashboard() {
@@ -70,12 +71,11 @@ export function AppDashboard() {
         `🎮 Augmentation de l'expérience: +${experienceGain} XP pour ${address}`
       );
 
-      const response = await fetch(
-        "http://localhost:3001/api/v1/users/level-up-by-address",
+      const response = await apiRequest(
+        `${API_CONFIG.BASE_URL}/users/level-up-by-address`,
         {
           method: "POST",
           headers: {
-            "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({
@@ -199,8 +199,8 @@ export function AppDashboard() {
 
     try {
       // Vérifier si l'utilisateur existe déjà dans la base
-      const response = await fetch(
-        `http://localhost:3001/api/v1/users/check-exists?address=${address}`
+      const response = await apiRequest(
+        `${API_CONFIG.BASE_URL}/users/check-exists?address=${address}`
       );
       const data = await response.json();
 
@@ -362,7 +362,7 @@ export function AppDashboard() {
                     size="sm"
                     className="h-8 px-3 text-xs font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 border border-gray-200 rounded-full"
                     onClick={() =>
-                      window.open("http://vps-b11044fd.vps.ovh.net/", "_blank")
+                      window.open("https://vps-b11044fd.vps.ovh.net/", "_blank")
                     }
                   >
                     <ExternalLink className="w-3 h-3 mr-1.5" />

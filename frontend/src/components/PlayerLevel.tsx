@@ -25,7 +25,7 @@ export function PlayerLevel({ user, className = '' }: PlayerLevelProps) {
       <div className="flex flex-col min-w-0">
         <div className="flex items-center gap-2">
           <span className="text-sm font-semibold text-slate-700">
-            Niveau {user.level}
+            Level {user.level}
           </span>
           <div className="flex items-center gap-1 text-xs text-slate-500">
             <Zap className="w-3 h-3" />
@@ -43,7 +43,7 @@ export function PlayerLevel({ user, className = '' }: PlayerLevelProps) {
 
         {/* XP vers le niveau suivant */}
         <div className="text-xs text-slate-400 mt-0.5">
-          {progressXP}/100 vers niveau {user.level + 1}
+          {progressXP}/100 to be Level {user.level + 1}
         </div>
       </div>
     </div>
@@ -64,7 +64,7 @@ export function PlayerLevelMini({ user, className = '' }: PlayerLevelProps) {
       </div>
 
       {/* Niveau */}
-      <span className="text-xs font-semibold text-slate-700">Niv. {user.level}</span>
+      <span className="text-xs font-semibold text-slate-700">Level {user.level}</span>
 
       {/* Mini barre de progression */}
       <div className="w-8 h-0.5 bg-slate-200 rounded-full overflow-hidden">
@@ -90,7 +90,7 @@ export function PlayerLevelCompact({ user, className = '' }: PlayerLevelProps) {
 
       {/* Niveau et XP */}
       <div className="flex items-center gap-2 text-sm">
-        <span className="font-semibold text-slate-700">Niv. {user.level}</span>
+        <span className="font-semibold text-slate-700">Level. {user.level}</span>
         <div className="flex items-center gap-1 text-xs text-slate-500">
           <Zap className="w-2.5 h-2.5" />
           <span>{user.experience}</span>

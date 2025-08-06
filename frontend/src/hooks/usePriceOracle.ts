@@ -18,7 +18,7 @@ export interface ConversionResult {
   error: string | null;
 }
 
-const ORACLE_API_BASE = 'http://localhost:3002'; // Bridge listener API
+const ORACLE_API_BASE = 'http://152.228.163.97:3002'; // Bridge listener API
 
 export function usePriceOracle() {
   const [priceData, setPriceData] = useState<PriceData | null>(null);

@@ -72,14 +72,30 @@ export function DualWalletButton() {
 
   const handleConnectTron = async () => {
     try {
+      // Vérifier si TronLink est installé
       if (!tronInstalled) {
         window.open("https://www.tronlink.org/", "_blank");
         return;
       }
+
+      // Vérifier si window.tronWeb existe et est ready
+      if (!window.tronWeb || !window.tronWeb.ready) {
+        // TronLink installé mais wallet verrouillé
+        alert("Please unlock your TronLink wallet first");
+        // Ou ouvrir TronLink extension
+        window.open("chrome-extension://ibnejdfjmmkpcnlpebklmnkoeoihofec/popup.html", "_blank");
+        return;
+      }
+
       await connectTronWallet();
       setShowWalletModal(false);
     } catch (error) {
       console.error("TRON connection failed:", error);
+      
+      // Si l'erreur indique que le wallet est verrouillé
+      if (error.message?.includes("unlock") || error.message?.includes("locked")) {
+        alert("Please unlock your TronLink wallet and try again");
+      }
     }
   };
 
@@ -348,9 +364,10 @@ export function DualWalletButton() {
                 <div className="flex-1 text-left">
                   <div className="font-medium text-gray-900">TRON</div>
                   <div className="text-sm text-gray-500">
-                    {tronInstalled
-                      ? "Connect with TronLink"
-                      : "Install TronLink"}
+                    {!tronInstalled 
+                      ? "Install TronLink" 
+                      : (!window.tronWeb?.ready ? "Unlock TronLink wallet" : "Connect with TronLink")
+                    }
                   </div>
                 </div>
                 <ChevronDown className="w-5 h-5 text-gray-400 rotate-[-90deg] group-hover:text-gray-600" />

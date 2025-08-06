@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { APP_GUARD } from '@nestjs/core';
 import { PrismaService } from './prisma/prisma.service';
 import { UsersModule } from './users/users.module';
 import { TransactionsModule } from './transactions/transactions.module';
@@ -17,6 +19,10 @@ import { HealthCronService } from './health/health-cron.service';
       isGlobal: true,
       envFilePath: '.env',
     }),
+    ThrottlerModule.forRoot([{
+      ttl: 60000, // 1 minute
+      limit: 100, // Max 100 requêtes par minute par IP
+    }]),
     UsersModule,
     TransactionsModule,
     IslandsModule,
@@ -26,7 +32,14 @@ import { HealthCronService } from './health/health-cron.service';
     RewardsModule
   ],
   controllers: [HealthController],
-  providers: [PrismaService, HealthCronService],
+  providers: [
+    PrismaService, 
+    HealthCronService,
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
+  ],
   exports: [PrismaService],
 })
 export class AppModule { }

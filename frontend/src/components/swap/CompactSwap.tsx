@@ -6,6 +6,7 @@ import { TokenSelector } from "./TokenSelector";
 import { useAuth } from "../../hooks/useAuth";
 import { useTokenBalances } from "../../hooks/useTokenBalances";
 import { authService } from "../../services/auth";
+import { API_CONFIG, apiRequest } from "../../config/api";
 import { ExternalLink, RotateCcw, Clock, Zap } from "lucide-react";
 import { toast } from "sonner";
 
@@ -116,7 +117,6 @@ export const CompactSwap: React.FC<CompactSwapProps> = ({ onSwapSuccess }) => {
     return acc;
   }, {} as Record<string, string>);
 
-  const API_BASE = process.env.VITE_API_URL || "http://localhost:3001/api/v1";
 
   const getQuote = async () => {
     if (!fromAmount || !address) return;
@@ -136,7 +136,7 @@ export const CompactSwap: React.FC<CompactSwapProps> = ({ onSwapSuccess }) => {
         slippage: slippage.toString(),
       });
 
-      const response = await fetch(`${API_BASE}/oneinch/quote?${params}`);
+      const response = await apiRequest(`${API_CONFIG.BASE_URL}/oneinch/quote?${params}`);
 
       if (!response.ok) {
         throw new Error(`API Error: ${response.statusText}`);
@@ -194,7 +194,7 @@ export const CompactSwap: React.FC<CompactSwapProps> = ({ onSwapSuccess }) => {
         slippage: slippage.toString(),
       });
 
-      const response = await fetch(`${API_BASE}/oneinch/swap?${params}`, {
+      const response = await apiRequest(`${API_CONFIG.BASE_URL}/oneinch/swap?${params}`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },

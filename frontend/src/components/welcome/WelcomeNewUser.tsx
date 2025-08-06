@@ -5,6 +5,7 @@ import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { Sparkles, MapPin, X, TreePine, User, Edit3, Info } from "lucide-react";
 import { DualWalletButton } from '../DualWalletButton';
+import { API_CONFIG, apiRequest } from "../../config/api";
 
 interface WelcomeNewUserProps {
   onDismiss: () => void;
@@ -41,11 +42,8 @@ export const WelcomeNewUser: React.FC<WelcomeNewUserProps> = ({
       const signature = await signMessage({ message });
 
       // Appeler l'API backend
-      const response = await fetch('http://localhost:3001/api/v1/auth/connect', {
+      const response = await apiRequest(`${API_CONFIG.BASE_URL}/auth/connect`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({
           address,
           signature,
@@ -55,11 +53,8 @@ export const WelcomeNewUser: React.FC<WelcomeNewUserProps> = ({
 
       if (response.ok) {
         // Mettre à jour le username
-        const updateResponse = await fetch('http://localhost:3001/api/v1/auth/update-username', {
+        const updateResponse = await apiRequest(`${API_CONFIG.BASE_URL}/auth/update-username`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
           body: JSON.stringify({
             address,
             username: username.trim(),
