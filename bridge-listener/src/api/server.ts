@@ -561,6 +561,150 @@ export class BridgeAPI {
       }
     });
 
+    // ===== REWARD SYSTEM ENDPOINTS =====
+
+    // Get reward token balance for an address
+    this.app.get('/rewards/balance', async (req, res) => {
+      try {
+        const { address } = req.query;
+
+        if (!address || typeof address !== 'string') {
+          return res.status(400).json({
+            success: false,
+            error: 'Missing or invalid address parameter'
+          });
+        }
+
+        // For now, return a simple balance structure
+        // TODO: Integrate with actual reward token contract
+        const balance = await this.resolver.getRewardTokenBalance(address);
+
+        res.json({
+          success: true,
+          balance: balance || '0',
+          address
+        });
+      } catch (error) {
+        console.error('❌ Reward balance error:', error);
+        res.status(500).json({
+          success: false,
+          error: error instanceof Error ? error.message : 'Failed to fetch reward balance'
+        });
+      }
+    });
+
+    // Get reward stats for an address (total earned, bridge count)
+    this.app.get('/rewards/stats', (req, res) => {
+      try {
+        const { address } = req.query;
+
+        if (!address || typeof address !== 'string') {
+          return res.status(400).json({
+            success: false,
+            error: 'Missing or invalid address parameter'
+          });
+        }
+
+        // Get all bridges completed by this address
+        const allBridges = this.resolver.getAllBridges();
+        const userBridges = allBridges.filter(bridge => {
+          // More precise matching based on bridge type and user role
+          switch (bridge.type) {
+            case 'ETH_TO_NEAR':
+              // User is ETH sender, recipient gets NEAR
+              return (
+                bridge.ethRecipient === address ||
+                (bridge as any).from === address ||
+                (bridge as any).sender === address
+              );
+            case 'NEAR_TO_ETH':
+              // User is NEAR sender, recipient gets ETH  
+              return (
+                bridge.nearAccount === address ||
+                bridge.ethRecipient === address
+              );
+            case 'ETH_TO_TRON':
+              // User is ETH sender, recipient gets TRX
+              return (
+                bridge.ethRecipient === address ||
+                bridge.tronAddress === address ||
+                (bridge as any).from === address ||
+                (bridge as any).sender === address
+              );
+            case 'TRON_TO_ETH':
+              // User is TRON sender, recipient gets ETH
+              return (
+                bridge.tronSender === address ||
+                bridge.tronAddress === address ||
+                bridge.ethRecipient === address
+              );
+            default:
+              // Fallback to original logic
+              return (
+                bridge.ethRecipient === address ||
+                bridge.nearAccount === address ||
+                bridge.tronAddress === address ||
+                bridge.tronSender === address ||
+                (bridge as any).from === address ||
+                (bridge as any).sender === address
+              );
+          }
+        });
+
+        // Count completed bridges by type
+        const completedBridges = userBridges.filter(bridge => bridge.status === 'COMPLETED');
+        const bridgeCount = completedBridges.length;
+
+        // Calculate total rewards earned based on bridge volume
+        let totalRewardsEarned = 0;
+        completedBridges.forEach(bridge => {
+          try {
+            const amount = parseFloat(bridge.amount);
+            if (bridge.type === 'ETH_TO_NEAR' || bridge.type === 'ETH_TO_TRON') {
+              // ETH bridges: 100 REWARD per ETH
+              totalRewardsEarned += amount * 100;
+            } else if (bridge.type === 'NEAR_TO_ETH') {
+              // NEAR bridges: 0.068 REWARD per NEAR 
+              totalRewardsEarned += amount * 0.068;
+            } else if (bridge.type === 'TRON_TO_ETH') {
+              // TRON bridges: 0.00394 REWARD per TRX
+              totalRewardsEarned += amount * 0.00394;
+            }
+          } catch (error) {
+            console.warn('Failed to parse bridge amount:', bridge.amount);
+          }
+        });
+
+        // Bridge count by type for detailed stats
+        const bridgeStats = {
+          ETH_TO_NEAR: completedBridges.filter(b => b.type === 'ETH_TO_NEAR').length,
+          NEAR_TO_ETH: completedBridges.filter(b => b.type === 'NEAR_TO_ETH').length,
+          ETH_TO_TRON: completedBridges.filter(b => b.type === 'ETH_TO_TRON').length,
+          TRON_TO_ETH: completedBridges.filter(b => b.type === 'TRON_TO_ETH').length
+        };
+
+        console.log(`📊 Reward stats for ${address}:`, {
+          bridgeCount,
+          totalRewardsEarned: totalRewardsEarned.toFixed(4),
+          bridgeStats
+        });
+
+        res.json({
+          success: true,
+          bridgeCount,
+          totalRewardsEarned: parseFloat(totalRewardsEarned.toFixed(4)),
+          bridgeStats,
+          address
+        });
+      } catch (error) {
+        console.error('❌ Reward stats error:', error);
+        res.status(500).json({
+          success: false,
+          error: error instanceof Error ? error.message : 'Failed to fetch reward stats'
+        });
+      }
+    });
+
     // ===== API V1 ROUTES =====
 
     // API v1 - Get all bridges

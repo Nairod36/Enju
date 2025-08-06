@@ -18,7 +18,8 @@ async function bootstrap() {
   // Configuration CORS complète
   app.enableCors({
     origin: (origin, callback) => {
-      console.log(`🔥 CORS origin check: ${origin}`);
+      // Removed verbose CORS logging to reduce console noise
+      // console.log(`🔥 CORS origin check: ${origin}`);
       // Accepter toutes les origines temporairement
       callback(null, true);
     },

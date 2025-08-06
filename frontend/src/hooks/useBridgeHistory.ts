@@ -4,15 +4,17 @@ import { BRIDGE_CONFIG } from '@/config/networks';
 
 export interface BridgeHistoryItem {
   id: string;
-  type: 'ETH_TO_NEAR' | 'NEAR_TO_ETH';
+  type: 'ETH_TO_NEAR' | 'NEAR_TO_ETH' | 'ETH_TO_TRON' | 'TRON_TO_ETH';
   status: 'PENDING' | 'COMPLETED' | 'FAILED';
   amount: string;
   fromChain: string;
   toChain: string;
   ethTxHash?: string;
   nearTxHash?: string;
+  tronTxHash?: string;
   ethRecipient?: string;
   nearAccount?: string;
+  tronAddress?: string;
   createdAt: number;
   completedAt?: number;
   hashlock: string;
@@ -53,23 +55,61 @@ export function useBridgeHistory() {
             return bridge.ethRecipient?.toLowerCase() === address.toLowerCase();
           }
           
+          // For ETH_TO_TRON: check if ethRecipient matches current address (user initiated from ETH)
+          if (bridge.type === 'ETH_TO_TRON') {
+            return bridge.ethRecipient?.toLowerCase() === address.toLowerCase();
+          }
+          
+          // For TRON_TO_ETH: check if ethRecipient matches current address (user receives on ETH)
+          if (bridge.type === 'TRON_TO_ETH') {
+            return bridge.ethRecipient?.toLowerCase() === address.toLowerCase();
+          }
+          
           return false;
-        }).map((bridge: any) => ({
-          id: bridge.id,
-          type: bridge.type,
-          status: bridge.status,
-          amount: bridge.amount,
-          fromChain: bridge.type === 'ETH_TO_NEAR' ? 'ethereum' : 'near',
-          toChain: bridge.type === 'ETH_TO_NEAR' ? 'near' : 'ethereum',
-          ethTxHash: bridge.ethTxHash,
-          nearTxHash: bridge.nearTxHash,
-          ethRecipient: bridge.ethRecipient,
-          nearAccount: bridge.nearAccount,
-          createdAt: bridge.createdAt,
-          completedAt: bridge.completedAt,
-          hashlock: bridge.hashlock,
-          secret: bridge.secret,
-        }));
+        }).map((bridge: any) => {
+          let fromChain, toChain;
+          
+          switch (bridge.type) {
+            case 'ETH_TO_NEAR':
+              fromChain = 'ethereum';
+              toChain = 'near';
+              break;
+            case 'NEAR_TO_ETH':
+              fromChain = 'near';
+              toChain = 'ethereum';
+              break;
+            case 'ETH_TO_TRON':
+              fromChain = 'ethereum';
+              toChain = 'tron';
+              break;
+            case 'TRON_TO_ETH':
+              fromChain = 'tron';
+              toChain = 'ethereum';
+              break;
+            default:
+              fromChain = 'unknown';
+              toChain = 'unknown';
+          }
+          
+          return {
+            id: bridge.id,
+            type: bridge.type,
+            status: bridge.status,
+            amount: bridge.amount,
+            fromChain,
+            toChain,
+            ethTxHash: bridge.ethTxHash,
+            nearTxHash: bridge.nearTxHash,
+            tronTxHash: bridge.tronTxHash,
+            ethRecipient: bridge.ethRecipient,
+            nearAccount: bridge.nearAccount,
+            tronAddress: bridge.tronAddress,
+            createdAt: bridge.createdAt,
+            completedAt: bridge.completedAt,
+            hashlock: bridge.hashlock,
+            secret: bridge.secret,
+          };
+        });
 
         // Sort by creation date (newest first)
         userBridges.sort((a: BridgeHistoryItem, b: BridgeHistoryItem) => b.createdAt - a.createdAt);
