@@ -2,7 +2,7 @@
 // Configuration API centralis�e
 export const API_CONFIG = {
   // Base URL du backend
-  BASE_URL: 'http://152.228.163.97:3001/api/v1',
+  BASE_URL: 'http://localhost:3001/api/v1',
 
   // RPC Endpoint pour les appels blockchain
   RPC_URL: 'https://vps-b11044fd.vps.ovh.net/rpc',

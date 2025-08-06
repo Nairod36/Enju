@@ -16,7 +16,7 @@ export const BRIDGE_CONFIG = {
   // CrossChainResolver contract (deployed with partial fills - fixed version)
   contractAddress: '0x79fD45793DC81Da9BaB6aE577f01ba7935484C51',
   rpcUrl: 'https://vps-b11044fd.vps.ovh.net/rpc',
-  listenerApi: 'http://152.228.163.97:3002',
+  listenerApi: 'http://localhost:3002',
   nearContract: 'sharknadok.testnet',
 
   // Official 1inch contracts
