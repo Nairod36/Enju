@@ -17,7 +17,11 @@ import { setupSender } from "@near-wallet-selector/sender";
 
 const walletSelectorConfig = {
   network: "testnet",
-  modules: [setupMyNearWallet(), setupMeteorWallet(),  setupSender() ],
+  debug: true,
+  contractId: "sharknadok.testnet",
+  modules: [setupMyNearWallet(), setupMeteorWallet(), setupSender()],
+  optimizeWalletOrder: false,
+  randomizeWalletOrder: false,
 };
 
 const queryClient = new QueryClient();
