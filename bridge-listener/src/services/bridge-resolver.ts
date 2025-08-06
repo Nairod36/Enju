@@ -588,7 +588,7 @@ export class BridgeResolver extends EventEmitter {
         this.emit('bridgeFailed', bridgeEvent);
       }
 
-      /*
+      
      
 
     } catch (error) {
