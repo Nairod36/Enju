@@ -18,26 +18,21 @@ export const generateNoise = (x: number, z: number, seed: number): number => {
 };
 
 export const generateIslandShape = (seed: number, baseRadius: number = 5): IslandShape[] => {
-    console.log(`🏝️ Génération île PARFAITEMENT CIRCULAIRE - rayon: ${baseRadius}`);
-    
     const tiles = new Set<string>();
-    
     // ALGORITHME CERCLE PARFAIT : utiliser l'équation du cercle x² + y² ≤ r²
     const radiusSquared = baseRadius * baseRadius;
-    
+
     // Parcourir un carré englobant et garder seulement les points dans le cercle
     for (let row = -baseRadius; row <= baseRadius; row++) {
         for (let col = -baseRadius; col <= baseRadius; col++) {
             const distanceSquared = row * row + col * col;
-            
+
             // Inclusion basée strictement sur l'équation du cercle
             if (distanceSquared <= radiusSquared) {
                 tiles.add(`${row},${col}`);
             }
         }
     }
-    
-    console.log(`✅ Cercle parfait généré: ${tiles.size} tuiles - AUCUN angle droit possible`);
 
     // Convertir en format IslandShape
     const tilesByRow = new Map<number, number[]>();
@@ -46,13 +41,13 @@ export const generateIslandShape = (seed: number, baseRadius: number = 5): Islan
         const [rowStr, colStr] = tileKey.split(',');
         const row = parseInt(rowStr, 10);
         const col = parseInt(colStr, 10);
-        
+
         // Validate parsed values
         if (isNaN(row) || isNaN(col) || !isFinite(row) || !isFinite(col)) {
             console.warn(`❌ Invalid tile key: ${tileKey} -> row=${row}, col=${col}`);
             return;
         }
-        
+
         if (!tilesByRow.has(row)) {
             tilesByRow.set(row, []);
         }
@@ -70,7 +65,6 @@ export const generateIslandShape = (seed: number, baseRadius: number = 5): Islan
 };
 
 export const enlargeIslandShape = (currentShape: IslandShape[], seed: number, radiusIncrease: number = 1): IslandShape[] => {
-    console.log(`🔍 AGRANDISSEMENT SIMPLE: +${radiusIncrease} rayon`);
 
     // ÉTAPE 1: Conserver EXACTEMENT toutes les tuiles existantes
     const existingTiles = new Set<string>();
@@ -88,12 +82,12 @@ export const enlargeIslandShape = (currentShape: IslandShape[], seed: number, ra
         const [rowStr, colStr] = tileKey.split(',');
         const row = parseInt(rowStr, 10);
         const col = parseInt(colStr, 10);
-        
+
         if (isNaN(row) || isNaN(col) || !isFinite(row) || !isFinite(col)) {
             console.warn(`❌ Invalid existing tile key: ${tileKey} -> row=${row}, col=${col}`);
             return;
         }
-        
+
         const distance = Math.sqrt(row * row + col * col);
         currentRadius = Math.max(currentRadius, distance);
     });
@@ -104,7 +98,7 @@ export const enlargeIslandShape = (currentShape: IslandShape[], seed: number, ra
     // ÉTAPE 3: Générer un nouveau cercle plus grand
     const newCircleTiles = new Set<string>();
     const newRadiusSquared = newRadius * newRadius;
-    
+
     for (let row = -newRadius; row <= newRadius; row++) {
         for (let col = -newRadius; col <= newRadius; col++) {
             const distanceSquared = row * row + col * col;
@@ -116,8 +110,6 @@ export const enlargeIslandShape = (currentShape: IslandShape[], seed: number, ra
 
     // ÉTAPE 4: Combiner (toutes les anciennes + toutes les nouvelles dans le cercle)
     const finalTiles = new Set([...existingTiles, ...newCircleTiles]);
-    
-    console.log(`✅ Résultat: ${existingTiles.size} conservées + ${newCircleTiles.size - existingTiles.size} ajoutées = ${finalTiles.size} total`);
 
     // Convertir en format IslandShape
     const tilesByRow = new Map<number, number[]>();
@@ -126,12 +118,12 @@ export const enlargeIslandShape = (currentShape: IslandShape[], seed: number, ra
         const [rowStr, colStr] = tileKey.split(',');
         const row = parseInt(rowStr, 10);
         const col = parseInt(colStr, 10);
-        
+
         if (isNaN(row) || isNaN(col) || !isFinite(row) || !isFinite(col)) {
             console.warn(`❌ Invalid final tile key: ${tileKey} -> row=${row}, col=${col}`);
             return;
         }
-        
+
         if (!tilesByRow.has(row)) {
             tilesByRow.set(row, []);
         }

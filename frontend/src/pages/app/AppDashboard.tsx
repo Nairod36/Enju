@@ -67,10 +67,6 @@ export function AppDashboard() {
         return;
       }
 
-      console.log(
-        `🎮 Augmentation de l'expérience: +${experienceGain} XP pour ${address}`
-      );
-
       const response = await apiRequest(
         `${API_CONFIG.BASE_URL}/users/level-up-by-address`,
         {
@@ -88,7 +84,6 @@ export function AppDashboard() {
 
       if (response.ok) {
         const result = await response.json();
-        console.log(`✅ Expérience mise à jour:`, result);
 
         // Attendre un peu puis rafraîchir les données utilisateur pour mettre à jour l'affichage
         setTimeout(async () => {
@@ -123,12 +118,6 @@ export function AppDashboard() {
 
       const currentState = islandRef.current.getCurrentState();
 
-      console.log("🔍 État actuel avant sauvegarde:", {
-        treeCount: currentState.treeCount,
-        userTreesLength: currentState.userTrees.length,
-        activeIslandId: activeIsland.id,
-      });
-
       const updateData = {
         islandData: currentState.islandData,
         treeCount: currentState.userTrees.length, // Utiliser le vrai nombre d'arbres
@@ -139,22 +128,9 @@ export function AppDashboard() {
         healthScore: 100,
       };
 
-      console.log("📤 Données à sauvegarder:", {
-        totalTrees: updateData.totalTrees,
-        userTreesLength: updateData.userTrees.length,
-        treeCount: updateData.treeCount,
-      });
-
       const savedIsland = await autoSaveIsland(activeIsland.id, updateData);
 
       if (savedIsland) {
-        console.log(
-          "✅ Île sauvegardée automatiquement après plantation d'arbre"
-        );
-        console.log("📥 Données sauvegardées:", {
-          totalTrees: savedIsland.totalTrees,
-          userTreesLength: savedIsland.userTrees?.length || 0,
-        });
         setUserIslandData(savedIsland);
         // Mettre à jour le count local avec le vrai nombre d'arbres
         setTreeCount(savedIsland.userTrees?.length || 0);
@@ -203,9 +179,6 @@ export function AppDashboard() {
         `${API_CONFIG.BASE_URL}/users/check-exists?address=${address}`
       );
       const data = await response.json();
-
-      console.log("User check result:", data);
-
       // Si l'utilisateur n'existe pas OU n'a pas de pseudo, afficher le welcome
       if (!data.exists || !data.user?.username) {
         console.log(
@@ -228,14 +201,6 @@ export function AppDashboard() {
           // Check if this is a new user by looking at existing data first
           const userIsland = await ensureUserHasIsland();
           if (userIsland) {
-            console.log("User island data:", userIsland);
-            console.log("Total trees from DB:", userIsland.totalTrees);
-            console.log("User trees array:", userIsland.userTrees);
-            console.log(
-              "User trees length:",
-              userIsland.userTrees?.length || 0
-            );
-
             setIslandSeed(parseInt(userIsland.seed));
             setTreeCount(userIsland.totalTrees || 0);
             setUserIslandData(userIsland);

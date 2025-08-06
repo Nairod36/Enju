@@ -4,9 +4,9 @@ import { Button } from "./ui/button";
 import { useAccount, useDisconnect } from "wagmi";
 import { useAppKit } from "@reown/appkit/react";
 import { Wallet, ChevronDown, X } from "lucide-react";
-import { useWalletSelector } from "@near-wallet-selector/react-hook";
 import { useTronWallet } from "@/hooks/useTronWallet";
 import { NetworkAddButton } from "./NetworkAddButton";
+import { useRobustNearWallet } from "@/hooks/useNearWallet";
 
 export function DualWalletButton() {
   const { address: ethAddress, isConnected: ethConnected } = useAccount();
@@ -15,10 +15,17 @@ export function DualWalletButton() {
 
   // NEAR wallet selector hooks
   const {
-    signedAccountId: nearAccountId,
-    signOut: signOutNear,
-    signIn: signInNear,
-  } = useWalletSelector();
+    accountId: nearAccountId,
+    isConnected: nearConnected,
+    isConnecting: nearConnecting,
+    connectionError: nearError,
+    retryCount,
+    connect: connectNear,
+    disconnect: disconnectNear,
+    forceReconnect: forceReconnectNear,
+    clearError: clearNearError,
+    isMeteorWalletError,
+  } = useRobustNearWallet();
 
   // TRON wallet hook
   const {
@@ -62,11 +69,10 @@ export function DualWalletButton() {
   };
 
   const handleConnectNear = async () => {
-    try {
-      await signInNear();
+    console.log("🔄 Connecting to NEAR wallet...");
+    const success = await connectNear();
+    if (success && !nearError) {
       setShowWalletModal(false);
-    } catch (error) {
-      console.error("NEAR connection failed:", error);
     }
   };
 
@@ -83,7 +89,10 @@ export function DualWalletButton() {
         // TronLink installé mais wallet verrouillé
         alert("Please unlock your TronLink wallet first");
         // Ou ouvrir TronLink extension
-        window.open("chrome-extension://ibnejdfjmmkpcnlpebklmnkoeoihofec/popup.html", "_blank");
+        window.open(
+          "chrome-extension://ibnejdfjmmkpcnlpebklmnkoeoihofec/popup.html",
+          "_blank"
+        );
         return;
       }
 
@@ -91,15 +100,17 @@ export function DualWalletButton() {
       setShowWalletModal(false);
     } catch (error) {
       console.error("TRON connection failed:", error);
-      
+
       // Si l'erreur indique que le wallet est verrouillé
-      if (error.message?.includes("unlock") || error.message?.includes("locked")) {
+      if (
+        error.message?.includes("unlock") ||
+        error.message?.includes("locked")
+      ) {
         alert("Please unlock your TronLink wallet and try again");
       }
     }
   };
 
-  const nearConnected = !!nearAccountId;
   const allConnected = ethConnected && nearConnected && tronConnected;
   const noneConnected = !ethConnected && !nearConnected && !tronConnected;
 
@@ -269,7 +280,7 @@ export function DualWalletButton() {
             {formatAccountId(nearAccountId)}
           </span>
           <Button
-            onClick={() => signOutNear()}
+            onClick={() => disconnectNear()}
             variant="ghost"
             size="sm"
             className="h-6 w-6 p-0 hover:bg-red-50 hover:text-red-600 ml-1"
@@ -364,10 +375,11 @@ export function DualWalletButton() {
                 <div className="flex-1 text-left">
                   <div className="font-medium text-gray-900">TRON</div>
                   <div className="text-sm text-gray-500">
-                    {!tronInstalled 
-                      ? "Install TronLink" 
-                      : (!window.tronWeb?.ready ? "Unlock TronLink wallet" : "Connect with TronLink")
-                    }
+                    {!tronInstalled
+                      ? "Install TronLink"
+                      : !window.tronWeb?.ready
+                      ? "Unlock TronLink wallet"
+                      : "Connect with TronLink"}
                   </div>
                 </div>
                 <ChevronDown className="w-5 h-5 text-gray-400 rotate-[-90deg] group-hover:text-gray-600" />
