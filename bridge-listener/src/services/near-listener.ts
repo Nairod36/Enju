@@ -1,4 +1,5 @@
 import * as nearApi from 'near-api-js';
+import { ethers } from 'ethers';
 import { EventEmitter } from 'events';
 import { NearHTLCEvent, ResolverConfig } from '../types';
 import { PriceOracle } from './price-oracle';
@@ -540,7 +541,25 @@ export class NearListener extends EventEmitter {
     }
   }
 
+  async transferNearToUser(receiverAccount: string, amount: string): Promise<void> {
+    try {
+      // Convert yoctoNEAR to NEAR for display (1 NEAR = 10^24 yoctoNEAR)
+      const nearAmount = ethers.formatUnits(amount, 24);
+      console.log(`💸 Transferring ${nearAmount} NEAR to ${receiverAccount}`);
 
+      const result = await this.account.sendMoney(
+        receiverAccount,
+        BigInt(amount)
+      );
+
+      console.log(`✅ NEAR transfer completed: ${result.transaction.hash}`);
+      console.log(`📦 ${nearAmount} NEAR sent to ${receiverAccount}`);
+
+    } catch (error) {
+      console.error('❌ Failed to transfer NEAR to user:', error);
+      throw error;
+    }
+  }
 
   getStatus() {
     return {

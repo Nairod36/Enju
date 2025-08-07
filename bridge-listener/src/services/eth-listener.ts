@@ -69,30 +69,14 @@ export class EthereumListener extends EventEmitter {
     console.log('🎯 Setting up EscrowCreated event listener (main event)...');
     console.log(`🔍 Contract address being monitored: ${this.config.ethBridgeContract}`);
     this.contract.on('EscrowCreated', (escrow, hashlock, destinationChain, destinationAccount, amount, event) => {
-      console.log('🔥🔥🔥 RAW EscrowCreated event received!', {
-        escrow,
-        hashlock,
-        destinationChain,
-        destinationAccount,
-        amount: amount.toString(),
-        blockNumber: event.blockNumber,
-        txHash: event.transactionHash
-      });
       this.handleNewEscrowCreated(escrow, hashlock, destinationChain, destinationAccount, amount, event);
     });
 
-    console.log('🎯 Setting up EscrowCreatedLegacy event listener (backward compatibility)...');
-    this.contract.on('EscrowCreatedLegacy', (escrow, hashlock, nearAccount, amount, event) => {
-      console.log('🔥🔥🔥 RAW EscrowCreatedLegacy event received!', {
-        escrow,
-        hashlock,
-        nearAccount,
-        amount: amount.toString(),
-        blockNumber: event.blockNumber,
-        txHash: event.transactionHash
-      });
-      this.handleLegacyEscrowCreated(escrow, hashlock, nearAccount, amount, event);
-    });
+    // Skip EscrowCreatedLegacy to avoid duplicates - EscrowCreated handles both cases
+    // console.log('🎯 Setting up EscrowCreatedLegacy event listener (backward compatibility)...');
+    // this.contract.on('EscrowCreatedLegacy', (escrow, hashlock, nearAccount, amount, event) => {
+    //   this.handleLegacyEscrowCreated(escrow, hashlock, nearAccount, amount, event);
+    // });
 
     // Advanced events (if available in future updates)
     console.log('🎯 Setting up PartialFillCreated event listener...');
@@ -100,6 +84,10 @@ export class EthereumListener extends EventEmitter {
 
     console.log('🎯 Setting up SwapFullyFilled event listener...');
     this.contract.on('SwapFullyFilled', this.handleSwapFullyFilled.bind(this));
+
+    // Listen for escrow completions (when users reveal the secret)
+    console.log('🎯 Setting up EscrowWithdrawn event listener...');
+    this.contract.on('EscrowWithdrawn', this.handleEscrowWithdrawn.bind(this));
 
     console.log('✅ All event listeners set up successfully');
 
@@ -130,6 +118,7 @@ export class EthereumListener extends EventEmitter {
       fillCount: fillCount.toString(),
       txHash: event.transactionHash,
       block: event.blockNumber
+
     });
 
     this.emit('swapFullyFilled', {
@@ -139,7 +128,11 @@ export class EthereumListener extends EventEmitter {
       txHash: event.transactionHash,
       blockNumber: event.blockNumber
     });
+
+    console.log(`✅ Swap fully filled event emitted successfully`);
   }
+
+
 
 
   private async handleLegacyEscrowCreated(
@@ -150,18 +143,6 @@ export class EthereumListener extends EventEmitter {
     event: ethers.EventLog
   ): Promise<void> {
     const eventId = `${event.transactionHash}-${event.index}`;
-
-    console.log(`🔥 INCOMING ETH EVENT: EscrowCreated detected!`);
-    console.log(`📋 Event details:`, {
-      eventId,
-      escrow,
-      hashlock,
-      nearAccount,
-      amount: ethers.formatEther(amount),
-      txHash: event.transactionHash,
-      block: event.blockNumber,
-      timestamp: new Date().toISOString()
-    });
 
     // 🔥 Éviter les doublons
     if (this.processedEvents.has(eventId)) {
@@ -221,19 +202,6 @@ export class EthereumListener extends EventEmitter {
     // Convert BigInt to number for comparison
     const destinationChainNum = typeof destinationChain === 'bigint' ? Number(destinationChain) : destinationChain;
 
-    console.log(`🔥 INCOMING ETH EVENT: New EscrowCreated detected!`);
-    console.log(`📋 Event details:`, {
-      eventId,
-      escrow,
-      hashlock,
-      destinationChain: destinationChainNum,
-      destinationAccount,
-      amount: ethers.formatEther(amount),
-      txHash: event.transactionHash,
-      block: event.blockNumber,
-      timestamp: new Date().toISOString()
-    });
-
     // Process NEAR (0) and TRON (1) destinations
     if (destinationChainNum !== 0 && destinationChainNum !== 1) {
       console.log(`⚠️ Skipping unsupported destination chain: ${destinationChainNum}`);
@@ -260,15 +228,6 @@ export class EthereumListener extends EventEmitter {
       console.log(`⚠️ No transaction hash available for event ${eventId}`);
     }
 
-    console.log(`✅ Processing new ETH → NEAR bridge:`, {
-      escrow,
-      hashlock,
-      destinationAccount,
-      amount: ethers.formatEther(amount),
-      txHash: event.transactionHash,
-      block: event.blockNumber,
-      sender: senderAddress
-    });
 
     if (destinationChainNum === 0) {
       // ETH → NEAR bridge
@@ -378,17 +337,7 @@ export class EthereumListener extends EventEmitter {
   ): Promise<void> {
     const eventId = `${event.transactionHash}-${event.index}`;
     console.log(`🔥 INCOMING ETH EVENT: PartialFillCreated detected!`);
-    console.log(`📋 Event details:`, {
-      eventId,
-      swapId,
-      fillId,
-      escrow,
-      fillAmount: ethers.formatEther(fillAmount),
-      remainingAmount: ethers.formatEther(remainingAmount),
-      txHash: event.transactionHash,
-      block: event.blockNumber,
-      timestamp: new Date().toISOString()
-    });
+
 
     // Avoid duplicates
     if (this.processedEvents.has(eventId)) {
@@ -425,5 +374,29 @@ export class EthereumListener extends EventEmitter {
       contractAddress: this.config.ethBridgeContract,
       rpcUrl: this.config.ethRpcUrl
     };
+  }
+
+  private async handleEscrowWithdrawn(
+    escrowAddress: string,
+    secret: string,
+    recipient: string,
+    event: ethers.EventLog
+  ): Promise<void> {
+    console.log('✅ ETH Escrow withdrawn, secret revealed:', {
+      escrowAddress,
+      secret,
+      recipient,
+      txHash: event.transactionHash,
+      block: event.blockNumber
+    });
+
+    // Emit event to bridge resolver with the secret
+    this.emit('escrowWithdrawn', {
+      escrowAddress,
+      secret,
+      recipient,
+      txHash: event.transactionHash,
+      blockNumber: event.blockNumber
+    });
   }
 }
