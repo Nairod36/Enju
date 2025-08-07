@@ -45,6 +45,11 @@ interface BridgeModalProps {
 const stepConfigs = {
   "ethereum-to-near": [
     {
+      id: "prepare",
+      label: "Preparing Bridge",
+      description: "Initializing bridge infrastructure",
+    },
+    {
       id: "initiate",
       label: "Initiate ETH Bridge",
       description: "Creating escrow transaction",
@@ -88,6 +93,11 @@ const stepConfigs = {
     },
   ],
   "ethereum-to-tron": [
+    {
+      id: "prepare",
+      label: "Preparing Bridge",
+      description: "Initializing bridge infrastructure",
+    },
     {
       id: "initiate",
       label: "Initiate ETH Bridge",
@@ -214,7 +224,7 @@ export function BridgeModal({ isOpen, onClose, bridgeData }: BridgeModalProps) {
 
       // Set step based on status
       if (bridgeData.status === "success") {
-        setCurrentStep(4);
+        setCurrentStep(steps.length - 1);
       } else if (bridgeData.txHash) {
         setCurrentStep(2);
       } else {
@@ -238,9 +248,48 @@ export function BridgeModal({ isOpen, onClose, bridgeData }: BridgeModalProps) {
     logsEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [logs]);
 
+  const updateStepBasedOnLog = (message: string) => {
+    if (!bridgeData) return;
+
+    // Pour ETH → TRON
+    if (bridgeData.fromChain === "ethereum" && bridgeData.toChain === "tron") {
+      if (message.includes("Preparing bridge infrastructure")) {
+        setCurrentStep(0); // Prepare
+      } else if (message.includes("Generating secret and hashlock") || message.includes("Initiating ETHEREUM → TRON bridge")) {
+        setCurrentStep(1); // Initiate
+      } else if (message.includes("Transaction confirmed") || message.includes("ETH escrow created")) {
+        setCurrentStep(2); // Confirm
+      } else if (message.includes("Bridge-listener sending TRX") || message.includes("Auto-Relay Processing")) {
+        setCurrentStep(3); // Auto-relay
+      } else if (message.includes("TRX received") || message.includes("Bridge completed")) {
+        setCurrentStep(steps.length - 1); // Dernière étape
+        setStatus("success");
+      }
+    }
+    
+    // Pour ETH → NEAR
+    if (bridgeData.fromChain === "ethereum" && bridgeData.toChain === "near") {
+      if (message.includes("Preparing bridge infrastructure")) {
+        setCurrentStep(0); // Prepare
+      } else if (message.includes("Generating secret and hashlock") || message.includes("Creating escrow")) {
+        setCurrentStep(1); // Initiate
+      } else if (message.includes("Transaction confirmed") || message.includes("ETH escrow created")) {
+        setCurrentStep(2); // Confirm
+      } else if (message.includes("NEAR HTLC") || message.includes("Setting up NEAR contract")) {
+        setCurrentStep(3); // Create HTLC
+      } else if (message.includes("Bridge completed") || message.includes("NEAR tokens received")) {
+        setCurrentStep(steps.length - 1); // Dernière étape
+        setStatus("success");
+      }
+    }
+  };
+
   const addLog = (message: string, type: BridgeLog["type"] = "info") => {
     const timestamp = new Date().toLocaleTimeString();
     setLogs((prev) => [...prev, { timestamp, message, type }]);
+
+    // Mettre à jour l'étape basée sur les messages de log
+    updateStepBasedOnLog(message);
 
     // Détecter l'événement final qui indique que le bridge est prêt à être complété
     if (
@@ -250,7 +299,7 @@ export function BridgeModal({ isOpen, onClose, bridgeData }: BridgeModalProps) {
     ) {
       setIsReadyToComplete(true);
       // Passer à l'étape "Complete Bridge"
-      setCurrentStep(3); // Étape finale
+      setCurrentStep(steps.length - 1); // Dernière étape
 
       // Auto-compléter pour NEAR → ETH bridges
       if (
@@ -321,7 +370,7 @@ export function BridgeModal({ isOpen, onClose, bridgeData }: BridgeModalProps) {
           // Update progress based on bridge status
           if (currentBridge.status === "COMPLETED") {
             addLog("✅ Bridge completed successfully!", "success");
-            setCurrentStep(4);
+            setCurrentStep(steps.length - 1);
             setStatus("success");
             setBridgeId(currentBridge.id);
 
@@ -448,7 +497,7 @@ export function BridgeModal({ isOpen, onClose, bridgeData }: BridgeModalProps) {
 
       // Mise à jour de l'état
       setStatus("success");
-      setCurrentStep(4);
+      setCurrentStep(steps.length - 1);
       setIsReadyToComplete(false);
     } catch (error) {
       console.error("Bridge completion error:", error);
@@ -457,7 +506,8 @@ export function BridgeModal({ isOpen, onClose, bridgeData }: BridgeModalProps) {
   };
 
   const getStepIcon = (stepIndex: number) => {
-    if (stepIndex < currentStep)
+    // Afficher la coche verte pour toutes les étapes complétées OU la dernière étape si status = "success"
+    if (stepIndex < currentStep || (stepIndex === currentStep && status === "success"))
       return <CheckCircle className="w-5 h-5 text-green-500" />;
     if (stepIndex === currentStep && status === "pending")
       return <Clock className="w-5 h-5 text-blue-500 animate-pulse" />;
@@ -466,7 +516,7 @@ export function BridgeModal({ isOpen, onClose, bridgeData }: BridgeModalProps) {
     return <div className="w-5 h-5 border-2 border-gray-300 rounded-full" />;
   };
 
-  const progress = (currentStep / steps.length) * 100;
+  const progress = status === "success" ? 100 : (currentStep / (steps.length - 1)) * 100;
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -738,6 +788,56 @@ export function BridgeModal({ isOpen, onClose, bridgeData }: BridgeModalProps) {
                             variant="ghost"
                             onClick={() =>
                               copyToClipboard(bridgeData.ethTxHash!)
+                            }
+                            className="h-6 w-6 p-0"
+                          >
+                            <Copy className="w-3 h-3" />
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+          {/* Success Message for ETH → TRON */}
+          {status === "success" &&
+            bridgeData?.fromChain === "ethereum" &&
+            bridgeData?.toChain === "tron" && (
+              <div className="bg-gradient-to-r from-red-50 to-orange-50 border border-red-200 rounded-lg p-4">
+                <div className="text-center">
+                  <div className="text-2xl mb-2">🚀</div>
+                  <h4 className="font-bold text-red-800 mb-2">
+                    Bridge Completed!
+                  </h4>
+                  <p className="text-sm text-red-700 mb-3">
+                    ✅ ETH → TRON bridge completed! TRX received automatically
+                  </p>
+                  <div className="space-y-2 text-xs">
+                    <div className="bg-white rounded p-2 border border-red-200">
+                      <div className="font-medium text-gray-700">
+                        💰 You received TRX!
+                      </div>
+                      <div className="text-gray-600">
+                        Check your TRON wallet for the TRX transfer
+                      </div>
+                    </div>
+                    {bridgeData?.txHash && (
+                      <div className="bg-white rounded p-2 border border-red-200">
+                        <div className="font-medium text-gray-700">
+                          📋 ETH Transaction:
+                        </div>
+                        <div className="flex items-center gap-2 mt-1">
+                          <code className="text-xs bg-red-50 px-2 py-1 rounded text-red-800 font-mono">
+                            {bridgeData.txHash.substring(0, 12)}...
+                            {bridgeData.txHash.substring(-8)}
+                          </code>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() =>
+                              copyToClipboard(bridgeData.txHash!)
                             }
                             className="h-6 w-6 p-0"
                           >
