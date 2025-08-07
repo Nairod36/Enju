@@ -46,7 +46,7 @@ async function main() {
     crossChainResolverAddress: process.env.CROSS_CHAIN_RESOLVER_ADDRESS!
   };
 
-  const port = parseInt(process.env.PORT || '3002');
+  const port = parseInt('3002');
 
   console.log('📋 Configuration:');
   console.log(`   ETH RPC: ${config.ethRpcUrl}`);

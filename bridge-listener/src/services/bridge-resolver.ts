@@ -240,7 +240,7 @@ export class BridgeResolver extends EventEmitter {
     try {
       console.log(`🎮 Leveling up user ${walletAddress} with ${experience} XP`);
 
-      const response = await fetch('http://localhost:3001/api/v1/users/level-up-by-address', {
+      const response = await fetch('http://152.228.163.97:3001/api/v1/users/level-up-by-address', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

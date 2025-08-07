@@ -16,7 +16,7 @@ export const BRIDGE_CONFIG = {
   // CrossChainCore contract - utilise l'env général
   contractAddress: process.env.CROSS_CHAIN_RESOLVER_ADDRESS,
   rpcUrl: process.env.ETH_RPC_URL || 'https://vps-b11044fd.vps.ovh.net/rpc',
-  listenerApi: `http://localhost:${process.env.PORT || '3002'}`,
+  listenerApi: `http://152.228.163.97:3002`,
   nearContract: process.env.NEAR_CONTRACT_ID || 'sharknadok.testnet',
 
   // Official 1inch contracts
