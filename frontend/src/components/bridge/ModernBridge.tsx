@@ -571,6 +571,20 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
   };
 
   const handleEthToNearBridgeStandard = async (bridgeData: any) => {
+    // Temps de chargement initial avec progression
+    updateBridgeLog("🔧 Initializing ETH → NEAR bridge...");
+    setBridgeData((prev) => ({
+      ...prev!,
+      status: "pending"
+    }));
+
+    // Countdown de 5 secondes avec logs
+    for (let i = 5; i > 0; i--) {
+      updateBridgeLog(`⏳ Preparing bridge infrastructure... ${i}s`);
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+
+    updateBridgeLog("✅ Bridge infrastructure ready!");
     updateBridgeLog("🔑 Generating secret and hashlock...");
 
     // Generate secret and hashlock
@@ -1503,6 +1517,20 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
       throw new Error("Please connect your TRON wallet first");
     }
 
+    // Temps de chargement initial avec progression
+    updateBridgeLog("🔧 Initializing ETH → TRON bridge...");
+    setBridgeData((prev) => ({
+      ...prev!,
+      status: "pending"
+    }));
+
+    // Countdown de 5 secondes avec logs
+    for (let i = 5; i > 0; i--) {
+      updateBridgeLog(`⏳ Preparing bridge infrastructure... ${i}s`);
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+
+    updateBridgeLog("✅ Bridge infrastructure ready!");
     updateBridgeLog("🔑 Generating secret and hashlock...");
 
     // Generate secret and hashlock
