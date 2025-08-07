@@ -1566,6 +1566,15 @@ export class BridgeResolver extends EventEmitter {
   }
 
   /**
+   * Create ETH escrow compatible timelocks
+   */
+  private async createEthEscrowTimelocks(): Promise<number> {
+    const now = Math.floor(Date.now() / 1000);
+    const duration = this.config.ethEscrowTimelockSeconds ?? 24 * 60 * 60;
+    return now + duration;
+  }
+
+  /**
    * Monitor Fusion+ secret revelation and auto-complete both sides
    */
   private monitorFusionSecretRevelation(
@@ -2175,20 +2184,33 @@ export class BridgeResolver extends EventEmitter {
       const hashlock = ethers.keccak256(secret);
       const tronAddress = bridge.tronAddress || bridge.ethRecipient || 'TG98QH6oqMJuhXSckNEs2hRdpfMttXWqaP';
 
+      // For ETH → NEAR bridges, ensure we use valid Ethereum addresses
+      let makerAddress: string;
+      if (bridge.type === 'ETH_TO_NEAR') {
+        // For ETH → NEAR, bridge.ethRecipient might be a NEAR account name
+        // Use a fallback ETH address or extract from ETH transaction
+        makerAddress = bridge.ethRecipient && bridge.ethRecipient.startsWith('0x')
+          ? bridge.ethRecipient
+          : '0x85BAa869D0FB0025A23804B536D43128688c1557'; // Fallback ETH address
+        console.log(`🔍 Using ETH address for ETH → NEAR maker: ${makerAddress}`);
+      } else {
+        makerAddress = bridge.ethRecipient || '0x85BAa869D0FB0025A23804B536D43128688c1557';
+      }
+
       const immutables = {
         orderHash: ethers.keccak256(
           ethers.solidityPacked(
             ['address', 'bytes32', 'uint8', 'string', 'uint256'],
-            [escrowAddress, hashlock, 1, tronAddress, Date.now()]
+            [escrowAddress, hashlock, bridge.type === 'ETH_TO_NEAR' ? 2 : 1, tronAddress, Date.now()]
           )
         ),
         hashlock: hashlock,
-        maker: bridge.ethRecipient || '0x85BAa869D0FB0025A23804B536D43128688c1557', // Original user who created the bridge
+        maker: makerAddress, // Ensure valid Ethereum address
         taker: process.env.CROSS_CHAIN_CORE_ADDRESS || '0x42F4FA48a564D4f83085aFA056Ae90A3d891021b', // CrossChainCore contract
         token: ethers.ZeroAddress, // ETH (zero address)
         amount: bridge.amount, // Original ETH amount
         safetyDeposit: 0, // No safety deposit for dst escrows
-        timelocks: await this.createFusionTimelocks() // Time constraints
+        timelocks: await this.createEthEscrowTimelocks() // Time constraints for ETH escrow
       };
 
       // Use 1inch escrow withdrawal with immutables
@@ -2220,7 +2242,6 @@ export class BridgeResolver extends EventEmitter {
 
     } catch (error) {
       console.error('❌ Failed to auto-complete ETH escrow:', error);
-      throw error;
     }
   }
 

@@ -220,9 +220,9 @@ export class NearListener extends EventEmitter {
           try {
             console.log(`🔍 Fetching transaction details for: ${txHash}`);
             const transaction = await this.near.connection.provider.txStatus(txHash, 'irrelevant', 'FINAL');
-            
+
             console.log(`🔍 Full transaction result:`, JSON.stringify(transaction, null, 2));
-            
+
             // Look in receipts outcomes for function call actions
             if (transaction.receipts_outcome) {
               for (const receipt of transaction.receipts_outcome) {
@@ -231,18 +231,18 @@ export class NearListener extends EventEmitter {
                 }
               }
             }
-            
+
             // Look in transaction actions for function call with preimage
             if (transaction.transaction && transaction.transaction.actions) {
               for (const action of transaction.transaction.actions) {
                 if (action.FunctionCall && action.FunctionCall.method_name === 'complete_cross_chain_swap') {
                   console.log(`🔍 Found complete_cross_chain_swap action:`, JSON.stringify(action, null, 2));
-                  
+
                   try {
                     const argsBuffer = Buffer.from(action.FunctionCall.args, 'base64');
                     const argsString = argsBuffer.toString('utf8');
                     console.log(`🔍 Decoded function args:`, argsString);
-                    
+
                     const argsObj = JSON.parse(argsString);
                     if (argsObj.preimage) {
                       console.log(`🔍 Found preimage in args:`, argsObj.preimage);
@@ -257,7 +257,7 @@ export class NearListener extends EventEmitter {
                 }
               }
             }
-            
+
           } catch (error) {
             console.log('⚠️  Could not extract secret from transaction:', (error as Error).message);
           }
@@ -330,7 +330,7 @@ export class NearListener extends EventEmitter {
     // Handle both ETH→NEAR and NEAR→ETH cases
     let nearAmount: string;
     let nearYocto: bigint;
-    
+
     // Check if amount is already in NEAR format (for NEAR→ETH bridges)
     if (typeof params.amount === 'string' && (params.amount.includes('.') || parseFloat(params.amount) < 1000)) {
       // Already in NEAR format - use directly
@@ -339,7 +339,7 @@ export class NearListener extends EventEmitter {
       nearYocto = BigInt(Math.floor(nearFloat * 1e24));
       console.log(`💰 Using NEAR amount directly: ${nearAmount} NEAR`);
       console.log(`🔍 nearFloat: ${nearFloat}, nearYocto: ${nearYocto.toString()}`);
-      
+
       if (nearYocto <= 0n) {
         throw new Error(`Invalid NEAR amount: ${nearAmount} resulted in ${nearYocto.toString()} yoctoNEAR`);
       }
@@ -347,7 +347,7 @@ export class NearListener extends EventEmitter {
       // ETH wei amount - convert to NEAR using market rates
       const ethWei = BigInt(params.amount);
       const ethAmount = Number(ethWei) / 1e18; // Convert wei to ETH
-      
+
       console.log(`💱 Converting ${ethAmount} ETH to NEAR...`);
       nearAmount = await this.priceOracle.convertEthToNear(ethAmount.toString());
       nearYocto = BigInt(Math.floor(parseFloat(nearAmount) * 1e24));
@@ -356,13 +356,13 @@ export class NearListener extends EventEmitter {
 
     // Use partial fills mode by default
     const usePartialFills = params.usePartialFills !== false;
-    
+
     if (usePartialFills) {
       console.log(`✅ Creating HTLC for ${nearAmount} NEAR`);
     } else {
       console.log(`✅ Using standard mode for ${nearAmount} NEAR`);
     }
-      
+
     console.log(`🚀 Calling NEAR contract: ${this.config.nearContractId}`);
     console.log(`   methodName: create_cross_chain_htlc`);
     console.log(`   args:`, JSON.stringify(args, null, 2));
@@ -377,7 +377,7 @@ export class NearListener extends EventEmitter {
     });
 
     console.log(`✅ HTLC created successfully`);
-    
+
     // Extract contract ID
     const allLogs = result.receipts_outcome
       .flatMap(r => r.outcome.logs);
@@ -419,7 +419,7 @@ export class NearListener extends EventEmitter {
     });
 
     console.log('✅ Partial Fill created:', result.transaction.hash);
-    
+
     // Extract fill ID from logs
     const allLogs = result.receipts_outcome
       .flatMap(r => r.outcome.logs);
@@ -430,7 +430,7 @@ export class NearListener extends EventEmitter {
 
     const [, fillId] = line.match(/Partial Fill created:\s*([^,]+)/)!;
     console.log('✅ Partial Fill ID:', fillId);
-    
+
     return fillId;
   }
 
@@ -462,7 +462,7 @@ export class NearListener extends EventEmitter {
     });
 
     console.log('✅ Partial Fill Swap created:', result.transaction.hash);
-    
+
     // Extract swap ID from logs
     const allLogs = result.receipts_outcome
       .flatMap(r => r.outcome.logs);
@@ -473,7 +473,7 @@ export class NearListener extends EventEmitter {
 
     const [, swapId] = line.match(/Partial Fill Swap created:\s*([^,]+)/)!;
     console.log('✅ Partial Fill Swap ID:', swapId);
-    
+
     return swapId;
   }
 
@@ -514,7 +514,7 @@ export class NearListener extends EventEmitter {
 
     try {
       const cleanId = contractId.replace(/[<>]/g, '');
-      
+
       // Convert HEX secret to base64
       const preimageBase64 = Buffer
         .from(secret.slice(2), 'hex')

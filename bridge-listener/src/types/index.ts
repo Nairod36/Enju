@@ -61,6 +61,7 @@ export interface ResolverConfig {
     chainId: string;
   };
   crossChainResolverAddress: string; // Notre contrat déployé
+  ethEscrowTimelockSeconds?: number;
 }
 
 export interface SwapRequest {

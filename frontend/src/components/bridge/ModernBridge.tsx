@@ -809,7 +809,6 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
     setIsLoading(false);
   };
 
-  // Monitor for NEAR HTLC creation and auto-complete for ETH→NEAR bridges
   const monitorAndCompleteNearHTLC = async (
     secret: string,
     hashlock: string
@@ -1670,8 +1669,12 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
       updateBridgeLog(`🔍 Swap ID for tracking: ${swapId.substring(0, 14)}...`);
 
       // 🎉 Bridge setup completed - TRON side will complete automatically!
-      updateBridgeLog(`🎉 Bridge setup completed - TRON side will complete automatically!`);
-      updateBridgeLog(`🚀 Bridge-listener will now distribute TRX to your address!`);
+      updateBridgeLog(
+        `🎉 Bridge setup completed - TRON side will complete automatically!`
+      );
+      updateBridgeLog(
+        `🚀 Bridge-listener will now distribute TRX to your address!`
+      );
 
       setBridgeData((prev: any) => ({
         ...prev,
