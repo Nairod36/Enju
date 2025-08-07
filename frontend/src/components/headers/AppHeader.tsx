@@ -15,7 +15,7 @@ export function AppHeader() {
         <div className="px-14 flex items-center justify-between border-b">
           {/* Logo & Brand */}
           <Link
-            to="/app"
+            to="/"
             className="flex items-center gap-2 hover:scale-105 transition-all duration-300"
           >
             <div className="flex flex-row items-center py-3">
