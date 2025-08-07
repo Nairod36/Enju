@@ -1,3 +1,5 @@
+
+import { BRIDGE_CONFIG } from '@/config/networks';
 import { useState, useEffect, useCallback } from 'react';
 
 export interface PriceData {
@@ -18,7 +20,7 @@ export interface ConversionResult {
   error: string | null;
 }
 
-const ORACLE_API_BASE = 'http://152.228.163.97:3002'; // Bridge listener API
+const ORACLE_API_BASE = BRIDGE_CONFIG.listenerApi;
 
 export function usePriceOracle() {
   const [priceData, setPriceData] = useState<PriceData | null>(null);
@@ -91,7 +93,7 @@ export function usePriceOracle() {
       }
 
       const data = await response.json();
-      
+
       return {
         ...result,
         convertedAmount: data.convertedAmount,
@@ -157,9 +159,9 @@ export function useConversion(
 
     const performConversion = async () => {
       setConversionResult(prev => ({ ...prev, isLoading: true, error: null }));
-      
+
       const result = await convertAmount(amount, fromChain, toChain);
-      
+
       if (!cancelled) {
         setConversionResult(result);
       }

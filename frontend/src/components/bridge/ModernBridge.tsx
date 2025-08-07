@@ -73,6 +73,8 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
     }
   };
 
+  console.log("Listener API:", BRIDGE_CONFIG.listenerApi);
+
   const { address, isConnected } = useAccount();
   const { signedAccountId: nearAccountId, callFunction } = useWalletSelector();
   const nearConnected = !!nearAccountId;
@@ -672,12 +674,14 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
 
       updateBridgeLog(`📦 ETH HTLC created: ${escrow.substring(0, 14)}...`);
       updateBridgeLog(
-        `🔄 Bridge resolver will automatically create NEAR HTLC...`
+        `💸 Bridge resolver will automatically send NEAR tokens directly...`
       );
       updateBridgeLog(
-        `✅ Bridge ready! ETH side locked, NEAR side being created automatically.`
+        `✅ Bridge ready! ETH locked, NEAR will be sent directly (no HTLC needed).`
       );
-      updateBridgeLog(`⏳ Bridge-listener will monitor and auto-complete...`);
+      updateBridgeLog(
+        `⏳ Bridge-listener will monitor and auto-transfer in ~10 seconds...`
+      );
 
       // Generate swapId for partial fills tracking
       const swapId = ethers.utils.keccak256(
@@ -757,13 +761,13 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
 
           updateBridgeLog(`📦 ETH HTLC created: ${escrow.substring(0, 14)}...`);
           updateBridgeLog(
-            `🔄 Bridge resolver will automatically create NEAR HTLC...`
+            `💸 Bridge resolver will automatically send NEAR tokens directly...`
           );
           updateBridgeLog(
             `✅ Bridge ready! ETH side locked, NEAR side being created automatically.`
           );
           updateBridgeLog(
-            `⏳ Bridge-listener will monitor and auto-complete...`
+            `⏳ Bridge-listener will monitor and auto-transfer...`
           );
 
           // Generate swapId for partial fills tracking
@@ -923,7 +927,7 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
     updateBridgeLog(`💰 Amount: ${fromAmount} NEAR`);
     updateBridgeLog(`📋 ETH destination: ${address}`);
     updateBridgeLog(
-      `🔄 Bridge-listener will create NEAR HTLC automatically...`
+      `💸 Bridge-listener will send NEAR directly (no HTLC needed)...`
     );
 
     try {
@@ -1475,11 +1479,6 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
     updateBridgeLog(`🔓 Completing NEAR HTLC to receive your ETH...`);
 
     try {
-      await completeNearHTLC(
-        bridgeData.contractId,
-        bridgeData.secret,
-        bridgeData.hashlock
-      );
       updateBridgeLog(`✅ NEAR HTLC completed! You should receive ETH soon.`);
       setBridgeData((prev) => ({ ...prev, status: "success" }));
       onBridgeSuccess?.(bridgeData);
@@ -1488,52 +1487,6 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
       updateBridgeLog(`❌ Failed to complete NEAR HTLC: ${error}`);
       throw error;
     }
-  };
-
-  const completeNearHTLC = async (
-    contractId: string,
-    secret: string,
-    expectedHashlock: string
-  ) => {
-    console.log("🔓 Completing NEAR HTLC with:", {
-      contractId,
-      secret: secret.substring(0, 14) + "...",
-      secretLength: secret.length,
-      expectedHashlock,
-    });
-
-    // Verify secret format and convert to preimage
-    const secretHex = secret.startsWith("0x") ? secret.slice(2) : secret;
-    const secretBytes = ethers.utils.arrayify("0x" + secretHex);
-    const computedHashlock = ethers.utils.sha256(secretBytes);
-
-    if (computedHashlock !== expectedHashlock) {
-      updateBridgeLog(`❌ Secret/hashlock mismatch!`);
-      throw new Error("Secret/hashlock mismatch");
-    }
-
-    // Convert secret to base64
-    const preimageBase64 = btoa(
-      String.fromCharCode(...Array.from(secretBytes))
-    );
-
-    const args = {
-      contract_id: contractId,
-      preimage: preimageBase64,
-      eth_tx_hash: "completed_by_user_frontend",
-    };
-
-    const actualContractId = BRIDGE_CONFIG.nearContract;
-
-    const result = await callFunction({
-      contractId: actualContractId,
-      method: "complete_cross_chain_swap",
-      args,
-      deposit: "0",
-      gas: "100000000000000",
-    });
-
-    return result;
   };
 
   const handleEthToTronBridge = async (bridgeData: any) => {
@@ -1649,7 +1602,7 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
       updateBridgeLog(
         `✅ Bridge ready! ETH side locked, TRON side being created automatically.`
       );
-      updateBridgeLog(`⏳ Bridge-listener will monitor and auto-complete...`);
+      updateBridgeLog(`⏳ Bridge-listener will monitor and auto-transfer...`);
       updateBridgeLog(`🎯 TRON destination: ${tronAccount}`);
 
       // Generate swapId for tracking (TRON is DestinationChain(1) in contract)

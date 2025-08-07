@@ -59,12 +59,13 @@ async function main() {
   console.log(`   NEAR Private Key: ${config.nearPrivateKey.substring(0, 10)}...${config.nearPrivateKey.substring(config.nearPrivateKey.length - 4)} (${config.nearPrivateKey.length} chars)`);
   console.log(`   1inch Factory: ${config.inchEscrowFactory}`);
   console.log(`   API Port: ${port}`);
-  
+
+  console.log(process.env.TRON_PRIVATE_KEY, process.env.TRON_FULL_HOST, process.env.TRON_FUSION_BRIDGE_CONTRACT);
   // Show TRON configuration status
   const tronPrivateKey = process.env.TRON_PRIVATE_KEY;
   const tronHost = process.env.TRON_FULL_HOST;
   const tronContract = process.env.TRON_FUSION_BRIDGE_CONTRACT;
-  
+
   if (tronPrivateKey && tronHost && tronContract) {
     console.log(`   TRON Host: ${tronHost}`);
     console.log(`   TRON Contract: ${tronContract}`);

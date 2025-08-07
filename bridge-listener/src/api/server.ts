@@ -229,30 +229,20 @@ export class BridgeAPI {
           });
         }
 
-        console.log('🚀 Creating NEAR HTLC via API:', { receiver, hashlock, timelock, ethAddress, amount });
-
-        // Create NEAR HTLC using the resolver's NEAR client
-        const contractId = await this.resolver.getNearListener().createCrossChainHTLC({
-          receiver,
-          hashlock,
-          timelock,
-          ethAddress,
-          amount
-        });
-
-        res.json({
-          success: true,
-          data: {
-            contractId,
-            txHash: `near_tx_${Date.now()}`,
-            message: 'NEAR HTLC created successfully'
-          }
+        console.log('⚠️ NEAR HTLC creation API disabled - using direct transfers only');
+        
+        // DISABLED: No longer creating HTLC for ETH→NEAR bridges
+        // ETH→NEAR bridges now use direct transfers automatically
+        return res.status(410).json({
+          success: false,
+          error: 'NEAR HTLC creation disabled',
+          message: 'ETH→NEAR bridges now use direct NEAR transfers. No HTLC creation needed.'
         });
       } catch (error) {
-        console.error('❌ NEAR HTLC creation failed:', error);
+        console.error('❌ NEAR HTLC creation API error:', error);
         res.status(500).json({
           success: false,
-          error: error instanceof Error ? error.message : 'Unknown error'
+          error: 'NEAR HTLC creation disabled'
         });
       }
     });

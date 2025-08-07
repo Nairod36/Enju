@@ -307,91 +307,6 @@ export class NearListener extends EventEmitter {
     }
   }
 
-  async createCrossChainHTLC(params: {
-    receiver: string;
-    hashlock: string;
-    timelock: number;
-    ethAddress: string;
-    amount: string;
-    usePartialFills?: boolean; // NEW: Optional flag from frontend
-  }): Promise<string> {
-    console.log('🔄 Creating NEAR HTLC via RPC with params:', params);
-
-    // 1️⃣ Préparez args & envoyez la tx
-    const args = {
-      receiver: params.receiver,
-      // on convertit l’hex (0x...) en Base64
-      hashlock: Buffer
-        .from(params.hashlock.slice(2), 'hex')
-        .toString('base64'),
-      timelock: params.timelock,
-      eth_address: params.ethAddress
-    };
-
-    // Handle both ETH→NEAR and NEAR→ETH cases
-    let nearAmount: string;
-    let nearYocto: bigint;
-
-    // Check if amount is already in NEAR format (for NEAR→ETH bridges)
-    if (typeof params.amount === 'string' && (params.amount.includes('.') || parseFloat(params.amount) < 1000)) {
-      // Already in NEAR format - use directly
-      nearAmount = params.amount;
-      const nearFloat = parseFloat(nearAmount);
-      nearYocto = BigInt(Math.floor(nearFloat * 1e24));
-      console.log(`💰 Using NEAR amount directly: ${nearAmount} NEAR`);
-      console.log(`🔍 nearFloat: ${nearFloat}, nearYocto: ${nearYocto.toString()}`);
-
-      if (nearYocto <= 0n) {
-        throw new Error(`Invalid NEAR amount: ${nearAmount} resulted in ${nearYocto.toString()} yoctoNEAR`);
-      }
-    } else {
-      // ETH wei amount - convert to NEAR using market rates
-      const ethWei = BigInt(params.amount);
-      const ethAmount = Number(ethWei) / 1e18; // Convert wei to ETH
-
-      console.log(`💱 Converting ${ethAmount} ETH to NEAR...`);
-      nearAmount = await this.priceOracle.convertEthToNear(ethAmount.toString());
-      nearYocto = BigInt(Math.floor(parseFloat(nearAmount) * 1e24));
-      console.log(`💰 ${ethAmount} ETH → ${nearAmount} NEAR`);
-    }
-
-    // Use partial fills mode by default
-    const usePartialFills = params.usePartialFills !== false;
-
-    if (usePartialFills) {
-      console.log(`✅ Creating HTLC for ${nearAmount} NEAR`);
-    } else {
-      console.log(`✅ Using standard mode for ${nearAmount} NEAR`);
-    }
-
-    console.log(`🚀 Calling NEAR contract: ${this.config.nearContractId}`);
-    console.log(`   methodName: create_cross_chain_htlc`);
-    console.log(`   args:`, JSON.stringify(args, null, 2));
-    console.log(`   attachedDeposit: ${nearYocto.toString()} yoctoNEAR`);
-    // Use the updated cross-chain HTLC method
-    const result = await this.account.functionCall({
-      contractId: this.config.nearContractId,
-      methodName: 'create_cross_chain_htlc',
-      args,
-      gas: BigInt('100000000000000'),
-      attachedDeposit: nearYocto,
-    });
-
-    console.log(`✅ HTLC created successfully`);
-
-    // Extract contract ID
-    const allLogs = result.receipts_outcome
-      .flatMap(r => r.outcome.logs);
-    const line = allLogs.find(l => l.startsWith('Cross-chain HTLC created:'));
-    if (!line) {
-      throw new Error('HTLC creation log not found');
-    }
-
-    const [, internalId] = line.match(/Cross-chain HTLC created:\s*([^,]+)/)!;
-    console.log(`✅ HTLC ID: ${internalId}`);
-    return internalId;
-  }
-
   // 🔥 NEW: Create partial fill (user signs only for the specific amount)
   async createPartialFill(params: {
     swapId: string;
@@ -547,13 +462,13 @@ export class NearListener extends EventEmitter {
       const nearAmount = ethers.formatUnits(amount, 24);
       console.log(`💸 Transferring ${nearAmount} NEAR to ${receiverAccount}`);
 
-      const result = await this.account.sendMoney(
-        receiverAccount,
-        BigInt(amount)
-      );
+      // const result = await this.account.sendMoney(
+      //   receiverAccount,
+      //   BigInt(amount)
+      // );
 
-      console.log(`✅ NEAR transfer completed: ${result.transaction.hash}`);
-      console.log(`📦 ${nearAmount} NEAR sent to ${receiverAccount}`);
+      // console.log(`✅ NEAR transfer completed: ${result.transaction.hash}`);
+      // console.log(`📦 ${nearAmount} NEAR sent to ${receiverAccount}`);
 
     } catch (error) {
       console.error('❌ Failed to transfer NEAR to user:', error);

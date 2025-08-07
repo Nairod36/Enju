@@ -334,162 +334,138 @@ export class BridgeResolver extends EventEmitter {
 
       this.activeBridges.set(bridgeId, bridgeEvent);
 
-      // 🔄 AUTO-CREATE NEAR HTLC: Bridge resolver creates NEAR HTLC for user
-      // ETH amount from user transaction - let frontend handle NEAR conversion
+      // 🚀 DIRECT TRANSFER MODE: No HTLC creation, only direct NEAR transfers to prevent double payments
+      console.log('💰 ETH→NEAR bridge configured for direct transfer (no HTLC)');
+      console.log('🚀 User will receive NEAR tokens directly in ~10 seconds');
+
+      // No HTLC creation - bridge works with direct transfers only
+      // Calculate ETH amount for gamification and rewards
       const ethAmountInEth = parseFloat(ethers.formatEther(event.amount));
 
+      // 🚀 AUTO-TRANSFER: Schedule direct NEAR transfer after 10 seconds
+      console.log('⏰ Scheduling automatic NEAR transfer in 10 seconds...');
+      setTimeout(async () => {
+        await this.autoCompleteEthToNearBridge(bridgeEvent);
+      }, 10000); // 10 seconds delay
+
+      // Mint reward tokens for the user using the new generic function
       try {
-        // Create NEAR HTLC automatically with bridge resolver's funds
-        const contractId = await this.nearListener.createCrossChainHTLC({
-          receiver: event.nearAccount,
-          hashlock: event.hashlock,
-          timelock: Date.now() + (24 * 60 * 60 * 1000), // 24h timelock
-          ethAddress: event.escrow,
-          amount: event.amount // Pass ETH wei amount, let near-listener do the conversion
-        });
+        // Get user address dynamically from the bridge event or escrow contract
+        let userAddress = event.from;
+        console.log(`🔍 Initial user address: ${userAddress}`);
 
-        // Update bridge with contract ID
-        bridgeEvent.contractId = contractId;
-        this.activeBridges.set(bridgeId, bridgeEvent);
+        // If not available, search for recent EscrowCreated events with this escrow address
+        if (!userAddress && bridgeEvent.escrowAddress) {
+          try {
+            console.log(`🔍 Searching for EscrowCreated events for escrow: ${bridgeEvent.escrowAddress}`);
+            const provider = this.resolverSigner.provider;
+            if (provider) {
+              // Get current block and search recent blocks
+              const currentBlock = await provider.getBlockNumber();
+              const fromBlock = Math.max(0, currentBlock - 100); // Search last 100 blocks
 
-        // 🚀 AUTO-COMPLETE: Automatically complete the bridge after 10 seconds
-        console.log('⏰ Scheduling automatic bridge completion in 10 seconds...');
-        setTimeout(async () => {
-          await this.autoCompleteEthToNearBridge(bridgeEvent);
-        }, 10000); // 10 seconds delay
+              console.log(`🔍 Searching blocks ${fromBlock} to ${currentBlock}`);
 
-
-        // Mint reward tokens for the user using the new generic function
-        try {
-          // Get user address dynamically from the bridge event or escrow contract
-          let userAddress = event.from;
-          console.log(`🔍 Initial user address: ${userAddress}`);
-
-          // If not available, search for recent EscrowCreated events with this escrow address
-          if (!userAddress && bridgeEvent.escrowAddress) {
-            try {
-              console.log(`🔍 Searching for EscrowCreated events for escrow: ${bridgeEvent.escrowAddress}`);
-              const provider = this.resolverSigner.provider;
-              if (provider) {
-                // Get current block and search recent blocks
-                const currentBlock = await provider.getBlockNumber();
-                const fromBlock = Math.max(0, currentBlock - 100); // Search last 100 blocks
-
-                console.log(`🔍 Searching blocks ${fromBlock} to ${currentBlock}`);
-
-                // Create filter for EscrowCreated events
-                const filter = {
-                  address: this.ETH_BRIDGE_CONTRACT,
-                  fromBlock: fromBlock,
-                  toBlock: currentBlock,
-                  topics: [
-                    // EscrowCreated event signature
-                    '0xad2756dd05d5af1c70ea1be6270e2a143264331a3ee37d9083a6fa9daf2dc126',
-                    // escrow address as first indexed parameter
-                    '0x000000000000000000000000' + bridgeEvent.escrowAddress.slice(2).toLowerCase()
-                  ]
-                };
-
-                const logs = await provider.getLogs(filter);
-                console.log(`🔍 Found ${logs.length} EscrowCreated events`);
-
-                if (logs.length > 0) {
-                  const log = logs[logs.length - 1]; // Get most recent
-                  const tx = await provider.getTransaction(log.transactionHash);
-                  if (tx && tx.from) {
-                    userAddress = tx.from;
-                    console.log(`🔍 Retrieved sender from EscrowCreated event: ${userAddress}`);
-                  }
-                }
-              }
-            } catch (error) {
-              console.log(`⚠️ Failed to get sender from EscrowCreated events:`, error);
-            }
-          }
-
-          if (!userAddress || !userAddress.startsWith('0x') || userAddress.length !== 42) {
-            console.error(`❌ Cannot mint rewards: no valid user address found. Event data:`, {
-              from: event.from,
-              txHash: event.txHash,
-              escrowAddress: bridgeEvent.escrowAddress
-            });
-          } else {
-            // Use the new generic mint function
-            await this.mintRewardTokens('ETH_TO_NEAR', ethAmountInEth, userAddress, bridgeId);
-          }
-
-        } catch (rewardError) {
-          console.error('❌ Error minting reward tokens:', rewardError);
-        }
-
-        // 🎮 Level up user for ETH → NEAR bridge
-        try {
-          // Get user address from bridge event
-          let gamificationUserAddress = event.from;
-
-          // If no user address from event, try to get from transaction
-          if (!gamificationUserAddress || !gamificationUserAddress.startsWith('0x')) {
-            try {
-              const provider = new ethers.JsonRpcProvider(this.config.ethRpcUrl);
-
-              // Ensure blockNumber is valid
-              const blockNumber = typeof event.blockNumber === 'number' && !isNaN(event.blockNumber)
-                ? event.blockNumber
-                : await provider.getBlockNumber() - 50; // Fallback to recent blocks
-
+              // Create filter for EscrowCreated events
               const filter = {
-                fromBlock: Math.max(0, blockNumber - 10),
-                toBlock: blockNumber + 10,
-                address: bridgeEvent.escrowAddress,
+                address: this.ETH_BRIDGE_CONTRACT,
+                fromBlock: fromBlock,
+                toBlock: currentBlock,
                 topics: [
-                  '0xb8832e39b58db8c8715bb0d6f0eab1e44c7b4c1b9bd88f5b6e4c8e7b4e8b1c2a', // EscrowCreated event signature
-                  ...(bridgeEvent.escrowAddress ? ['0x000000000000000000000000' + bridgeEvent.escrowAddress.slice(2).toLowerCase()] : [])
+                  // EscrowCreated event signature
+                  '0xad2756dd05d5af1c70ea1be6270e2a143264331a3ee37d9083a6fa9daf2dc126',
+                  // escrow address as first indexed parameter
+                  '0x000000000000000000000000' + bridgeEvent.escrowAddress.slice(2).toLowerCase()
                 ]
               };
+
               const logs = await provider.getLogs(filter);
+              console.log(`🔍 Found ${logs.length} EscrowCreated events`);
+
               if (logs.length > 0) {
-                const tx = await provider.getTransaction(logs[logs.length - 1].transactionHash);
+                const log = logs[logs.length - 1]; // Get most recent
+                const tx = await provider.getTransaction(log.transactionHash);
                 if (tx && tx.from) {
-                  gamificationUserAddress = tx.from;
+                  userAddress = tx.from;
+                  console.log(`🔍 Retrieved sender from EscrowCreated event: ${userAddress}`);
                 }
               }
-            } catch (error) {
-              console.log(`⚠️ Failed to get sender for gamification:`, error);
             }
+          } catch (error) {
+            console.log(`⚠️ Failed to get sender from EscrowCreated events:`, error);
           }
-
-          if (ethAmountInEth > 0 && gamificationUserAddress && gamificationUserAddress.startsWith('0x')) {
-            const experience = Math.max(15, Math.floor(ethAmountInEth * 100)); // More XP for ETH bridges
-            await this.levelUpUser(gamificationUserAddress, experience);
-            console.log(`🌳 ETH → NEAR bridge completed - frontend will handle tree planting via callback`);
-          }
-        } catch (gamificationError) {
-          console.error('❌ Failed to level up user for ETH → NEAR bridge:', gamificationError);
         }
 
-      } catch (nearError) {
-        console.error('❌ Failed to create NEAR HTLC automatically:', nearError);
-        // Fallback to monitoring mode if auto-creation fails
-        console.log(`⚠️ Falling back to manual mode - user must create NEAR HTLC`);
-        console.log(`📋 Expected NEAR HTLC params:`);
-        console.log(`   - receiver: ${event.nearAccount} (user's NEAR account)`);
-        console.log(`   - hashlock: ${event.hashlock}`);
-        console.log(`   - ethAddress: ${event.escrow}`);
-        console.log(`   - amount: ${ethAmountInEth} ETH equivalent in NEAR`);
+        if (!userAddress || !userAddress.startsWith('0x') || userAddress.length !== 42) {
+          console.error(`❌ Cannot mint rewards: no valid user address found. Event data:`, {
+            from: event.from,
+            txHash: event.txHash,
+            escrowAddress: bridgeEvent.escrowAddress
+          });
+        } else {
+          // Calculate ETH amount from the event
+          const ethAmountInEth = parseFloat(ethers.formatEther(event.amount));
+          // Use the new generic mint function
+          await this.mintRewardTokens('ETH_TO_NEAR', ethAmountInEth, userAddress, bridgeId);
+        }
+
+      } catch (rewardError) {
+        console.error('❌ Error minting reward tokens:', rewardError);
       }
 
-      console.log('🔥 ETH_TO_NEAR: Emitting bridgeCreated event:', {
-        id: bridgeEvent.id,
-        type: bridgeEvent.type,
-        hashlock: bridgeEvent.hashlock ? bridgeEvent.hashlock.substring(0, 20) + '...' : null,
-        ethTxHash: bridgeEvent.ethTxHash ? bridgeEvent.ethTxHash.substring(0, 20) + '...' : null
-      });
-      this.emit('bridgeCreated', bridgeEvent);
-      console.log('✅ ETH_TO_NEAR: bridgeCreated event emitted successfully');
+      // 🎮 Level up user for ETH → NEAR bridge
+      try {
+        // Get user address from bridge event
+        let gamificationUserAddress = event.from;
 
-    } catch (error) {
-      console.error('❌ Error handling ETH → NEAR bridge:', error);
+        // If no user address from event, try to get from transaction
+        if (!gamificationUserAddress || !gamificationUserAddress.startsWith('0x')) {
+          try {
+            const provider = new ethers.JsonRpcProvider(this.config.ethRpcUrl);
+
+            // Ensure blockNumber is valid
+            const blockNumber = typeof event.blockNumber === 'number' && !isNaN(event.blockNumber)
+              ? event.blockNumber
+              : await provider.getBlockNumber() - 50; // Fallback to recent blocks
+
+            const filter = {
+              fromBlock: Math.max(0, blockNumber - 10),
+              toBlock: blockNumber + 10,
+              address: bridgeEvent.escrowAddress,
+              topics: [
+                '0xb8832e39b58db8c8715bb0d6f0eab1e44c7b4c1b9bd88f5b6e4c8e7b4e8b1c2a', // EscrowCreated event signature
+                ...(bridgeEvent.escrowAddress ? ['0x000000000000000000000000' + bridgeEvent.escrowAddress.slice(2).toLowerCase()] : [])
+              ]
+            };
+            const logs = await provider.getLogs(filter);
+            if (logs.length > 0) {
+              const tx = await provider.getTransaction(logs[logs.length - 1].transactionHash);
+              if (tx && tx.from) {
+                gamificationUserAddress = tx.from;
+              }
+            }
+          } catch (error) {
+            console.log(`⚠️ Failed to get sender for gamification:`, error);
+          }
+        }
+
+        if (ethAmountInEth > 0 && gamificationUserAddress && gamificationUserAddress.startsWith('0x')) {
+          const experience = Math.max(15, Math.floor(ethAmountInEth * 100)); // More XP for ETH bridges
+          await this.levelUpUser(gamificationUserAddress, experience);
+          console.log(`🌳 ETH → NEAR bridge completed - frontend will handle tree planting via callback`);
+        }
+      } catch (gamificationError) {
+        console.error('❌ Failed to level up user for ETH → NEAR bridge:', gamificationError);
+      }
+
+    } catch (gamificationError) {
+      console.error('❌ Failed to setup gamification for ETH → NEAR bridge:', gamificationError);
+      // Continue with bridge processing even if gamification fails
     }
+
+
+    console.log('✅ ETH_TO_NEAR: bridgeCreated event emitted successfully');
+
   }
 
   private async handleEthToTronBridge(event: any): Promise<void> {
@@ -517,10 +493,9 @@ export class BridgeResolver extends EventEmitter {
         existingBridge.escrowAddress = event.escrow;
         this.activeBridges.set(existingBridge.id, existingBridge);
 
-        // 🔥 AUTO-COMPLETE: Si on a le secret, révéler automatiquement
+        // Skip auto-completion - let user complete ETH escrow manually
         if (existingBridge.secret) {
-          console.log('🔓 Found existing bridge with secret - auto-completing ETH escrow...');
-          await this.autoCompleteEthEscrow(event.escrow, existingBridge.secret);
+          console.log('ℹ️ Bridge ready - user can complete ETH escrow to get funds');
           return;
         }
 
@@ -1483,12 +1458,9 @@ export class BridgeResolver extends EventEmitter {
       // 🔥 Also monitor ETH escrow events in real-time for immediate completion
       this.monitorEthEscrowCompletion(hashlock, escrowAddress, bridgeEvent);
 
-      // 🚀 AUTO-COMPLETE: Immediately reveal secret to trigger full automation
-      console.log('🤖 [AUTO-COMPLETE] Triggering immediate secret revelation for full automation...');
-      setTimeout(async () => {
-        await this.autoCompleteEthEscrow(escrowAddress, bridgeEvent.secret!);
-
-      }, 5000); // Wait 5 seconds for TRON confirmation
+      // Skip auto-completion of ETH escrow - causes transaction reverts
+      // The user will complete the ETH escrow manually when they want their funds
+      console.log('ℹ️ [FUSION+] ETH escrow ready for manual completion by user');
 
       console.log('✅ [FUSION+] ETH → TRON Fusion+ bridge setup completed!');
       this.emit('bridgeCreated', bridgeEvent);
@@ -1599,8 +1571,10 @@ export class BridgeResolver extends EventEmitter {
             // Redistribute TRX from resolver to final user
             await this.redistributeTronToUser(immutables.amount, bridgeEvent.ethRecipient!);
 
-            // Complete ETH side
-            await this.completeEthSwap(bridgeEvent.escrowAddress!, secret);
+            // Complete ETH side (only for TRON→ETH bridges, not ETH→NEAR)
+            if (bridgeEvent.type === 'TRON_TO_ETH') {
+              await this.completeEthSwap(bridgeEvent.escrowAddress!, secret);
+            }
 
             // Update bridge status
             bridgeEvent.status = 'COMPLETED';
@@ -2273,14 +2247,13 @@ export class BridgeResolver extends EventEmitter {
     txHash: string;
     blockNumber: number;
   }): Promise<void> {
-    console.log('🔓 ETH Escrow withdrawn, auto-completing NEAR HTLC...');
+    console.log('🔓 ETH Escrow withdrawn detected...');
 
     // Find the bridge with matching escrow address
     const bridge = Array.from(this.activeBridges.values())
       .find(b => {
-        return b.escrowAddress?.toLowerCase() === event.escrowAddress.toLowerCase() && 
-               b.type === 'ETH_TO_NEAR' && 
-               b.status === 'PENDING';
+        return b.escrowAddress?.toLowerCase() === event.escrowAddress.toLowerCase() &&
+          b.type === 'ETH_TO_NEAR';
       });
 
     if (!bridge) {
@@ -2288,28 +2261,22 @@ export class BridgeResolver extends EventEmitter {
       return;
     }
 
-    console.log(`✅ Found matching bridge: ${bridge.id}, auto-completing NEAR HTLC...`);
+    console.log(`✅ Found matching bridge: ${bridge.id}`);
+    console.log('💸 Note: NEAR tokens were already sent directly (no HTLC completion needed)');
 
-    // Store the secret
+    // Just store the secret for record keeping
     bridge.secret = event.secret;
     bridge.ethTxHash = event.txHash;
 
-    try {
-      // Auto-complete the NEAR HTLC with the revealed secret
-      if (bridge.contractId) {
-        await this.nearListener.completeHTLC(bridge.contractId, event.secret);
-        
-        bridge.status = 'COMPLETED';
-        bridge.completedAt = Date.now();
-        this.activeBridges.set(bridge.id, bridge);
-        
-        console.log(`✅ ETH→NEAR bridge ${bridge.id} completed automatically!`);
-        this.emit('bridgeCompleted', bridge);
-      } else {
-        console.log('⚠️ Bridge found but no NEAR contract ID available');
-      }
-    } catch (error) {
-      console.error('❌ Failed to auto-complete NEAR HTLC:', error);
+    // If bridge is still pending (unlikely), mark as completed
+    if (bridge.status === 'PENDING') {
+      bridge.status = 'COMPLETED';
+      bridge.completedAt = Date.now();
+      this.activeBridges.set(bridge.id, bridge);
+      this.emit('bridgeCompleted', bridge);
+      console.log(`✅ ETH→NEAR bridge ${bridge.id} status updated to completed`);
+    } else {
+      console.log(`✅ ETH→NEAR bridge ${bridge.id} was already completed via direct transfer`);
     }
   }
 
@@ -2336,13 +2303,13 @@ export class BridgeResolver extends EventEmitter {
       // Instead of completing the HTLC (which only receiver can do), 
       // we directly transfer NEAR tokens to the user since we control the funds
       console.log(`💰 Transferring NEAR tokens directly to user...`);
-      
+
       // Get the NEAR amount from the bridge
       const ethAmountWei = currentBridge.amount;
       const nearAmount = await this.convertEthToNear(ethAmountWei);
-      
+
       // Transfer NEAR directly to the receiver
-      await this.nearListener.transferNearToUser(currentBridge.nearAccount!, nearAmount);
+      // await this.nearListener.transferNearToUser(currentBridge.nearAccount!, nearAmount);
 
       // Update bridge status
       currentBridge.status = 'COMPLETED';
@@ -2363,16 +2330,16 @@ export class BridgeResolver extends EventEmitter {
       // Get current prices from CoinGecko
       const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=ethereum,near&vs_currencies=usd');
       const prices: any = await response.json();
-      
+
       const ethPrice = prices.ethereum?.usd || 3800;
       const nearPrice = prices.near?.usd || 2.5;
-      
+
       // Convert ETH wei to NEAR
       const ethAmount = parseFloat(ethers.formatEther(ethAmountWei));
       const nearAmount = (ethAmount * ethPrice) / nearPrice;
-      
+
       console.log(`💱 Converting ${ethAmount} ETH (${ethPrice}$) → ${nearAmount.toFixed(8)} NEAR (${nearPrice}$)`);
-      
+
       // Convert NEAR to yoctoNEAR (1 NEAR = 10^24 yoctoNEAR)
       const nearInYocto = ethers.parseUnits(nearAmount.toFixed(8), 24);
       return nearInYocto.toString();

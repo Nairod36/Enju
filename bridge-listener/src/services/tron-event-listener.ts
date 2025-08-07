@@ -137,6 +137,11 @@ export class TronEventListener extends EventEmitter {
       
       if (!response.ok) {
         const errorText = await response.text();
+        if (response.status === 404) {
+          // Contract not found - return empty array instead of throwing
+          console.log(`⚠️ TRON contract not found (404) - skipping...`);
+          return [];
+        }
         console.error(`❌ TronGrid API error: ${response.status} - ${errorText}`);
         throw new Error(`TronGrid API error: ${response.status} - ${errorText}`);
       }
