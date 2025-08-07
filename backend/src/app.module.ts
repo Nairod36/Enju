@@ -13,6 +13,7 @@ import { RpcModule } from './rpc/rpc.module';
 import { RewardsModule } from './rewards/rewards.module';
 import { HealthController } from './health/health.controller';
 import { HealthCronService } from './health/health-cron.service';
+import { NearModule } from './near/near.module';
 
 @Module({
   imports: [
@@ -30,11 +31,12 @@ import { HealthCronService } from './health/health-cron.service';
     BridgeModule,
     OneInchModule,
     RpcModule,
-    RewardsModule
+    RewardsModule,
+    NearModule, // Ensure NearModule is imported here
   ],
   controllers: [HealthController],
   providers: [
-    PrismaService, 
+    PrismaService,
     HealthCronService,
     {
       provide: APP_GUARD,

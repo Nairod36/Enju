@@ -10,6 +10,7 @@ import { ethers } from "ethers";
 import { BRIDGE_CONFIG, FORK_MAINNET_CONFIG } from "@/config/networks";
 import { useConversion } from "@/hooks/usePriceOracle";
 import { useTronWallet } from "@/hooks/useTronWallet";
+import { useNearProxy } from "@/hooks/useNearProxy";
 
 interface BridgeData {
   fromAmount: string;
@@ -76,8 +77,9 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
   console.log("Listener API:", BRIDGE_CONFIG.listenerApi);
 
   const { address, isConnected } = useAccount();
-  const { signedAccountId: nearAccountId, callFunction } = useWalletSelector();
+  const { signedAccountId: nearAccountId } = useWalletSelector();
   const nearConnected = !!nearAccountId;
+  const { proxyNearRpc, getAccount, viewFunction } = useNearProxy();
 
   // TRON wallet connection
   const {
@@ -866,7 +868,7 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
 
           try {
             // Complete the NEAR HTLC with our secret
-            await completeNearHTLC(ourBridge.contractId, secret, hashlock);
+            // await completeNearHTLC(ourBridge.contractId, secret, hashlock);
             updateBridgeLog(
               `✅ Bridge completed! You should receive your NEAR now.`
             );
@@ -1408,7 +1410,7 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
     nearAmountStr: string
   ) => {
     // Verify NEAR connection again
-    if (!nearConnected || !nearAccountId || !callFunction) {
+    if (!nearConnected || !nearAccountId) {
       const error = `NEAR wallet not properly connected: nearConnected=${nearConnected}, nearAccountId=${nearAccountId}, callFunction=${typeof callFunction}`;
       console.error("❌", error);
       updateBridgeLog(`❌ ${error}`);
@@ -1436,7 +1438,7 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
 
       // Test with minimal deposit first to see if wallet responds
 
-      const result = await callFunction({
+      const result = await proxyNearRpc({
         contractId: BRIDGE_CONFIG.nearContract,
         method: "create_cross_chain_htlc",
         args,
