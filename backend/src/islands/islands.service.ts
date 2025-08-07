@@ -101,15 +101,42 @@ export class IslandsService {
 
   async getActiveIsland(userId: string): Promise<IslandResponseDto | null> {
     const island = await this.prisma.island.findFirst({
-      where: { userId, isActive: true },
-      include: {
-        userTrees: true,
-        chests: true,
-        usedTiles: true
-      }
+      where: { userId, isActive: true }
     });
 
-    return island ? this.transformToResponseDto(island) : null;
+    if (!island) {
+      return null;
+    }
+
+    // Récupérer les données directement (contournement des relations cassées)
+    const userTrees = await this.prisma.islandTree.findMany({
+      where: { islandId: island.id }
+    });
+    
+    const chests = await this.prisma.islandChest.findMany({
+      where: { islandId: island.id }
+    });
+    
+    const usedTiles = await this.prisma.islandUsedTile.findMany({
+      where: { islandId: island.id }
+    });
+
+    console.log('🔍 getActiveIsland - Direct DB check:', {
+      islandId: island.id,
+      treeCount: island.treeCount,
+      totalTrees: island.totalTrees,
+      userTreesFound: userTrees.length
+    });
+    
+    // Construire l'objet avec les données directes
+    const islandWithRelations = {
+      ...island,
+      userTrees,
+      chests,
+      usedTiles
+    };
+
+    return this.transformToResponseDto(islandWithRelations);
   }
 
   async ensureUserHasIsland(userId: string): Promise<IslandResponseDto> {
@@ -165,20 +192,45 @@ export class IslandsService {
   }
 
   async getIslandById(userId: string, islandId: string): Promise<IslandResponseDto> {
+    console.log('🔍 Getting island by ID:', { userId, islandId });
+    
     const island = await this.prisma.island.findFirst({
-      where: { id: islandId, userId },
-      include: {
-        userTrees: true,
-        chests: true,
-        usedTiles: true
-      }
+      where: { id: islandId, userId }
     });
 
     if (!island) {
       throw new NotFoundException('Island not found');
     }
 
-    return this.transformToResponseDto(island);
+    // Récupérer les données directement (contournement des relations cassées)
+    const userTrees = await this.prisma.islandTree.findMany({
+      where: { islandId }
+    });
+    
+    const chests = await this.prisma.islandChest.findMany({
+      where: { islandId }
+    });
+    
+    const usedTiles = await this.prisma.islandUsedTile.findMany({
+      where: { islandId }
+    });
+
+    console.log('🏝️ Found island with direct queries:', {
+      id: island.id,
+      treeCount: island.treeCount,
+      totalTrees: island.totalTrees,
+      userTreesFound: userTrees.length
+    });
+    
+    // Construire l'objet avec les données directes
+    const islandWithRelations = {
+      ...island,
+      userTrees,
+      chests,
+      usedTiles
+    };
+
+    return this.transformToResponseDto(islandWithRelations);
   }
 
   async updateIsland(userId: string, islandId: string, updateIslandDto: UpdateIslandDto): Promise<IslandResponseDto> {
@@ -392,6 +444,62 @@ export class IslandsService {
     };
 
     return this.updateIsland(userId, islandId, autoUpdateData);
+  }
+
+  async addTreeToIsland(userId: string, islandId: string, treeData: any): Promise<IslandResponseDto> {
+    const existingIsland = await this.prisma.island.findFirst({
+      where: { id: islandId, userId },
+      include: {
+        userTrees: true,
+        chests: true,
+        usedTiles: true
+      }
+    });
+
+    if (!existingIsland) {
+      throw new NotFoundException('Island not found');
+    }
+
+    const result = await this.prisma.$transaction(async (prisma) => {
+      console.log('🌳 Creating tree in DB:', { islandId, treeData });
+      
+      // Ajouter le nouvel arbre
+      const createdTree = await prisma.islandTree.create({
+        data: {
+          islandId,
+          treeData
+        }
+      });
+      
+      console.log('✅ Tree created successfully:', createdTree.id);
+
+      // Vérifier le nombre d'arbres après création
+      const treeCount = await prisma.islandTree.count({
+        where: { islandId }
+      });
+      
+      console.log('🔢 Trees count after creation:', treeCount);
+
+      // Mettre à jour les compteurs de l'île
+      const updatedIsland = await prisma.island.update({
+        where: { id: islandId },
+        data: {
+          treeCount: { increment: 1 },
+          totalTrees: { increment: 1 },
+          lastModified: new Date(),
+          lastUpdateAt: new Date()
+        }
+      });
+      
+      console.log('📊 Updated island counters:', {
+        newTreeCount: updatedIsland.treeCount,
+        newTotalTrees: updatedIsland.totalTrees
+      });
+
+      return updatedIsland;
+    });
+
+    return this.getIslandById(userId, islandId);
   }
 
   private transformToResponseDto(island: any): IslandResponseDto {

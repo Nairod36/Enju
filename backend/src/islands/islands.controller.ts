@@ -156,6 +156,23 @@ export class IslandsController {
     return this.islandsService.autoSaveIsland(req.user.id, id, updateIslandDto);
   }
 
+  @Post(':id/add-tree')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({
+    summary: 'Add a tree to island',
+    description: 'Add a new tree to the island and update counters'
+  })
+  @ApiParam({ name: 'id', description: 'Island ID' })
+  @ApiResponse({ status: 200, description: 'Tree added successfully', type: IslandResponseDto })
+  async addTreeToIsland(
+    @Request() req,
+    @Param('id') id: string,
+    @Body() body: { treeData: any }
+  ): Promise<IslandResponseDto> {
+    return this.islandsService.addTreeToIsland(req.user.id, id, body.treeData);
+  }
+
   @Delete(':id')
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)

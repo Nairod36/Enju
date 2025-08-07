@@ -185,6 +185,24 @@ class IslandsService {
     return result;
   }
 
+  async addTreeToIsland(id: string, treeData: any): Promise<IslandResponse> {
+    const response = await apiRequest(`${API_CONFIG.BASE_URL}/islands/${id}/add-tree`, {
+      method: 'POST',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify({ treeData }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Add tree failed:', response.status, errorText);
+      throw new Error(`Failed to add tree to island: ${response.status} ${errorText}`);
+    }
+
+    const result = await response.json();
+    console.log('✅ Add tree API response:', result);
+    return result;
+  }
+
   // Migration depuis localStorage
   async migrateFromLocalStorage(): Promise<void> {
     try {

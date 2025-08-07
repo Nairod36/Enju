@@ -103,44 +103,6 @@ export function AppDashboard() {
     }
   };
 
-  // Fonction helper pour sauvegarder l'île après plantation d'arbre
-  const saveIslandAfterTreePlant = async () => {
-    if (!activeIsland || !islandRef.current) {
-      console.warn(
-        "❌ Impossible de sauvegarder : île active ou référence manquante"
-      );
-      return;
-    }
-
-    try {
-      // Attendre un petit moment pour que l'état de l'île soit mis à jour
-      await new Promise((resolve) => setTimeout(resolve, 100));
-
-      const currentState = islandRef.current.getCurrentState();
-
-      const updateData = {
-        islandData: currentState.islandData,
-        treeCount: currentState.userTrees.length, // Utiliser le vrai nombre d'arbres
-        userTrees: currentState.userTrees,
-        chests: currentState.chests,
-        usedTiles: Array.from(currentState.usedTiles), // Convertir Set en Array pour la sauvegarde
-        totalTrees: currentState.userTrees.length, // Utiliser le vrai nombre d'arbres
-        healthScore: 100,
-      };
-
-      const savedIsland = await autoSaveIsland(activeIsland.id, updateData);
-
-      if (savedIsland) {
-        setUserIslandData(savedIsland);
-        // Mettre à jour le count local avec le vrai nombre d'arbres
-        setTreeCount(savedIsland.userTrees?.length || 0);
-      } else {
-        console.error("❌ Erreur lors de la sauvegarde automatique de l'île");
-      }
-    } catch (error) {
-      console.error("Erreur lors de la sauvegarde automatique:", error);
-    }
-  };
 
   const [userIslandData, setUserIslandData] = useState<any>(null);
 
@@ -166,6 +128,7 @@ export function AppDashboard() {
     activeIsland,
     ensureUserHasIsland,
     autoSaveIsland,
+    addTreeToIsland,
     isLoading: islandsLoading,
   } = useIslands();
 
@@ -281,10 +244,8 @@ export function AppDashboard() {
           <WelcomeNewUser
             onDismiss={() => setShowWelcome(false)}
             islandName={`Island #${islandSeed || "..."}`}
-            treeCount={userIslandData?.userTrees?.length || 0}
-            bridgeCount={
-              bridgeHistory.filter((b) => b.status === "COMPLETED").length
-            }
+            treeCount={userIslandData?.totalTrees || userIslandData?.treeCount || 0}
+            bridgeCount={authUser?.bridgeCount || 0}
             memberSince={
               userIslandData?.createdAt
                 ? new Date(userIslandData.createdAt).toLocaleDateString(
@@ -482,7 +443,11 @@ export function AppDashboard() {
                   />
                   <fog attach="fog" args={["#e6f3ff", 40, 90]} />
 
-                  <FloatingIsland ref={islandRef} seed={islandSeed} />
+                  <FloatingIsland 
+                    ref={islandRef} 
+                    seed={islandSeed} 
+                    userIslandData={userIslandData}
+                  />
                 </Canvas>
               )}
             </div>
@@ -506,7 +471,7 @@ export function AppDashboard() {
                 <div className="flex items-center space-x-2">
                   <div className="w-2 h-2 bg-emerald-500 rounded-full"></div>
                   <span className="text-sm font-bold text-emerald-700">
-                    {userIslandData?.userTrees?.length || 0}
+                    {userIslandData?.totalTrees || userIslandData?.treeCount || 0}
                   </span>
                 </div>
               </div>
@@ -517,10 +482,7 @@ export function AppDashboard() {
                 <div className="flex items-center space-x-2">
                   <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
                   <span className="text-sm font-bold text-blue-700">
-                    {
-                      bridgeHistory.filter((b) => b.status === "COMPLETED")
-                        .length
-                    }
+                    {authUser?.bridgeCount || 0}
                   </span>
                 </div>
               </div>
@@ -631,17 +593,82 @@ export function AppDashboard() {
               {activeTab === "bridge" ? (
                 <ModernBridge
                   onBridgeSuccess={async () => {
-                    // Planter un arbre sur l'île
-                    if (islandRef.current && islandRef.current.addRandomTree) {
-                      islandRef.current.addRandomTree();
-                      console.log("🌳 Tree planted for bridge success!");
-
-                      // Sauvegarder l'île automatiquement (met à jour treeCount)
-                      await saveIslandAfterTreePlant();
+                    console.log("🌉 onBridgeSuccess called");
+                    
+                    if (!activeIsland) {
+                      console.error("❌ No active island");
+                      return;
                     }
 
-                    // Note: L'expérience pour les bridges est gérée par le bridge-listener
-                    // mais rafraîchir le profil pour être sûr
+                    try {
+                      // Créer un arbre directement en base (pas en local)
+                      const newTreeData = {
+                        id: `tree-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                        position: [
+                          (Math.random() - 0.5) * 8, // Position aléatoire sur l'île
+                          1, // Hauteur fixe
+                          (Math.random() - 0.5) * 8
+                        ],
+                        scale: 0.6 + Math.random() * 0.4,
+                        birthTime: Date.now(),
+                      };
+
+                      console.log("🌳 Adding tree directly to database for bridge:", newTreeData);
+                      
+                      // Ajouter l'arbre en base de données
+                      const updatedIsland = await addTreeToIsland(activeIsland.id, newTreeData);
+                      
+                      if (updatedIsland) {
+                        console.log("✅ Bridge tree added to database successfully");
+                        console.log("🌳 New tree count:", updatedIsland.totalTrees);
+                        console.log("📊 Updated bridge island data:", updatedIsland);
+                        
+                        // Mettre à jour l'état local avec les données fraîches de la base
+                        setUserIslandData(updatedIsland);
+                        
+                        // Recharger l'île dans le composant Island
+                        if (islandRef.current) {
+                          islandRef.current.loadFromDatabase(updatedIsland);
+                        }
+                        
+                        // Force un re-render en récupérant les données fraîches
+                        setTimeout(async () => {
+                          try {
+                            const freshIsland = await ensureUserHasIsland();
+                            if (freshIsland) {
+                              console.log("🔄 Fresh bridge island data:", freshIsland);
+                              setUserIslandData(freshIsland);
+                            }
+                          } catch (error) {
+                            console.error("❌ Error refreshing bridge island data:", error);
+                          }
+                        }, 1000);
+                      } else {
+                        console.error("❌ Failed to add bridge tree to database");
+                      }
+                    } catch (error) {
+                      console.error("❌ Error adding bridge tree to database:", error);
+                    }
+
+                    // Incrémenter le compteur de bridges en base
+                    try {
+                      const token = localStorage.getItem("auth_token");
+                      if (token) {
+                        await apiRequest(
+                          `${API_CONFIG.BASE_URL}/users/me/bridge-completed`,
+                          {
+                            method: "POST",
+                            headers: {
+                              Authorization: `Bearer ${token}`,
+                            },
+                          }
+                        );
+                      }
+                    } catch (error) {
+                      console.error("❌ Error incrementing bridge count:", error);
+                    }
+
+                    // Rafraîchir le profil pour mettre à jour l'affichage
                     setTimeout(async () => {
                       await refreshProfile();
                       refreshHistory();
@@ -650,14 +677,62 @@ export function AppDashboard() {
                 />
               ) : (
                 <CompactSwap
-                  onSwapSuccess={async (txHash) => {
-                    // Planter un arbre sur l'île
-                    if (islandRef.current && islandRef.current.addRandomTree) {
-                      islandRef.current.addRandomTree();
-                      console.log("🌳 Tree planted for swap success!", txHash);
+                  onSwapSuccess={async () => {
+                    console.log("🎯 onSwapSuccess called");
+                    
+                    if (!activeIsland) {
+                      console.error("❌ No active island");
+                      return;
+                    }
 
-                      // Sauvegarder l'île automatiquement (met à jour treeCount)
-                      await saveIslandAfterTreePlant();
+                    try {
+                      // Créer un arbre directement en base (pas en local)
+                      const newTreeData = {
+                        id: `tree-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                        position: [
+                          (Math.random() - 0.5) * 8, // Position aléatoire sur l'île
+                          1, // Hauteur fixe
+                          (Math.random() - 0.5) * 8
+                        ],
+                        scale: 0.6 + Math.random() * 0.4,
+                        birthTime: Date.now(),
+                      };
+
+                      console.log("🌳 Adding tree directly to database:", newTreeData);
+                      
+                      // Ajouter l'arbre en base de données
+                      const updatedIsland = await addTreeToIsland(activeIsland.id, newTreeData);
+                      
+                      if (updatedIsland) {
+                        console.log("✅ Tree added to database successfully");
+                        console.log("🌳 New tree count:", updatedIsland.totalTrees);
+                        console.log("📊 Updated island data:", updatedIsland);
+                        
+                        // Mettre à jour l'état local avec les données fraîches de la base
+                        setUserIslandData(updatedIsland);
+                        
+                        // Recharger l'île dans le composant Island
+                        if (islandRef.current) {
+                          islandRef.current.loadFromDatabase(updatedIsland);
+                        }
+                        
+                        // Force un re-render en récupérant les données fraîches
+                        setTimeout(async () => {
+                          try {
+                            const freshIsland = await ensureUserHasIsland();
+                            if (freshIsland) {
+                              console.log("🔄 Fresh island data:", freshIsland);
+                              setUserIslandData(freshIsland);
+                            }
+                          } catch (error) {
+                            console.error("❌ Error refreshing island data:", error);
+                          }
+                        }, 1000);
+                      } else {
+                        console.error("❌ Failed to add tree to database");
+                      }
+                    } catch (error) {
+                      console.error("❌ Error adding tree to database:", error);
                     }
 
                     // Augmenter l'expérience pour le swap (minimum 8 XP)

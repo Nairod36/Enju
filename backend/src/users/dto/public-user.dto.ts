@@ -38,6 +38,12 @@ export class PublicUserDto {
     })
     experience: number;
 
+    @ApiProperty({
+        description: 'Number of completed bridges',
+        example: 12
+    })
+    bridgeCount: number;
+
     @ApiPropertyOptional({
         description: 'Profile image URL',
         example: 'https://example.com/avatar.jpg'

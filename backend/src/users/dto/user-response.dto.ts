@@ -57,6 +57,12 @@ export class UserResponseDto {
     tokenBalance: number;
 
     @ApiProperty({
+        description: 'Number of completed bridges',
+        example: 12
+    })
+    bridgeCount: number;
+
+    @ApiProperty({
         description: 'Connection status',
         example: true
     })

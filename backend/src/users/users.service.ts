@@ -436,4 +436,50 @@ export class UsersService {
 
     return this.levelUp(user.id, experienceGain, activityBonus);
   }
+
+  async incrementBridgeCount(walletAddress: string): Promise<UserResponseDto> {
+    const user = await this.prisma.user.findUnique({
+      where: { walletAddress: walletAddress.toLowerCase() },
+    });
+
+    if (!user) {
+      throw new UserNotFoundException();
+    }
+
+    const updatedUser = await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        bridgeCount: { increment: 1 },
+        activityScore: { increment: 10 }, // Bonus d'activité pour les bridges
+        lastActivityAt: new Date(),
+      },
+    });
+
+    console.log(`🌉 Bridge completed for user: ${user.walletAddress} | Bridge count: ${user.bridgeCount + 1}`);
+
+    return this.usersUtils.transformToResponseDto(updatedUser);
+  }
+
+  async incrementBridgeCountById(userId: string): Promise<UserResponseDto> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new UserNotFoundException();
+    }
+
+    const updatedUser = await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        bridgeCount: { increment: 1 },
+        activityScore: { increment: 10 }, // Bonus d'activité pour les bridges
+        lastActivityAt: new Date(),
+      },
+    });
+
+    console.log(`🌉 Bridge completed for user: ${user.walletAddress} | Bridge count: ${user.bridgeCount + 1}`);
+
+    return this.usersUtils.transformToResponseDto(updatedUser);
+  }
 }

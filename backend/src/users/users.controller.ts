@@ -116,4 +116,26 @@ export class UsersController {
   async levelUpByAddress(@Body() body: { walletAddress: string; experience: number; activityBonus?: number }) {
     return this.usersService.levelUpByAddress(body.walletAddress, body.experience, body.activityBonus);
   }
+
+  @Post('bridge-completed')
+  @ApiOperation({
+    summary: 'Increment bridge count',
+    description: 'Increment bridge count when a bridge transaction is completed successfully'
+  })
+  @ApiResponse({ status: 200, description: 'Bridge count incremented successfully' })
+  async incrementBridgeCount(@Body() body: { walletAddress: string }) {
+    return this.usersService.incrementBridgeCount(body.walletAddress);
+  }
+
+  @Post('me/bridge-completed')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({
+    summary: 'Increment my bridge count',
+    description: 'Increment bridge count for authenticated user'
+  })
+  @ApiResponse({ status: 200, description: 'Bridge count incremented successfully' })
+  async incrementMyBridgeCount(@Request() req) {
+    return this.usersService.incrementBridgeCountById(req.user.id);
+  }
 }

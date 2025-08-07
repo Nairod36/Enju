@@ -219,6 +219,33 @@ export const useIslands = () => {
     }
   };
 
+  // Add tree to island in database
+  const addTreeToIsland = async (id: string, treeData: any): Promise<IslandResponse | null> => {
+    if (!isAuthenticated) {
+      console.warn('Must be authenticated to add tree to island');
+      return null;
+    }
+
+    try {
+      const updatedIsland = await islandsService.addTreeToIsland(id, treeData);
+      
+      // Update local list
+      setIslands(prev => prev.map(island => 
+        island.id === id ? updatedIsland : island
+      ));
+      
+      // Update active island if this is it
+      if (activeIsland?.id === id) {
+        setActiveIsland(updatedIsland);
+      }
+      
+      return updatedIsland;
+    } catch (err) {
+      console.error('Error adding tree to island:', err);
+      return null;
+    }
+  };
+
   // Migrer depuis localStorage
   const migrateFromLocalStorage = async (): Promise<boolean> => {
     if (!isAuthenticated) {
@@ -263,6 +290,7 @@ export const useIslands = () => {
     createIsland,
     updateIsland,
     autoSaveIsland,
+    addTreeToIsland,
     setAsActiveIsland,
     deleteIsland,
     migrateFromLocalStorage,

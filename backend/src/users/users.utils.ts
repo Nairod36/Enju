@@ -16,6 +16,7 @@ export class UsersUtils {
             level: user.level,
             experience: user.experience,
             tokenBalance: user.tokenBalance ? parseFloat(user.tokenBalance.toString()) : 0,
+            bridgeCount: user.bridgeCount || 0,
             isConnected: user.isConnected,
             createdAt: user.createdAt,
         };
@@ -31,6 +32,7 @@ export class UsersUtils {
             lastActivityAt: user.lastActivityAt,
             level: user.level,
             experience: user.experience,
+            bridgeCount: user.bridgeCount || 0,
             profileImage: user.profileImage,
             bio: user.bio,
             isConnected: user.isConnected,
