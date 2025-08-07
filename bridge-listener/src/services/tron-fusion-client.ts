@@ -58,43 +58,28 @@ export class TronFusionClient {
 
       // Convert addresses for TRON compatibility (et conversion en Sun)
       const tronImmutables = this.convertToTronImmutables(immutables);
-      // Utiliser les valeurs converties (string d'entier)
-      const amountInSun = BigInt(tronImmutables.amount);
-      const safetyDepositInSun = BigInt(tronImmutables.safetyDeposit);
+      // Utiliser les valeurs converties (string d'entier) 
+      const amountInSun = BigInt((tronImmutables as any[])[5]); // amount is at index 5
+      const safetyDepositInSun = BigInt((tronImmutables as any[])[6]); // safetyDeposit is at index 6
       const totalRequiredSun = amountInSun + safetyDepositInSun;
 
-      // Check balance before sending
-      const currentBalance = await this.tronWeb.trx.getBalance();
+      // Check balance before sending (force refresh by specifying address)
+      const resolverAddress = this.tronWeb.defaultAddress.base58;
+      const currentBalance = await this.tronWeb.trx.getBalance(resolverAddress);
       const balanceInTrx = this.tronWeb.fromSun(currentBalance);
       const totalRequiredTrx = this.tronWeb.fromSun(totalRequiredSun.toString());
 
+      console.log(`🔍 [DEBUG] Resolver address: ${resolverAddress}`);
+      console.log(`🔍 [DEBUG] Current balance: ${balanceInTrx} TRX (${currentBalance} SUN)`);
+      console.log(`🔍 [DEBUG] Required: ${totalRequiredTrx} TRX (${totalRequiredSun} SUN)`);
 
       if (BigInt(currentBalance) < totalRequiredSun) {
         throw new Error(`Insufficient TRX balance: ${balanceInTrx} TRX < ${totalRequiredTrx} TRX required`);
       }
 
       // Format parameters in the exact order expected by the contract ABI
-      const formattedImmutables = [
-        tronImmutables.orderHash,
-        tronImmutables.hashlock,
-        tronImmutables.maker,
-        tronImmutables.taker,
-        tronImmutables.token,
-        tronImmutables.amount,
-        tronImmutables.safetyDeposit,
-        [
-          tronImmutables.timelocks.srcWithdrawal,
-          tronImmutables.timelocks.srcPublicWithdrawal,
-          tronImmutables.timelocks.srcCancellation,
-          tronImmutables.timelocks.srcPublicCancellation,
-          tronImmutables.timelocks.dstWithdrawal,
-          tronImmutables.timelocks.dstPublicWithdrawal,
-          tronImmutables.timelocks.dstCancellation
-        ]
-      ];
-
       const transaction = await this.fusionBridgeContract.createTronEscrow(
-        formattedImmutables,
+        tronImmutables, // Already in correct format
         tronMaker,
         ethTaker
       ).send({
@@ -341,29 +326,6 @@ export class TronFusionClient {
     console.log('✅ TRON Fusion+ event watchers started');
   }
 
-  /**
-   * Convert ETH Immutables to TRON format
-   */
-  private convertToTronImmutables(ethImmutables: FusionImmutables): TronImmutables {
-    // Si la valeur contient un point, on considère que c'est du TRX (décimal), sinon déjà en Sun (entier)
-    const amountInSun = ethImmutables.amount.includes('.')
-      ? this.tronWeb.toSun(ethImmutables.amount)
-      : ethImmutables.amount;
-    const safetyDepositInSun = ethImmutables.safetyDeposit.includes('.')
-      ? this.tronWeb.toSun(ethImmutables.safetyDeposit)
-      : ethImmutables.safetyDeposit;
-
-    return {
-      orderHash: ethImmutables.orderHash,
-      hashlock: ethImmutables.hashlock,
-      maker: ethImmutables.maker, // ETH address as hex
-      taker: ethImmutables.taker, // Resolver ETH address
-      token: ethImmutables.token, // address(0) for TRX
-      amount: amountInSun.toString(),
-      safetyDeposit: safetyDepositInSun.toString(),
-      timelocks: this.convertToTronTimelocks(ethImmutables.timelocks)
-    };
-  }
 
   /**
    * Convert ETH timelocks to TRON format (adjusted for faster block times)
@@ -436,6 +398,30 @@ export class TronFusionClient {
     const secretBytes = Buffer.from(secret.replace('0x', ''), 'hex');
     const hash = crypto.createHash('sha256').update(secretBytes).digest();
     return '0x' + hash.toString('hex');
+  }
+
+  /**
+   * Convert immutables to TRON format
+   */
+  private convertToTronImmutables(immutables: FusionImmutables): any[] {
+    return [
+      immutables.orderHash,
+      immutables.hashlock, 
+      immutables.maker,
+      immutables.taker,
+      immutables.token,
+      this.tronWeb.toSun(String(immutables.amount)).toString(), // Convert to SUN
+      this.tronWeb.toSun(String(immutables.safetyDeposit || 0)).toString(), // Convert to SUN
+      [
+        immutables.timelocks.srcWithdrawal || 0,
+        immutables.timelocks.srcPublicWithdrawal || 0,
+        immutables.timelocks.srcCancellation || 0,
+        immutables.timelocks.srcPublicCancellation || 0,
+        immutables.timelocks.dstWithdrawal || 0,
+        immutables.timelocks.dstPublicWithdrawal || 0,
+        immutables.timelocks.dstCancellation || 0
+      ]
+    ];
   }
 
   /**

@@ -5,8 +5,10 @@ import * as dotenv from 'dotenv';
 import { setupSwagger } from './app.swagger';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
 import { ValidationPipe as CustomValidationPipe } from './common/pipes/validation.pipe';
+import * as path from 'path';
 
-dotenv.config();
+// Load environment variables from parent directory
+dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
@@ -48,9 +50,9 @@ async function bootstrap() {
   // Configuration de Swagger
   setupSwagger(app);
 
-  const port = process.env.PORT || 3001;
+  const port = process.env.BACKEND_PORT || 3001;
   await app.listen(port);
-  
+
   // Monitoring de base
   setInterval(() => {
     const memUsage = process.memoryUsage();
@@ -59,7 +61,7 @@ async function bootstrap() {
       console.warn(`⚠️  High memory usage: ${memMB}MB`);
     }
   }, 30000); // Check toutes les 30s
-  
+
   console.log(`
     🌳 Enju SwapForest API is running!
     📍 Server: http://localhost:${port}

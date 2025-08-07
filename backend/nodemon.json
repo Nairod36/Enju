@@ -2,5 +2,8 @@
   "watch": ["src"],
   "ext": "ts",
   "ignore": ["src/**/*.spec.ts"],
-  "exec": "ts-node src/main.ts"
+  "exec": "ts-node -r dotenv/config src/main.ts",
+  "env": {
+    "DOTENV_CONFIG_PATH": "../.env"
+  }
 }

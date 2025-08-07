@@ -486,7 +486,9 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
 
     try {
       console.log("🎯 Bridge routing:", { fromChain, toChain });
-      updateBridgeLog(`🎯 Starting ${fromChain.toUpperCase()} → ${toChain.toUpperCase()} bridge`);
+      updateBridgeLog(
+        `🎯 Starting ${fromChain.toUpperCase()} → ${toChain.toUpperCase()} bridge`
+      );
 
       // Special handling for TRON → ETH to ensure we only use TronLink
       if (fromChain === "tron" && toChain === "ethereum") {
@@ -608,7 +610,7 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
     updateBridgeLog(`   • Hashlock: ${hashlock.substring(0, 14)}...`);
     updateBridgeLog(`   • NEAR Account: ${nearAccountId}`);
     updateBridgeLog(`   • Amount: ${fromAmount} ETH`);
-    
+
     const tx = await crossChainContract.createETHToNEARBridge(
       hashlock,
       nearAccountId,
@@ -631,7 +633,11 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
     // Debug: log all events
     if (receipt.events && receipt.events.length > 0) {
       receipt.events.forEach((event, index) => {
-        updateBridgeLog(`📝 Event ${index}: ${event.event || 'Unknown'} - Topics: ${event.topics?.length || 0}`);
+        updateBridgeLog(
+          `📝 Event ${index}: ${event.event || "Unknown"} - Topics: ${
+            event.topics?.length || 0
+          }`
+        );
         if (event.args) {
           updateBridgeLog(`   Args: ${JSON.stringify(event.args)}`);
         }
@@ -816,14 +822,16 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
 
       try {
         // Check bridge-listener API for bridges with our hashlock
-        updateBridgeLog(`🔍 Checking bridge status (attempt ${attempts}/${maxAttempts})...`);
-        
+        updateBridgeLog(
+          `🔍 Checking bridge status (attempt ${attempts}/${maxAttempts})...`
+        );
+
         const response = await fetch(`${BRIDGE_CONFIG.listenerApi}/bridges`);
-        
+
         if (!response.ok) {
           throw new Error(`API responded with status ${response.status}`);
         }
-        
+
         const result = await response.json();
         updateBridgeLog(`📊 API Response: ${JSON.stringify(result)}`);
 
@@ -877,11 +885,15 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
         }
       } catch (error) {
         console.error("❌ Error monitoring NEAR HTLC:", error);
-        updateBridgeLog(`❌ Error monitoring NEAR HTLC: ${error.message || error}`);
-        
+        updateBridgeLog(
+          `❌ Error monitoring NEAR HTLC: ${error.message || error}`
+        );
+
         // If it's a network error, try a different approach
-        if (error.message?.includes('Failed to fetch')) {
-          updateBridgeLog(`🔄 Bridge-listener not accessible, checking transaction manually...`);
+        if (error.message?.includes("Failed to fetch")) {
+          updateBridgeLog(
+            `🔄 Bridge-listener not accessible, checking transaction manually...`
+          );
           // Could add manual transaction checking here
         }
       }
@@ -1154,7 +1166,7 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
                 userToChain: bridgeData.toChain,
                 hasEthTx: !!bridge.ethTxHash,
                 hasContract: !!bridge.contractId,
-                isMatch
+                isMatch,
               });
             }
 
@@ -1173,7 +1185,11 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
 
           // Handle auto-completed bridge first (highest priority)
           // ONLY for NEAR → ETH bridges initiated by user
-          if (autoCompletedBridge && bridgeData.fromChain === "near" && bridgeData.toChain === "ethereum") {
+          if (
+            autoCompletedBridge &&
+            bridgeData.fromChain === "near" &&
+            bridgeData.toChain === "ethereum"
+          ) {
             updateBridgeLog(`🎉 Bridge auto-completed by bridge-listener!`);
             updateBridgeLog(
               `✅ ETH RELEASED TO USER! NEAR → ETH bridge completed!`
@@ -1201,20 +1217,48 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
             updateBridgeLog(
               `✅ Bridge completed automatically by bridge-listener!`
             );
-            
+
             // Messages spécifiques selon le type de bridge initié par l'utilisateur
-            if (bridgeData.fromChain === "near" && bridgeData.toChain === "ethereum") {
-              updateBridgeLog(`✅ ETH RELEASED TO USER! NEAR → ETH bridge completed!`);
-              updateBridgeLog(`💰 You should have received ${fromAmount} NEAR worth of ETH!`);
-            } else if (bridgeData.fromChain === "ethereum" && bridgeData.toChain === "near") {
-              updateBridgeLog(`✅ ETH → NEAR bridge completed! User received NEAR tokens`);
-              updateBridgeLog(`💰 You should have received ${fromAmount} ETH worth of NEAR!`);
-            } else if (bridgeData.fromChain === "ethereum" && bridgeData.toChain === "tron") {
-              updateBridgeLog(`✅ ETH → TRON bridge completed! TRX sent automatically!`);
-              updateBridgeLog(`💰 You should have received ${fromAmount} ETH worth of TRX!`);
-            } else if (bridgeData.fromChain === "tron" && bridgeData.toChain === "ethereum") {
-              updateBridgeLog(`✅ TRON → ETH bridge completed! ETH sent automatically!`);
-              updateBridgeLog(`💰 You should have received ${fromAmount} TRX worth of ETH!`);
+            if (
+              bridgeData.fromChain === "near" &&
+              bridgeData.toChain === "ethereum"
+            ) {
+              updateBridgeLog(
+                `✅ ETH RELEASED TO USER! NEAR → ETH bridge completed!`
+              );
+              updateBridgeLog(
+                `💰 You should have received ${fromAmount} NEAR worth of ETH!`
+              );
+            } else if (
+              bridgeData.fromChain === "ethereum" &&
+              bridgeData.toChain === "near"
+            ) {
+              updateBridgeLog(
+                `✅ ETH → NEAR bridge completed! User received NEAR tokens`
+              );
+              updateBridgeLog(
+                `💰 You should have received ${fromAmount} ETH worth of NEAR!`
+              );
+            } else if (
+              bridgeData.fromChain === "ethereum" &&
+              bridgeData.toChain === "tron"
+            ) {
+              updateBridgeLog(
+                `✅ ETH → TRON bridge completed! TRX sent automatically!`
+              );
+              updateBridgeLog(
+                `💰 You should have received ${fromAmount} ETH worth of TRX!`
+              );
+            } else if (
+              bridgeData.fromChain === "tron" &&
+              bridgeData.toChain === "ethereum"
+            ) {
+              updateBridgeLog(
+                `✅ TRON → ETH bridge completed! ETH sent automatically!`
+              );
+              updateBridgeLog(
+                `💰 You should have received ${fromAmount} TRX worth of ETH!`
+              );
             }
 
             // Show transaction proofs
@@ -1307,8 +1351,12 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
 
           // After 2 minutes of waiting, assume bridge was auto-completed if ETH transaction exists
           // ONLY for NEAR → ETH bridges
-          if (attempts >= 24 && pendingNearToEthBridge?.ethTxHash && 
-              bridgeData.fromChain === "near" && bridgeData.toChain === "ethereum") {
+          if (
+            attempts >= 24 &&
+            pendingNearToEthBridge?.ethTxHash &&
+            bridgeData.fromChain === "near" &&
+            bridgeData.toChain === "ethereum"
+          ) {
             updateBridgeLog(`🎉 Bridge auto-completed by bridge-listener!`);
             updateBridgeLog(
               `✅ ETH RELEASED TO USER! NEAR → ETH bridge completed!`
@@ -1527,12 +1575,13 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
     await provider.send("eth_requestAccounts", []);
     const signer = provider.getSigner();
 
-    // Use new CrossChainCore contract
+    // Use CrossChainCore contract (real ABI from contract source)
     const crossChainContract = new ethers.Contract(
       BRIDGE_CONFIG.contractAddress,
       [
-        // CrossChainCore ABI
+        // Real CrossChainCore ABI
         "function createETHToTRONBridge(bytes32 hashlock, string calldata tronAddress) external payable returns (address escrow)",
+        "function withdraw(address escrowAddress, bytes32 secret) external",
         "event EscrowCreated(address indexed escrow, bytes32 indexed hashlock, uint8 indexed destinationChain, string destinationAccount, uint256 amount)",
       ],
       signer
@@ -1543,7 +1592,7 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
     updateBridgeLog(`   • Hashlock: ${hashlock.substring(0, 14)}...`);
     updateBridgeLog(`   • TRON Address: ${tronAddress}`);
     updateBridgeLog(`   • Amount: ${fromAmount} ETH`);
-    
+
     const tx = await crossChainContract.createETHToTRONBridge(
       hashlock,
       tronAddress,
@@ -1566,7 +1615,11 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
     // Debug: log all events
     if (receipt.events && receipt.events.length > 0) {
       receipt.events.forEach((event, index) => {
-        updateBridgeLog(`📝 Event ${index}: ${event.event || 'Unknown'} - Topics: ${event.topics?.length || 0}`);
+        updateBridgeLog(
+          `📝 Event ${index}: ${event.event || "Unknown"} - Topics: ${
+            event.topics?.length || 0
+          }`
+        );
         if (event.args) {
           updateBridgeLog(`   Args: ${JSON.stringify(event.args)}`);
         }
@@ -1615,6 +1668,10 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
       );
 
       updateBridgeLog(`🔍 Swap ID for tracking: ${swapId.substring(0, 14)}...`);
+
+      // 🎉 Bridge setup completed - TRON side will complete automatically!
+      updateBridgeLog(`🎉 Bridge setup completed - TRON side will complete automatically!`);
+      updateBridgeLog(`🚀 Bridge-listener will now distribute TRX to your address!`);
 
       setBridgeData((prev: any) => ({
         ...prev,

@@ -13,20 +13,20 @@ export const FORK_MAINNET_CONFIG = {
 };
 
 export const BRIDGE_CONFIG = {
-  // CrossChainResolver contract (deployed with partial fills - fixed version)
-  contractAddress: '0x79fD45793DC81Da9BaB6aE577f01ba7935484C51',
-  rpcUrl: 'https://vps-b11044fd.vps.ovh.net/rpc',
-  listenerApi: 'http://152.228.163.97:3002',
-  nearContract: 'sharknadok.testnet',
+  // CrossChainCore contract - utilise l'env général
+  contractAddress: process.env.CROSS_CHAIN_RESOLVER_ADDRESS,
+  rpcUrl: process.env.ETH_RPC_URL || 'https://vps-b11044fd.vps.ovh.net/rpc',
+  listenerApi: `http://152.228.163.97:${process.env.PORT || '3002'}`,
+  nearContract: process.env.NEAR_CONTRACT_ID || 'sharknadok.testnet',
 
   // Official 1inch contracts
-  inchEscrowFactory: '0xa7bCb4EAc8964306F9e3764f67Db6A7af6DdF99A',
+  inchEscrowFactory: process.env.INCH_ESCROW_FACTORY,
   inchLimitOrderProtocol: '0x111111125421cA6dc452d289314280a0f8842A65',
 
   tron: {
-    contractAddress: 'TPtAi88ucyJDGjY6fHTkvqVtipcKuovxMM',
+    contractAddress: process.env.TRON_FUSION_BRIDGE_CONTRACT || 'TPtAi88ucyJDGjY6fHTkvqVtipcKuovxMM',
     network: 'shasta',
-    rpcUrl: 'https://api.shasta.trongrid.io',
+    rpcUrl: process.env.TRON_FULL_HOST || 'https://api.shasta.trongrid.io',
     apiKey: '5e8b38e2-9828-4737-af16-11b935808aca'
   }
 };

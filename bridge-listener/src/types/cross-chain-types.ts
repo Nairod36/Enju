@@ -125,4 +125,6 @@ export interface BridgeEvent {
   timelock: number;
   createdAt: number;
   completedAt?: number;
+  secret?: string; // Secret for auto-completion
+  orderHash?: string; // Fusion+ order hash
 }

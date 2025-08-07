@@ -22,7 +22,7 @@ export class BridgeResolver extends EventEmitter {
   private isRunning = false;
 
   // Contrats déployés
-  private readonly ETH_BRIDGE_CONTRACT = '0x79fD45793DC81Da9BaB6aE577f01ba7935484C51';
+  private readonly ETH_BRIDGE_CONTRACT = this.config.ethBridgeContract;
   private readonly TRON_BRIDGE_CONTRACT = 'TPtAi88ucyJDGjY6fHTkvqVtipcKuovxMM';
   private nearToEthMap = new Map<string, string>(); // Map NEAR account → ETH address
 
@@ -528,6 +528,13 @@ export class BridgeResolver extends EventEmitter {
         existingBridge.escrowAddress = event.escrow;
         this.activeBridges.set(existingBridge.id, existingBridge);
 
+        // 🔥 AUTO-COMPLETE: Si on a le secret, révéler automatiquement
+        if (existingBridge.secret) {
+          console.log('🔓 Found existing bridge with secret - auto-completing ETH escrow...');
+          await this.autoCompleteEthEscrow(event.escrow, existingBridge.secret);
+          return;
+        }
+
         // Continuer avec le traitement TRX si nécessaire
         if (existingBridge.status === 'PENDING') {
           console.log(`🔄 Existing bridge found, will process TRX sending if needed`);
@@ -564,11 +571,11 @@ export class BridgeResolver extends EventEmitter {
 
       // 🔄 Use unified Fusion+ approach instead of direct TRX sending to avoid duplication
       console.log(`🔄 Processing ETH → TRON bridge via unified Fusion+ flow...`);
-      
+
       try {
         // Convert amount for processing
         const ethAmountInEther = ethers.formatEther(event.amount);
-        
+
         // Process through unified method to avoid duplicate TRX sends
         await this.processEthToTronSwap(
           event.escrow,
@@ -587,9 +594,6 @@ export class BridgeResolver extends EventEmitter {
         this.activeBridges.set(bridgeId, bridgeEvent);
         this.emit('bridgeFailed', bridgeEvent);
       }
-
-      
-     
 
     } catch (error) {
       console.error('❌ Error handling ETH → TRON bridge:', error);
@@ -612,6 +616,12 @@ export class BridgeResolver extends EventEmitter {
       bridge.secret = event.secret;
       bridge.status = 'COMPLETED';
       bridge.completedAt = Date.now();
+
+      // 🔥 Store the secret for relayer use
+      if (event.secret && bridge.hashlock) {
+        console.log('📝 Storing ETH swap secret for relayer use');
+        this.secretStore.set(bridge.hashlock, event.secret);
+      }
 
       // Complete NEAR side if we have the contract ID
       if (bridge.contractId) {
@@ -844,6 +854,12 @@ export class BridgeResolver extends EventEmitter {
       // Store the secret from the NEAR transaction
       if (event.secret) {
         bridge.secret = event.secret;
+      }
+
+      // 🔥 Store the secret for relayer use
+      if (event.secret && bridge.hashlock) {
+        console.log('📝 Storing secret for relayer use');
+        this.secretStore.set(bridge.hashlock, event.secret);
       }
 
       // 🔥 AUTO-COMPLETE: Use revealed secret to complete the appropriate escrow
@@ -1109,14 +1125,29 @@ export class BridgeResolver extends EventEmitter {
     try {
       console.log('🔍 Relayer searching for secret matching hashlock:', hashlock.substring(0, 14) + '...');
 
+      // Normaliser le hashlock (enlever 0x et mettre en minuscule)
+      const normalizedHashlock = hashlock.replace(/^0x/, '').toLowerCase();
+
       // Méthode 1: Chercher dans le cache de secrets du relayer
-      const cachedSecret = this.secretStore.get(hashlock);
+      const cachedSecret = this.secretStore.get(hashlock) || this.secretStore.get(normalizedHashlock);
       if (cachedSecret) {
         console.log('✅ Secret found in relayer cache!');
         return cachedSecret;
       }
 
-      // Méthode 2: Chercher dans les événements ETH récents pour trouver un secret révélé
+      // Méthode 2: Chercher dans les bridges actifs (le secret peut déjà être connu)
+      for (const bridge of this.activeBridges.values()) {
+        if (bridge.secret && bridge.hashlock) {
+          const bridgeHashlockNormalized = bridge.hashlock.replace(/^0x/, '').toLowerCase();
+          if (bridgeHashlockNormalized === normalizedHashlock) {
+            console.log('✅ Secret found in active bridge!');
+            this.secretStore.set(hashlock, bridge.secret); // Cache le secret
+            return bridge.secret;
+          }
+        }
+      }
+
+      // Méthode 3: Chercher dans les événements ETH récents pour trouver un secret révélé
       const secret = await this.extractSecretFromEthEvents(hashlock);
       if (secret) {
         console.log('✅ Secret found in ETH events!');
@@ -1397,6 +1428,15 @@ export class BridgeResolver extends EventEmitter {
       throw new Error('TRON Fusion+ client not initialized');
     }
 
+    // Generate secret for this bridge (since frontend doesn't generate one)
+    const secret = this.generateSecret();
+    const calculatedHashlock = ethers.keccak256(secret);
+    console.log(`🔐 Generated secret for bridge, hashlock: ${calculatedHashlock.substring(0, 14)}...`);
+    console.log(`🔍 Provided hashlock: ${hashlock.substring(0, 14)}...`);
+
+    // For now, use the provided hashlock from the event (frontend-generated)
+    // TODO: In production, frontend should generate secret and send hashlock
+
     try {
       // 1. Create 1inch-compatible immutables
       const orderHash = ethers.keccak256(
@@ -1413,7 +1453,7 @@ export class BridgeResolver extends EventEmitter {
         taker: this.resolverSigner.address, // Resolver address
         token: '0x0000000000000000000000000000000000000000', // TRX
         amount: trxAmount, // TRX amount
-        safetyDeposit: '0.1', // 0.1 TRX safety deposit
+        safetyDeposit: '0.01', // 0.01 TRX safety deposit (reduced due to low balance)
         timelocks: await this.createFusionTimelocks()
       };
 
@@ -1446,7 +1486,8 @@ export class BridgeResolver extends EventEmitter {
         nearAccount: '',
         timelock: Date.now() + (18 * 60 * 60 * 1000), // 18h Fusion+ timelock
         createdAt: Date.now(),
-        orderHash // Store Fusion+ order hash
+        orderHash, // Store Fusion+ order hash
+        secret // Store the secret for auto-completion
       };
 
       this.activeBridges.set(bridgeId, bridgeEvent);
@@ -1454,6 +1495,16 @@ export class BridgeResolver extends EventEmitter {
 
       // 4. Monitor for secret revelation and auto-complete
       this.monitorFusionSecretRevelation(orderHash, immutables, bridgeEvent);
+
+      // 🔥 Also monitor ETH escrow events in real-time for immediate completion
+      this.monitorEthEscrowCompletion(hashlock, escrowAddress, bridgeEvent);
+
+      // 🚀 AUTO-COMPLETE: Immediately reveal secret to trigger full automation
+      console.log('🤖 [AUTO-COMPLETE] Triggering immediate secret revelation for full automation...');
+      setTimeout(async () => {
+        await this.autoCompleteEthEscrow(escrowAddress, bridgeEvent.secret!);
+
+      }, 5000); // Wait 5 seconds for TRON confirmation
 
       console.log('✅ [FUSION+] ETH → TRON Fusion+ bridge setup completed!');
       this.emit('bridgeCreated', bridgeEvent);
@@ -1893,36 +1944,166 @@ export class BridgeResolver extends EventEmitter {
       const bridgeContract = new ethers.Contract(
         this.ETH_BRIDGE_CONTRACT,
         [
+          'event EscrowWithdrawn(address indexed escrow, bytes32 secret, address indexed recipient)',
           'event SwapCompleted(bytes32 indexed swapId, bytes32 secret)',
           'function getSwap(bytes32 swapId) external view returns (address user, uint256 amount, bytes32 hashlock, string memory targetAccount, bool completed, bool refunded, uint256 timelock)'
         ],
         this.resolverSigner
       );
 
-      // Chercher les événements SwapCompleted récents
-      const filter = bridgeContract.filters.SwapCompleted();
-      const events = await bridgeContract.queryFilter(filter, -1000); // Last 1000 blocks
+      // Chercher les événements EscrowWithdrawn récents (pour ETH→TRON bridges)
+      try {
+        const withdrawnFilter = bridgeContract.filters.EscrowWithdrawn();
+        const withdrawnEvents = await bridgeContract.queryFilter(withdrawnFilter, -1000); // Last 1000 blocks
 
-      // Trouver l'événement correspondant au hashlock
-      for (const event of events) {
-        if ('args' in event && event.args) {
-          const swapId = event.args.swapId;
-          const secret = event.args.secret;
+        console.log(`🔍 Found ${withdrawnEvents.length} EscrowWithdrawn events`);
 
-          // Vérifier si ce secret correspond au hashlock
-          const computedHashlock = ethers.keccak256(secret);
-          if (computedHashlock === hashlock) {
-            console.log('✅ Secret found in ETH events!');
-            return secret;
+        // Trouver l'événement correspondant au hashlock
+        for (const event of withdrawnEvents) {
+          if ('args' in event && event.args) {
+            const secret = event.args.secret;
+
+            // Vérifier si ce secret correspond au hashlock
+            const computedHashlock = ethers.keccak256(secret);
+            if (computedHashlock.toLowerCase() === hashlock.toLowerCase()) {
+              console.log('✅ Secret found in EscrowWithdrawn events!');
+              return secret;
+            }
           }
         }
+      } catch (error) {
+        console.log('⚠️ No EscrowWithdrawn events found, trying SwapCompleted...');
       }
 
+      // Fallback: chercher les événements SwapCompleted récents
+      try {
+        const swapFilter = bridgeContract.filters.SwapCompleted();
+        const swapEvents = await bridgeContract.queryFilter(swapFilter, -1000); // Last 1000 blocks
+
+        console.log(`🔍 Found ${swapEvents.length} SwapCompleted events`);
+
+        // Trouver l'événement correspondant au hashlock
+        for (const event of swapEvents) {
+          if ('args' in event && event.args) {
+            const secret = event.args.secret;
+
+            // Vérifier si ce secret correspond au hashlock
+            const computedHashlock = ethers.keccak256(secret);
+            if (computedHashlock.toLowerCase() === hashlock.toLowerCase()) {
+              console.log('✅ Secret found in SwapCompleted events!');
+              return secret;
+            }
+          }
+        }
+      } catch (error) {
+        console.log('⚠️ No SwapCompleted events found');
+      }
+
+      console.log('❌ No secret found in any ETH events');
       return null;
     } catch (error) {
       console.error('Failed to extract secret from ETH events:', error);
       return null;
     }
+  }
+
+  /**
+   * Monitor ETH escrow completion in real-time for automated bridges
+   */
+  private monitorEthEscrowCompletion(hashlock: string, escrowAddress: string, bridgeEvent: BridgeEvent): void {
+    console.log('👁️ [AUTOMATED] Monitoring ETH escrow for real-time completion...');
+
+    // Create a contract instance for listening to events on the escrow contract
+    const escrowContract = new ethers.Contract(
+      escrowAddress,
+      [
+        'event EscrowWithdrawn(address indexed escrow, bytes32 secret, address indexed recipient)',
+        'function withdraw(bytes32 secret) external'
+      ],
+      this.resolverSigner
+    );
+
+    // Listen for EscrowWithdrawn events on this specific escrow
+    const filter = escrowContract.filters.EscrowWithdrawn();
+
+    const onEscrowWithdrawn = async (escrow: string, secret: string, recipient: string, event: any) => {
+      try {
+        console.log('🔓 [AUTOMATED] ETH escrow withdrawn event detected!');
+        console.log(`📋 Escrow: ${escrow}`);
+        console.log(`📋 Secret: ${secret.substring(0, 14)}...`);
+        console.log(`📋 Recipient: ${recipient}`);
+
+        // Verify this is the right escrow
+        if (escrow.toLowerCase() === escrowAddress.toLowerCase()) {
+          console.log('✅ [AUTOMATED] Secret revealed for our bridge! Completing TRON side...');
+
+          // Store the secret
+          this.secretStore.set(hashlock, secret);
+          bridgeEvent.secret = secret;
+
+          // Complete TRON side automatically
+          if (this.tronFusionClient && bridgeEvent.orderHash) {
+            console.log('🔄 [AUTOMATED] Auto-completing TRON side with revealed secret...');
+
+            // Create minimal immutables for withdrawal
+            const immutables = {
+              orderHash: bridgeEvent.orderHash,
+              hashlock: hashlock,
+              maker: escrowAddress,
+              taker: this.resolverSigner.address,
+              token: '0x0000000000000000000000000000000000000000',
+              amount: bridgeEvent.amount,
+              safetyDeposit: '0.1',
+              timelocks: await this.createFusionTimelocks()
+            };
+
+            const tronResult = await this.tronFusionClient.withdraw(
+              bridgeEvent.orderHash,
+              secret,
+              immutables
+            );
+
+            if (tronResult.success) {
+              console.log('✅ [AUTOMATED] TRON side completed automatically!');
+
+              // Redistribute TRX to user (use tronAddress from bridge event)
+              const ethAmountStr = ethers.formatEther(bridgeEvent.amount.toString());
+              const trxAmount = await this.priceOracle.convertEthToTrx(ethAmountStr);
+
+              // For ETH→TRON bridges, send TRX to the specified TRON address
+              const tronAddress = bridgeEvent.tronAddress || bridgeEvent.ethRecipient;
+              if (tronAddress) {
+                await this.redistributeTronToUser(trxAmount, tronAddress);
+              } else {
+                console.error('❌ No TRON address found for redistribution');
+              }
+
+              // Update bridge status
+              bridgeEvent.status = 'COMPLETED';
+              bridgeEvent.completedAt = Date.now();
+              this.activeBridges.set(bridgeEvent.id, bridgeEvent);
+
+              console.log('🎉 [AUTOMATED] Fully automated ETH → TRON bridge completed!');
+              this.emit('bridgeCompleted', bridgeEvent);
+
+              // Clean up listener
+              escrowContract.removeListener(filter, onEscrowWithdrawn);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('❌ [AUTOMATED] Error in escrow completion monitoring:', error);
+      }
+    };
+
+    // Set up the listener
+    escrowContract.on(filter, onEscrowWithdrawn);
+
+    // Clean up after 24 hours
+    setTimeout(() => {
+      escrowContract.removeListener(filter, onEscrowWithdrawn);
+      console.log('⏰ [AUTOMATED] ETH escrow monitoring timeout for', hashlock.substring(0, 10) + '...');
+    }, 24 * 60 * 60 * 1000);
   }
 
   /**
@@ -1973,45 +2154,110 @@ export class BridgeResolver extends EventEmitter {
   }
 
   /**
-   * Compléter le swap ETH avec CrossChainResolver
+   * Auto-compléter l'escrow ETH pour révéler le secret (automatisation complète)
    */
-  private async completeEthSwap(escrowAddress: string, secret: string): Promise<void> {
+  private async autoCompleteEthEscrow(escrowAddress: string, secret: string): Promise<void> {
     try {
-      console.log('⚙️ Completing ETH escrow with CrossChainResolver...');
+      console.log('🤖 AUTO-COMPLETING ETH escrow for fully automated bridge...');
       console.log(`📋 Escrow: ${escrowAddress}`);
       console.log(`📋 Secret: ${secret.substring(0, 14)}...`);
 
-      const resolverContract = new ethers.Contract(
-        this.ETH_BRIDGE_CONTRACT,
+      // Find the bridge event to get the correct values for immutables
+      const bridge = Array.from(this.activeBridges.values())
+        .find(b => b.escrowAddress === escrowAddress);
+
+      if (!bridge) {
+        console.error('❌ Bridge not found for escrow:', escrowAddress);
+        return;
+      }
+
+      // Create immutables matching those used during escrow creation
+      const hashlock = ethers.keccak256(secret);
+      const tronAddress = bridge.tronAddress || bridge.ethRecipient || 'TG98QH6oqMJuhXSckNEs2hRdpfMttXWqaP';
+
+      const immutables = {
+        orderHash: ethers.keccak256(
+          ethers.solidityPacked(
+            ['address', 'bytes32', 'uint8', 'string', 'uint256'],
+            [escrowAddress, hashlock, 1, tronAddress, Date.now()]
+          )
+        ),
+        hashlock: hashlock,
+        maker: bridge.ethRecipient || '0x85BAa869D0FB0025A23804B536D43128688c1557', // Original user who created the bridge
+        taker: process.env.CROSS_CHAIN_CORE_ADDRESS || '0x42F4FA48a564D4f83085aFA056Ae90A3d891021b', // CrossChainCore contract
+        token: ethers.ZeroAddress, // ETH (zero address)
+        amount: bridge.amount, // Original ETH amount
+        safetyDeposit: 0, // No safety deposit for dst escrows
+        timelocks: await this.createFusionTimelocks() // Time constraints
+      };
+
+      // Use 1inch escrow withdrawal with immutables
+      const escrowContract = new ethers.Contract(
+        escrowAddress,
         [
-          'function withdraw(address escrowAddress, bytes32 secret, tuple(bytes32 orderHash, bytes32 hashlock, address maker, address taker, address token, uint256 amount, uint256 safetyDeposit, uint256 timelocks) immutables) external'
+          'function withdraw(bytes32 secret, tuple(bytes32 orderHash, bytes32 hashlock, address maker, address taker, address token, uint256 amount, uint256 safetyDeposit, uint256 timelocks) immutables) external',
+          'event EscrowWithdrawn(address indexed escrow, bytes32 secret, address indexed recipient)'
         ],
         this.resolverSigner
       );
 
-      // Créer les immutables 1inch pour le withdrawal
-      // Note: En production, ces valeurs devraient être stockées lors de la création de l'escrow
-      const immutables = {
-        orderHash: ethers.keccak256(ethers.solidityPacked(['address', 'bytes32'], [escrowAddress, secret])),
-        hashlock: ethers.keccak256(secret), // Le hashlock est le hash du secret
-        maker: this.resolverSigner.address, // Resolver as maker for destination escrows
-        taker: escrowAddress, // Escrow address as taker (simplified)
-        token: ethers.ZeroAddress, // ETH (zero address)
-        amount: ethers.parseEther("1.0"), // Amount (should be stored from creation)
-        safetyDeposit: 0, // No safety deposit for destination escrows
-        timelocks: 0 // Simplified timelocks
-      };
-
-      const tx = await resolverContract.withdraw(escrowAddress, secret, immutables, {
+      console.log('🔓 Revealing secret by calling withdraw with immutables on escrow...');
+      const tx = await escrowContract.withdraw(secret, immutables, {
         gasLimit: 300000
       });
 
-      await tx.wait();
-      console.log('✅ ETH escrow withdrawal completed:', tx.hash);
+      const receipt = await tx.wait();
+      console.log(`✅ ETH escrow auto-completed! Secret revealed in tx: ${receipt.hash}`);
+      console.log(`🎉 Fully automated ETH → TRON bridge completed!`);
+
+      if (bridge) {
+        bridge.status = 'COMPLETED';
+        bridge.completedAt = Date.now();
+        bridge.ethCompletionTxHash = receipt.hash;
+        this.activeBridges.set(bridge.id, bridge);
+        this.emit('bridgeCompleted', bridge);
+      }
+
     } catch (error) {
-      console.error('❌ Failed to complete ETH escrow withdrawal:', error);
-      // Fallback: simple transfer for now
-      console.log('⚠️ Using fallback direct transfer method...');
+      console.error('❌ Failed to auto-complete ETH escrow:', error);
+      throw error;
     }
+  }
+
+  /**
+   * Compléter le swap ETH avec CrossChainResolver
+   */
+  private async completeEthSwap(escrowAddress: string, secret: string): Promise<void> {
+    console.log('⚙️ Completing ETH escrow with CrossChainResolver...');
+    console.log(`📋 Escrow: ${escrowAddress}`);
+    console.log(`📋 Secret: ${secret.substring(0, 14)}...`);
+
+    const resolverContract = new ethers.Contract(
+      this.ETH_BRIDGE_CONTRACT,
+      [
+        'function withdraw(address escrowAddress, bytes32 secret, tuple(bytes32 orderHash, bytes32 hashlock, address maker, address taker, address token, uint256 amount, uint256 safetyDeposit, uint256 timelocks) immutables) external'
+      ],
+      this.resolverSigner
+    );
+
+    // Créer les immutables 1inch pour le withdrawal
+    // Note: En production, ces valeurs devraient être stockées lors de la création de l'escrow
+    const immutables = {
+      orderHash: ethers.keccak256(ethers.solidityPacked(['address', 'bytes32'], [escrowAddress, secret])),
+      hashlock: ethers.keccak256(secret), // Le hashlock est le hash du secret
+      maker: this.resolverSigner.address, // Resolver as maker for destination escrows
+      taker: escrowAddress, // Escrow address as taker (simplified)
+      token: ethers.ZeroAddress, // ETH (zero address)
+      amount: ethers.parseEther("1.0"), // Amount (should be stored from creation)
+      safetyDeposit: 0, // No safety deposit for destination escrows
+      timelocks: 0 // Simplified timelocks
+    };
+
+    const tx = await resolverContract.withdraw(escrowAddress, secret, immutables, {
+      gasLimit: 300000
+    });
+
+    await tx.wait();
+    console.log('✅ ETH escrow withdrawal completed:', tx.hash);
   }
 }
