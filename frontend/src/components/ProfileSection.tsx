@@ -9,7 +9,7 @@ import { API_CONFIG, apiRequest } from "../config/api";
 
 interface UserProfile {
   id: string;
-  address: string;
+  walletAddress: string;
   username: string | null;
   email: string | null;
   createdAt: string;
@@ -24,6 +24,7 @@ export function ProfileSection() {
   const { signMessage } = useSignMessage();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [isEditing, setIsEditing] = useState(false);
+
   const [newUsername, setNewUsername] = useState("");
   const [isUpdating, setIsUpdating] = useState(false);
   const [showAuthInfo, setShowAuthInfo] = useState(false);
@@ -48,6 +49,7 @@ export function ProfileSection() {
 
       if (response.ok) {
         const data = await response.json();
+        console.log("Profile data:", data);
         setProfile(data.user);
         setNewUsername(data.user.username || "");
       } else {
@@ -183,14 +185,11 @@ export function ProfileSection() {
             My Profile
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-4 relative z-[999]">
           {/* Username */}
           <div className="space-y-2">
             <Label htmlFor="username">Username</Label>
             {/* Debug info */}
-            <div className="text-xs text-gray-500 mb-2">
-              Debug: isEditing={isEditing.toString()}, profile exists={!!profile}, connected={isConnected.toString()}
-            </div>
             {isEditing ? (
               <div className="space-y-2">
                 <Input
@@ -198,7 +197,7 @@ export function ProfileSection() {
                   type="text"
                   value={newUsername}
                   onChange={(e) => setNewUsername(e.target.value)}
-                  className="border-emerald-200 focus:border-emerald-500"
+                  className="border-emerald-200 focus:border-emerald-500 z-[100]"
                   minLength={3}
                   maxLength={20}
                   placeholder="Enter your new username..."
@@ -212,7 +211,7 @@ export function ProfileSection() {
                       isUpdating
                     }
                     size="sm"
-                    className="bg-emerald-600 hover:bg-emerald-700"
+                    className="bg-emerald-600 hover:bg-emerald-700 z-[50]"
                   >
                     <Save className="h-4 w-4 mr-1" />
                     {isUpdating ? "Saving..." : "Save"}
@@ -222,6 +221,7 @@ export function ProfileSection() {
                     variant="outline"
                     size="sm"
                     disabled={isUpdating}
+                    className="text-slate-600 hover:text-slate-700 z-[50]"
                   >
                     <X className="h-4 w-4 mr-1" />
                     Cancel
@@ -240,7 +240,7 @@ export function ProfileSection() {
                   }}
                   variant="ghost"
                   size="sm"
-                  className="text-emerald-600 hover:text-emerald-700"
+                  className="text-emerald-600 hover:text-emerald-700 z-[50]"
                 >
                   <Edit3 className="h-4 w-4 mr-1" />
                   Edit
@@ -271,8 +271,14 @@ export function ProfileSection() {
               <p className="font-medium">{profile.activityScore}</p>
             </div>
             <div>
-              <Label className="text-slate-500">Token Balance</Label>
-              <p className="font-medium">{profile.tokenBalance} REWARD</p>
+              <Label className="text-slate-500">Created at</Label>
+              <p className="font-medium">
+                {new Date(profile.createdAt).toLocaleDateString("en-US", {
+                  year: "numeric",
+                  month: "long",
+                  day: "numeric",
+                })}
+              </p>
             </div>
           </div>
 
@@ -280,7 +286,7 @@ export function ProfileSection() {
           <div>
             <Label className="text-slate-500">Wallet</Label>
             <code className="block bg-slate-100 px-3 py-2 rounded text-sm mt-1">
-              {profile.address}
+              {profile.walletAddress}
             </code>
           </div>
 
@@ -290,7 +296,7 @@ export function ProfileSection() {
               variant="ghost"
               size="sm"
               onClick={() => setShowAuthInfo(!showAuthInfo)}
-              className="text-slate-500 hover:text-slate-700"
+              className="text-slate-500 hover:text-slate-700 z-[50]"
             >
               <Info className="h-4 w-4 mr-1" />
               Why sign when modifying?
@@ -298,7 +304,7 @@ export function ProfileSection() {
           </div>
 
           {showAuthInfo && (
-            <div className="mt-4 p-4 bg-emerald-50 rounded-lg text-sm text-slate-700">
+            <div className="mt-4 p-4 bg-emerald-50 rounded-lg text-sm text-slate-700 z-[70]">
               <p className="font-medium text-emerald-800 mb-2">
                 Enhanced Security:
               </p>

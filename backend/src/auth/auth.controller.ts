@@ -5,7 +5,7 @@ import { Request } from 'express';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(private readonly authService: AuthService) { }
 
   @Post('connect')
   async connectWallet(@Body() body: { address: string; signature?: string; message?: string }) {
@@ -20,7 +20,8 @@ export class AuthController {
   @Get('me')
   @UseGuards(JwtAuthGuard)
   async getProfile(@Req() req: Request) {
-    const address = req.user?.['address'];
+    console.log("Request user:", req.user);
+    const address = req.user?.['walletAddress'];
     if (!address) {
       throw new BadRequestException('User address not found in token');
     }

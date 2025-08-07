@@ -645,6 +645,7 @@ export class BridgeResolver extends EventEmitter {
 
       // 🔥 AUTO-COMPLETE ETH→NEAR: Bridge resolver completes NEAR HTLC automatically
       // Only auto-complete for ETH→NEAR bridges, not NEAR→ETH
+      console.log(`🔄 Auto-completing NEAR HTLC for ETH→NEAR bridge: ${existingBridge.id}`);
       if (existingBridge.type === 'ETH_TO_NEAR' && existingBridge.secret) {
         console.log(`🔓 Auto-completing NEAR HTLC for ETH→NEAR bridge with secret...`);
         try {
@@ -2291,10 +2292,10 @@ export class BridgeResolver extends EventEmitter {
         return;
       }
 
-      if (!currentBridge.contractId) {
-        console.log('⚠️ No NEAR contract ID available, cannot complete bridge');
-        return;
-      }
+      // if (!currentBridge.contractId) {
+      //   console.log('⚠️ No NEAR contract ID available, cannot complete bridge');
+      //   return;
+      // }
 
       // Generate a secret for this bridge
       const secret = this.generateSecret();
@@ -2309,7 +2310,7 @@ export class BridgeResolver extends EventEmitter {
       const nearAmount = await this.convertEthToNear(ethAmountWei);
 
       // Transfer NEAR directly to the receiver
-      // await this.nearListener.transferNearToUser(currentBridge.nearAccount!, nearAmount);
+      await this.nearListener.transferNearToUser(currentBridge.nearAccount!, nearAmount);
 
       // Update bridge status
       currentBridge.status = 'COMPLETED';

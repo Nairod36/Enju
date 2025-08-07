@@ -8,7 +8,7 @@ export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
-  ) {}
+  ) { }
 
   async connectWallet(address: string, signature?: string, message?: string) {
     if (!ethers.utils.isAddress(address)) {
@@ -42,9 +42,9 @@ export class AuthService {
     });
 
     // Générer JWT token
-    const token = this.jwtService.sign({ 
-      sub: user.id, 
-      address: user.walletAddress 
+    const token = this.jwtService.sign({
+      sub: user.id,
+      address: user.walletAddress
     });
 
     return {

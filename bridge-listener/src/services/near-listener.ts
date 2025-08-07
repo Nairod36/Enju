@@ -462,13 +462,13 @@ export class NearListener extends EventEmitter {
       const nearAmount = ethers.formatUnits(amount, 24);
       console.log(`💸 Transferring ${nearAmount} NEAR to ${receiverAccount}`);
 
-      // const result = await this.account.sendMoney(
-      //   receiverAccount,
-      //   BigInt(amount)
-      // );
+      const result = await this.account.sendMoney(
+        receiverAccount,
+        BigInt(amount)
+      );
 
-      // console.log(`✅ NEAR transfer completed: ${result.transaction.hash}`);
-      // console.log(`📦 ${nearAmount} NEAR sent to ${receiverAccount}`);
+      console.log(`✅ NEAR transfer completed: ${result.transaction.hash}`);
+      console.log(`📦 ${nearAmount} NEAR sent to ${receiverAccount}`);
 
     } catch (error) {
       console.error('❌ Failed to transfer NEAR to user:', error);

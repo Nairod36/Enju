@@ -74,8 +74,6 @@ export function ModernBridge({ onBridgeSuccess }: ModernBridgeProps) {
     }
   };
 
-  console.log("Listener API:", BRIDGE_CONFIG.listenerApi);
-
   const { address, isConnected } = useAccount();
   const { signedAccountId: nearAccountId } = useWalletSelector();
   const nearConnected = !!nearAccountId;
